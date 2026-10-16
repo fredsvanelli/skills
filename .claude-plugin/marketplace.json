@@ -1,0 +1,12 @@
+{
+  "name": "fredsvanelli",
+  "description": "Fred Vanelli's Claude Code plugins.",
+  "owner": { "name": "Fred Vanelli" },
+  "plugins": [
+    {
+      "name": "fredsvanelli",
+      "source": "./",
+      "description": "UAT runbooks kept as a project's verified knowledge base."
+    }
+  ]
+}
