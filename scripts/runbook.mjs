@@ -35,9 +35,10 @@ const json = (value) => `${JSON.stringify(value, null, 2)}\n`
 const pick = (options, keys) =>
   Object.fromEntries(keys.filter((key) => typeof options[key] === 'string').map((key) => [key, options[key]]))
 
-function collect(root, config, listName, warnings) {
-  const { items, warnings: found } = extractItems(root, config[listName], listName)
+function collect(root, config, listName, warnings, status = {}) {
+  const { items, warnings: found, ran, complete } = extractItems(root, config[listName], listName)
   warnings.push(...found)
+  Object.assign(status, { ran, complete })
   return items.map((item) => ({ ...item, slice: sliceOf(item.file, config.slices) }))
 }
 
@@ -70,8 +71,10 @@ function commandItems(root, config, options, listName, warnings) {
 function commandCoverage(root, config, options, warnings) {
   const runbooks = loadRunbooks(root, config)
   const sourceWarnings = []
-  const entries = collect(root, config, 'entries', sourceWarnings)
-  const requirements = collect(root, config, 'requirements', sourceWarnings)
+  const entriesStatus = {}
+  const requirementsStatus = {}
+  const entries = collect(root, config, 'entries', sourceWarnings, entriesStatus)
+  const requirements = collect(root, config, 'requirements', sourceWarnings, requirementsStatus)
   warnings.push(...sourceWarnings, ...runbookWarnings(runbooks))
   const filters = pick(options, ['capability', 'feature', 'path', 'slice'])
   const result = computeCoverage({
@@ -79,8 +82,10 @@ function commandCoverage(root, config, options, warnings) {
     entries,
     requirements,
     requirementsConfigured: config.requirements.length > 0,
+    requirementsRan: requirementsStatus.ran > 0,
     slices: config.slices,
     filters,
+    unavailable: { entries: !entriesStatus.complete, requirements: !requirementsStatus.complete },
   })
   result.warnings = sourceWarnings
   const scope = Object.entries(filters).map(([key, value]) => `${key} ${value}`).join(', ') || 'overall'

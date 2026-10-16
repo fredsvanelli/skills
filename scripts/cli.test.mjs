@@ -109,3 +109,19 @@ test('the file runs as a program', () => {
   const out = execFileSync(process.execPath, [SCRIPT, 'list', '--root', FIXTURE, '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   assert.equal(JSON.parse(out).length, 5)
 })
+
+test('coverage with a missing sibling root reports no false orphans', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbook-cli-'))
+  fs.mkdirSync(path.join(dir, 'docs/runbooks/billing'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/runbook.config.json'), JSON.stringify({
+    version: 1,
+    entries: [{ extractor: 'next-app-router', root: '../missing-api', glob: 'src/app/**/route.ts' }],
+    requirements: [{ extractor: 'command', command: 'node -e "process.exit(3)"' }],
+  }))
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/billing/pay.md'), '---\nid: billing.pay\ncapability: billing\nstatus: active\ncovers:\n  entries: [POST /admin/pay]\n  requirements: [REQ-1]\n---\n')
+  const { code, stdout } = run(['coverage', '--root', dir])
+  assert.equal(code, 0)
+  assert.doesNotMatch(stdout, /which no longer exists/)
+  assert.match(stdout, /^Orphan check skipped for entry points, requirements: a source did not run \(see Warnings\)\.$/m)
+  assert.match(stdout, /^\| Requirements \| - \| - \| - \| requirement sources did not run \|$/m)
+})

@@ -119,3 +119,34 @@ test('nextStatus keeps draft when every step was waived', () => {
 test('nextStatus rejects unknown states', () => {
   assert.throws(() => nextStatus('draft', ['ok']), /unknown step state: ok/)
 })
+
+test('a list whose sources did not all run gets no orphan check', () => {
+  const config = loadConfig(FIXTURE)
+  const local = extractItems(FIXTURE, [config.entries[0]], 'entries').items
+  const result = computeCoverage({
+    runbooks: loadRunbooks(FIXTURE, config),
+    entries: local,
+    requirements: extractItems(FIXTURE, config.requirements, 'requirements').items,
+    requirementsConfigured: true,
+    slices: config.slices,
+    unavailable: { entries: true, requirements: false },
+  })
+  assert.deepEqual(result.orphans, [{ runbook: 'deliveries.list-deliveries', kind: 'requirement', ref: 'REQ-9' }])
+  assert.deepEqual(result.orphanChecksSkipped, ['entry'])
+})
+
+test('requirement sources that all failed are reported as unavailable, not as zero coverage', () => {
+  const config = loadConfig(FIXTURE)
+  const result = computeCoverage({
+    runbooks: loadRunbooks(FIXTURE, config),
+    entries: extractItems(FIXTURE, config.entries, 'entries').items,
+    requirements: [],
+    requirementsConfigured: true,
+    requirementsRan: false,
+    slices: config.slices,
+    unavailable: { entries: false, requirements: true },
+  })
+  assert.equal(result.requirements, null)
+  assert.equal(result.requirementsNote, 'requirement sources did not run')
+  assert.equal(result.orphans.some((o) => o.kind === 'requirement'), false)
+})

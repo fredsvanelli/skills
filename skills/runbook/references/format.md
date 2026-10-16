@@ -37,7 +37,7 @@ last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2
 | `status` | `draft`, `active` or `deprecated` (see Status) |
 | `last_run` | the latest full run: `date`, `commit` (quoted), `result` (`passed`, `failed`, `blocked`), `report` (path relative to `paths.runbooks`) |
 
-The parser reads a YAML subset: `key: value` maps nested by two-space indentation, lists as `[a, b]` or `- item` lines of scalars, inline maps `{ k: v }`, quoted strings, `#` comments after a space. Quote any value that starts with `[`, `{`, `"` or `'`, or that contains `, ` inside a flow list. Quote commit hashes so digits-only hashes stay strings.
+The parser reads a YAML subset: `key: value` maps nested by two-space indentation, lists as `[a, b]` or `- item` lines of scalars, inline maps `{ k: v }`, quoted strings, `#` comments after a space. Brackets inside an id stay part of it (`[/deliveries/[id], /x]` is two ids), and a flow list may continue over several lines until its `]`. Quote any value that starts with `[`, `{`, `"` or `'`, or that contains `, ` inside a flow list. Quote commit hashes so digits-only hashes stay strings.
 
 ## Body
 

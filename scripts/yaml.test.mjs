@@ -76,3 +76,18 @@ test('splitFrontmatter handles LF, CRLF, BOM and missing blocks', () => {
   assert.equal(splitFrontmatter('# No frontmatter\n'), null)
   assert.equal(splitFrontmatter('---\na: 1\n'), null)
 })
+
+test('plain ids with brackets stay whole inside flow lists and maps', () => {
+  assert.deepEqual(parseYaml('entries: [/deliveries/[id], /x, DELETE /a/[id]/b]\n'), {
+    entries: ['/deliveries/[id]', '/x', 'DELETE /a/[id]/b'],
+  })
+  assert.deepEqual(parseYaml('m: { page: /x/[id], n: 1 }\n'), { m: { page: '/x/[id]', n: 1 } })
+})
+
+test('a flow list may span several lines', () => {
+  assert.deepEqual(parseYaml('entries: [\n  "/a",\n  /b/[id],  # note\n  /c\n]\nnext: 1\n'), {
+    entries: ['/a', '/b/[id]', '/c'],
+    next: 1,
+  })
+  assert.throws(() => parseYaml('entries: [\n  /a,\n'), /line 1: expected , or \]/)
+})

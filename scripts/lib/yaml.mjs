@@ -44,9 +44,17 @@ function parseFlow(text, lineNo) {
   const skipSpace = () => {
     while (i < text.length && /\s/.test(text[i])) i++
   }
+  // Brackets inside a plain scalar nest, so `/deliveries/[id]` stays one value.
   const readUntil = (stops) => {
     const start = i
-    while (i < text.length && !stops.includes(text[i])) i++
+    let depth = 0
+    while (i < text.length) {
+      const char = text[i]
+      if (depth === 0 && stops.includes(char)) break
+      if (char === '[' || char === '{') depth++
+      else if ((char === ']' || char === '}') && depth > 0) depth--
+      i++
+    }
     return text.slice(start, i)
   }
   const quoted = () => {
@@ -163,6 +171,38 @@ function parseBlock(lines, start, indent) {
   return [result, i]
 }
 
+function flowDepth(text) {
+  let depth = 0
+  let quote = null
+  for (const char of text) {
+    if (quote) {
+      if (char === quote) quote = null
+      continue
+    }
+    if (char === '"' || char === "'") quote = char
+    else if (char === '[' || char === '{') depth++
+    else if (char === ']' || char === '}') depth--
+  }
+  return depth
+}
+
+// A flow list or map left open at the end of a line continues on the next lines.
+function joinFlowLines(lines) {
+  const joined = []
+  for (let k = 0; k < lines.length; k++) {
+    const line = { ...lines[k] }
+    const value = isItem(line.text) ? itemText(line.text) : line.text.match(KEY_LINE)?.[2] ?? ''
+    if (/^[[{]/.test(value)) {
+      while (flowDepth(line.text) > 0 && k + 1 < lines.length) {
+        k++
+        line.text = `${line.text} ${lines[k].text}`
+      }
+    }
+    joined.push(line)
+  }
+  return joined
+}
+
 export function parseYaml(text) {
   const lines = []
   text.replace(/\r\n/g, '\n').split('\n').forEach((raw, index) => {
@@ -173,7 +213,8 @@ export function parseYaml(text) {
     lines.push({ no: index + 1, indent: leading.length, text: content.trim() })
   })
   if (lines.length === 0) return {}
-  const [value, next] = parseBlock(lines, 0, lines[0].indent)
-  if (next < lines.length) throw new FrontmatterError(`line ${lines[next].no}: unexpected indentation`)
+  const joined = joinFlowLines(lines)
+  const [value, next] = parseBlock(joined, 0, joined[0].indent)
+  if (next < joined.length) throw new FrontmatterError(`line ${joined[next].no}: unexpected indentation`)
   return value
 }

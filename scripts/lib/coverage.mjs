@@ -38,7 +38,17 @@ function summarize(items) {
   }
 }
 
-export function computeCoverage({ runbooks, entries, requirements, requirementsConfigured, slices, filters = {} }) {
+export function computeCoverage({
+  runbooks,
+  entries,
+  requirements,
+  requirementsConfigured,
+  requirementsRan = true,
+  slices,
+  filters = {},
+  unavailable = { entries: false, requirements: false },
+}) {
+  const requirementsAvailable = requirementsConfigured && requirementsRan
   const valid = runbooks.filter((rb) => rb.problems.length === 0 && rb.status !== 'deprecated')
   const scoped = filterRunbooks(valid, { capability: filters.capability, feature: filters.feature })
   const sliceName = filters.slice ?? filters.capability
@@ -56,7 +66,7 @@ export function computeCoverage({ runbooks, entries, requirements, requirementsC
     refsByStatus(valid, 'entries'),
   )
 
-  const scopedRequirements = requirementsConfigured
+  const scopedRequirements = requirementsAvailable
     ? withState(requirements.filter((r) => !featureRequirements || featureRequirements.has(r.id)), refsByStatus(valid, 'requirements'))
     : null
 
@@ -77,9 +87,18 @@ export function computeCoverage({ runbooks, entries, requirements, requirementsC
 
   const entryIds = new Set(entries.map((e) => e.id))
   const requirementIds = new Set(requirements.map((r) => r.id))
+  // A list whose sources did not all run cannot tell a removed id from an unread one.
+  const checkEntries = !unavailable.entries
+  const checkRequirements = requirementsAvailable && !unavailable.requirements
+  const orphanChecksSkipped = [
+    ...(checkEntries ? [] : ['entry']),
+    ...(requirementsConfigured && !checkRequirements ? ['requirement'] : []),
+  ]
   const orphans = scoped.flatMap((rb) => [
-    ...rb.covers.entries.filter((ref) => !entryIds.has(ref)).map((ref) => ({ runbook: rb.id, kind: 'entry', ref })),
-    ...(requirementsConfigured
+    ...(checkEntries
+      ? rb.covers.entries.filter((ref) => !entryIds.has(ref)).map((ref) => ({ runbook: rb.id, kind: 'entry', ref }))
+      : []),
+    ...(checkRequirements
       ? rb.covers.requirements.filter((ref) => !requirementIds.has(ref)).map((ref) => ({ runbook: rb.id, kind: 'requirement', ref }))
       : []),
   ])
@@ -88,8 +107,10 @@ export function computeCoverage({ runbooks, entries, requirements, requirementsC
   return {
     entries: summarize(scopedEntries),
     requirements: scopedRequirements && summarize(scopedRequirements),
+    requirementsNote: requirementsConfigured && !requirementsRan ? 'requirement sources did not run' : null,
     groups,
     orphans,
+    orphanChecksSkipped,
     runbooks: {
       active: active.length,
       draft: scoped.filter((rb) => rb.status === 'draft').length,

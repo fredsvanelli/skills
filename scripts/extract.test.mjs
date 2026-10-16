@@ -96,3 +96,13 @@ test('command sources read a JSON array and warn on failure', () => {
   const notJson = extractItems(FIXTURE, [{ extractor: 'command', command: 'node -p "1 + 1"' }], 'requirements')
   assert.deepEqual(notJson.warnings, ['requirements[0]: command failed: output is not a JSON array'])
 })
+
+test('extractItems reports whether every source ran', () => {
+  const config = loadConfig(FIXTURE)
+  assert.equal(extractItems(FIXTURE, config.entries, 'entries').complete, true)
+  const skipped = extractItems(FIXTURE, [{ extractor: 'next-app-router', root: '../missing-repo', glob: 'src/app/**/route.ts' }], 'entries')
+  assert.equal(skipped.complete, false)
+  assert.equal(skipped.ran, 0)
+  const failed = extractItems(FIXTURE, [{ extractor: 'command', command: 'node -e "process.exit(3)"' }], 'requirements')
+  assert.equal(failed.complete, false)
+})
