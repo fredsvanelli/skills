@@ -9,7 +9,21 @@
 | `prompt` | the Claude in Chrome extension | the user, by pasting the reply | the user, beforehand |
 | `script` | a temporary Playwright script (fallback) | the agent, from the script output | env vars read by the script |
 
-Default: `headless` when `.mcp.json` has the `mcp.headless` server; otherwise `guided`.
+## Choosing the mode
+
+`--mode` decides. Without it, ask with `AskUserQuestion` before any precondition check or browser action. There is no default mode.
+
+A mode is available when:
+
+| Mode | Available when |
+|---|---|
+| `guided` | always |
+| `headless` | `.mcp.json` has the `mcp.headless` server and its tools are loaded in this session |
+| `headed` | `.mcp.json` has the `mcp.headed` server and its tools are loaded in this session |
+| `chrome` | the `mcp__claude-in-chrome__*` tools, or a tool that enables them, are in this session |
+| `prompt` | always |
+
+Offer only the available modes, in the table's order, each with a one-line description from the first table. Mark `headless` "(Recommended)" and list it first when it is available; otherwise recommend `guided`. `AskUserQuestion` takes four options at most: when five are available, leave `prompt` out of the options and name it in the question text as an answer the user can type under "Other". Name the unavailable modes in the question text with the reason, for example "headed: `.mcp.json` has no `runbook-playwright-headed` server".
 
 ## guided
 
@@ -23,7 +37,7 @@ Use the tools of the MCP server named in `mcp.headless` or `mcp.headed` (`browse
 - After each step, take a snapshot, compare the visible text with Expected, and save a screenshot named `<run id>/<step>.png` (it lands in `paths.evidence` through `--output-dir`).
 - Set each state from what the page shows. On failure, quote the visible text.
 
-When the server is missing from `.mcp.json`, or its tools are not loaded in this session, use `script` and say why.
+When the selected mode cannot start (the server is missing, its tools are not loaded, or the browser fails to launch), stop before the first step. Show the error, then ask again with `AskUserQuestion`, offering the other available modes plus `script`. Never switch modes without the user's answer.
 
 ## script
 

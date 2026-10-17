@@ -13,7 +13,7 @@ They are managed with the `fredsvanelli` Claude Code plugin (`/fredsvanelli:runb
 
 ## Lifecycle
 
-1. `create` writes a runbook as `draft`.
+1. `create` writes a runbook as `draft`. When the behavior changes, `update` edits its steps and keeps its status until the next full run.
 2. `run` executes it. A full run where every step passes (or is waived, with at least one pass) makes it `active`.
 3. Only `active` runbooks count as coverage.
 4. `audit-script` checks runbooks against the code; `audit-code` measures coverage.
@@ -25,6 +25,7 @@ They are managed with the `fredsvanelli` Claude Code plugin (`/fredsvanelli:runb
 |---|---|
 | `/fredsvanelli:runbook:list` | lists runbooks, or the ones a diff affects (`--affected`) |
 | `/fredsvanelli:runbook:create` | writes a runbook from a spec, diff, ticket or description |
+| `/fredsvanelli:runbook:update` | updates the steps of a runbook after the behavior it records changed |
 | `/fredsvanelli:runbook:run` | runs runbooks: `--mode guided`, `headless`, `headed`, `chrome` or `prompt` |
 | `/fredsvanelli:runbook:to-script` | turns a runbook into a Playwright spec |
 | `/fredsvanelli:runbook:audit-script` | checks runbooks still match the code |

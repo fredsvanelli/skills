@@ -45,11 +45,21 @@ test('templates parse', () => {
   assert.equal(parseYaml(runbook.yaml).status, 'draft')
 })
 
-test('all seven commands exist and none is a stub', () => {
+test('all eight commands exist and none is a stub', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/runbook/*.md').map((rel) => path.basename(rel, '.md'))
-  assert.deepEqual(commands, ['audit-code', 'audit-script', 'create', 'list', 'run', 'setup', 'to-script'])
+  assert.deepEqual(commands, ['audit-code', 'audit-script', 'create', 'list', 'run', 'setup', 'to-script', 'update'])
   for (const name of commands) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, `commands/runbook/${name}.md`), 'utf8')
     assert.doesNotMatch(text, /Not implemented yet/, `${name}.md is still a stub`)
+  }
+})
+
+test('every command is listed in the skill table and in both READMEs', () => {
+  const commands = findFiles(PLUGIN_ROOT, 'commands/runbook/*.md').map((rel) => path.basename(rel, '.md'))
+  for (const doc of ['skills/runbook/SKILL.md', 'README.md', 'templates/readme.md']) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, doc), 'utf8')
+    for (const name of commands) {
+      assert.match(text, new RegExp(`/fredsvanelli:runbook:${name}\\b`), `${doc} lists ${name}`)
+    }
   }
 })

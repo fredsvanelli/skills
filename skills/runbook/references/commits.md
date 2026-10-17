@@ -4,7 +4,7 @@ Each command commits its own files by the policy in `commits.<type>` of the conf
 
 | Type | Files |
 |---|---|
-| `runbooks` | runbook files written or edited by `create`, `audit-script --fix`, `to-script` (with its spec file), and `status`/`last_run` updates from `run` |
+| `runbooks` | runbook files written or edited by `create`, `update`, `audit-script --fix`, `to-script` (with its spec file), and `status`/`last_run` updates from `run` |
 | `runs` | `_runs/*.md` reports |
 | `coverage` | `_coverage/*.md` reports |
 | `setup` | the config, `README.md`, `.gitkeep` files, `.gitignore`, the agents block, `.mcp.json`, `.claude/settings.json` |
