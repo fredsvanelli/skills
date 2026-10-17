@@ -15,8 +15,9 @@ Run `git status --porcelain` now and keep the list for the commit step.
 3. **Write.** One `test.describe('<title>')` with one test that walks the steps in run order, one `test.step('S01 <step title>', ...)` per step, an assertion for each Expected, and the login the project's helpers provide. First line: `// Generated from runbook <id> (<runbook path>). Change the runbook, then regenerate with /fredsvanelli:runbook:to-script <id>.`
 4. **Run once** with the project's Playwright command limited to the file (for example `npx playwright test <file>`), and show the result. When it fails, compare with the runbook's last report: a spec mistake (selector, timing) gets fixed here; an app failure is a finding to report, not something to code around.
 5. **Record.** Add the spec path to `scripts:` in the runbook frontmatter.
-6. **Leave CI alone.** CI jobs, gates and E2E allowlists are the project's decision; mention any that would need the new file.
+6. **Leave CI alone.** CI jobs, gates and E2E allowlists are the project's decision; note any that would need the new file.
+7. **Show the script.** Before any commit question, print the summary in the conversation: the spec path, one line per `test.step` with the step it covers, the result of the run in item 4 (with each failing step and its error), the `scripts:` change in the runbook, and the CI files from item 6.
+8. **Commit.** Commit the spec and the runbook change together by the `runbooks` policy. Ask an `ask` question only after the summary from item 7 is on screen; the question names the files and the message and does not repeat the summary.
+9. **Close.** Give the commit outcome: the short sha, or the paths left uncommitted.
 
-Commit the spec and the runbook change together by the `runbooks` policy.
-
-Done when the spec exists, ran once with a reported result, and the runbook lists it.
+Done when the spec exists, ran once with a reported result, the runbook lists it, and the user has seen the summary before any commit question.

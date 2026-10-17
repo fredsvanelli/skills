@@ -1,6 +1,6 @@
 ---
 description: Run runbooks in the browser and record a report per runbook
-argument-hint: "<id...> | --capability x | --affected [base] [--mode guided|headless|headed|chrome|prompt] [--steps S01,S02] [--import <file|text>]"
+argument-hint: "<id...> | --capability x | --affected [base] [--mode guided|headless|headed|chrome|prompt|script] [--steps S01,S02] [--import <file|text>]"
 disable-model-invocation: true
 ---
 
@@ -20,7 +20,7 @@ Run `git status --porcelain` now and keep the list for the commit step.
 
 Leave out `deprecated` and invalid runbooks and name them in the final summary.
 
-Mode: `--mode` when given, otherwise the default in `run-modes.md`. With `--import`, go to step 6.
+Mode: `--mode` when given; otherwise ask the user to choose among the available modes, as "Choosing the mode" in `run-modes.md` describes. With `--import`, go to step 6.
 
 Run id per runbook: `<YYYY-MM-DD-HHMM>-<runbook id>`.
 
@@ -58,10 +58,20 @@ Per runbook:
 
 Parse the reply by the Import rules in `run-modes.md`, resolve every question with the user, then do step 5 with `mode: prompt`.
 
-## 7. Report back
+## 7. Show the results
 
-One row per runbook: passed, failed, blocked, waived counts, the report path, and any status change. For each failure: step, Expected, Seen. Then offer to investigate the causes (with `superpowers:systematic-debugging` when available); the fix is separate work.
+Print the results in the conversation before any commit question:
 
-Commit by policy: reports under `runs`, runbook frontmatter changes under `runbooks`.
+- a table with one row per runbook: passed, failed, blocked, waived counts, the report path, and any status change;
+- for each failure: step, Expected, Seen;
+- the runbooks left out in step 1, with the reason.
 
-Done when every selected runbook has a report, every step in it has a state, and the user has the summary.
+## 8. Commit
+
+Commit by policy: reports under `runs`, runbook frontmatter changes under `runbooks`. Ask an `ask` question only after the table from step 7 is on screen; the question names the files and the message and does not repeat the table.
+
+## 9. Close
+
+Give the commit outcome: the short sha, or the paths left uncommitted. Then offer to investigate the causes of the failures (with `superpowers:systematic-debugging` when available); the fix is separate work.
+
+Done when every selected runbook has a report, every step in it has a state, and the user has seen the results table before any commit question.

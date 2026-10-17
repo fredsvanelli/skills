@@ -38,6 +38,18 @@ A table (runbook, verdict, findings count), then the findings per runbook. Print
 
 ## 4. Fix (with `--fix`)
 
-Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`; tell the user its `last_run` describes the old text and offer `/fredsvanelli:runbook:run <id>`. Commit by the `runbooks` policy.
+Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`.
 
-Done when every selected runbook has a verdict and every finding names its evidence.
+## 5. Show the fixes (with `--fix`)
+
+Print the summary in the conversation before any commit question: a table with one row per applied fix (runbook, step, finding, the edit in one line), then the findings left unfixed with the reason, and the runbooks whose `last_run` now describes the old text.
+
+## 6. Commit (with `--fix`)
+
+Commit by the `runbooks` policy. Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
+
+## 7. Close (with `--fix`)
+
+Give the commit outcome: the short sha, or the paths left uncommitted. Offer `/fredsvanelli:runbook:run <id>` for each edited runbook.
+
+Done when every selected runbook has a verdict and every finding names its evidence; with `--fix`, also when the user has seen the summary of the fixes before any commit question.

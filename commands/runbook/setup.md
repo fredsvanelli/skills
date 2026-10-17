@@ -61,13 +61,26 @@ Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" entries` and `... req
 
 Done when every target exists, `entries` prints at least one entry per source, and no warning is left unexplained.
 
-## 4. Report
+## 4. Show the setup
+
+Print the summary in the conversation before any commit question:
+
+- the files written, each marked created or updated;
+- the config fixes made in step 3 so `entries` and `requirements` exit 0, one line each, and the warnings left with their explanation;
+- the entry count per source and per slice.
+
+## 5. Commit
+
+Commit by the `setup` policy. Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
+
+## 6. Close
 
 Tell the user:
 
-- the files written;
-- the entry count per source and per slice;
+- the commit outcome: the short sha, or the paths left uncommitted;
 - tools missing, each with its install command (Node 18+, `npx @playwright/mcp@0.0.83 --help` to pre-fetch the MCP server);
 - what needs a restart: new `.mcp.json` servers load in a new session or through `/mcp`.
 
-Install nothing without asking. Commit by the `setup` policy. Offer `/fredsvanelli:runbook:audit-code` for a coverage baseline.
+Install nothing without asking. Offer `/fredsvanelli:runbook:audit-code` for a coverage baseline.
+
+Done when the user has seen the summary before any commit question.

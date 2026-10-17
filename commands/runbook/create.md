@@ -1,5 +1,5 @@
 ---
-description: Write or update a runbook from a spec, diff, ticket or description
+description: Write a new runbook from a spec, diff, ticket or description
 argument-hint: "--from spec <path> | diff [base] | ticket <id> | text \"<description>\""
 disable-model-invocation: true
 ---
@@ -31,7 +31,7 @@ Done when every behavior the source promises is on the list.
 
 1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" entries --json`: map each requirement to the entry ids it touches.
 2. `... requirements --json`: when the config has requirement sources, use their ids.
-3. `... list --json`: find runbooks whose `covers.entries` overlap. When one covers the same flow, ask whether to update it instead of creating another.
+3. `... list --json`: find runbooks whose `covers.entries` overlap. When one covers the same flow, ask whether to update it instead of creating another; to update, stop here and follow `${CLAUDE_PLUGIN_ROOT}/commands/runbook/update.md` with the same source.
 
 ## 3. Investigate the code
 
@@ -61,8 +61,16 @@ Each flow gets its main path, at least one edge case (empty, invalid input, or a
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" list --json` and confirm the new runbook has an empty `problems` list.
 
-## 6. Report
+## 6. Show the runbook
 
-Show the path, the steps as a tree with their parents, the entries and requirements the runbook covers, and the "Not covered" list. Say it counts as coverage after its first clean full run, and offer `/fredsvanelli:runbook:run <id>`.
+Print the summary in the conversation before any commit question: the path, the steps as a tree with their parents, the entries and requirements the runbook covers, and the "Not covered" list.
 
-Commit by the `runbooks` policy.
+## 7. Commit
+
+Commit by the `runbooks` policy. Ask an `ask` question only after the summary from step 6 is on screen; the question names the files and the message and does not repeat the summary.
+
+## 8. Close
+
+Give the commit outcome: the short sha, or the paths left uncommitted. Say the runbook counts as coverage after its first clean full run, and offer `/fredsvanelli:runbook:run <id>`.
+
+Done when the new runbook has an empty `problems` list and the user has seen its summary before any commit question.

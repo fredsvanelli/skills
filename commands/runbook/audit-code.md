@@ -16,8 +16,8 @@ Run `git status --porcelain` now and keep the list for the commit step.
 2. **Numbers.** For each scope, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" coverage <filter>` (Markdown) and `... coverage <filter> --json`. Exit code 2 stops the command; show the message.
 3. **Suggestions.** From the JSON's uncovered entries and requirements, rank at most five runbooks to write first by the rules in `coverage.md`.
 4. **Write** each report from `${CLAUDE_PLUGIN_ROOT}/templates/coverage-report.md` to `<paths.runbooks>/_coverage/<scope file name>`, with the script output pasted unchanged.
-5. **Summarize** in the chat: entry and requirement coverage per scope, orphan and invalid runbook counts, and the top suggestions. Offer `/fredsvanelli:runbook:create` for the first one.
+5. **Summarize** in the chat before any commit question: the report paths, entry and requirement coverage per scope, orphan and invalid runbook counts, and the top suggestions.
+6. **Commit** by the `coverage` policy. Ask an `ask` question only after the summary from item 5 is on screen; the question names the files and the message and does not repeat the summary.
+7. **Close.** Give the commit outcome: the short sha, or the paths left uncommitted. Offer `/fredsvanelli:runbook:create` for the first suggestion.
 
-Commit by the `coverage` policy.
-
-Done when every scope has its report file and the chat summary lists the same numbers.
+Done when every scope has its report file, the chat summary lists the same numbers, and the user has seen it before any commit question.
