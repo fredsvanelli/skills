@@ -30,7 +30,7 @@ devolve um relatório do que entrou, do que fechou e do que ficou — com o moti
 Qualquer outro argumento é inválido — diga e pare.
 
 **Onde funciona:** raiz do repositório, com `gh` autenticado (`gh auth status`) e `python3`.
-O helper é `${CLAUDE_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py` (sem `jq` — não há
+Os checks que contam como CI verde vêm de `DEPENDABOT_REQUIRED_CHECKS` (nomes separados por vírgula), definido no `env` do `.claude/settings.json` do projeto; sem ele o helper sai 2. O helper é `${CLAUDE_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py` (sem `jq` — não há
 `jq` nesta máquina). Rode `python3 <helper>` sem argumentos para ver os subcomandos.
 
 ## O que esta skill faz e o que não faz
@@ -60,8 +60,8 @@ D="${CLAUDE_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py"
 Arquivo untracked não bloqueia (só avise); com `--dry-run` a árvore nem precisa estar limpa,
 porque nada troca de branch.
 
-Confira que `.github/dependabot.yml` ainda tem `target-branch: develop` nos dois
-ecossistemas. Se alguém mudou isso, o raciocínio de "PR contra `main` é resíduo" deixa
+Confira que `.github/dependabot.yml` ainda tem `target-branch: develop` em todo
+ecossistema configurado. Se alguém mudou isso, o raciocínio de "PR contra `main` é resíduo" deixa
 de valer — diga e pergunte antes de seguir.
 
 ## Passo 2 — Inventário
@@ -132,11 +132,11 @@ gh run view <run-id> --log-failed | tail -60
   `/linear-create-ticket`.
 - Falha sem relação com o bump (rede, runner, teste flaky conhecido) → `gh run rerun <run-id> --failed`
   **uma vez**, `wait` de novo. Vermelho duas vezes = pular e reportar; não insista.
-- **Job pulado não é verde.** O helper exige `Lint`, `Typecheck`, `Build` e `Unit tests` em
-  `SUCCESS`. Se `CI pause check` pausou o CI (`.github/ci-pause.json`), os outros jobs nem
-  rodam e a PR parece limpa — o helper diz `ausente`/`SKIPPED`. `rerun --failed` não
-  reexecuta job pulado: **pule** a PR, com motivo "CI pausado até <data do ci-pause.json>",
-  e não espere a pausa acabar dentro desta execução.
+- **Job pulado não é verde.** O helper exige cada check de `DEPENDABOT_REQUIRED_CHECKS` em
+  `SUCCESS`; `ausente`/`SKIPPED` conta como não verde. Se o projeto pausou o CI (por exemplo
+  `.github/ci-pause.json`), os jobs nem rodam e a PR parece limpa. `rerun --failed` não
+  reexecuta job pulado: **pule** a PR, com motivo "CI pausado até <data>", e não espere a
+  pausa acabar dentro desta execução.
 
 ### 3.4 · Major → perguntar
 
@@ -212,7 +212,7 @@ git checkout -b chore/deps-<pkg-slug>-<versão> origin/develop
 Confira com `python3 $D covered <pkg> <versão> HEAD`. Depois:
 
 ```bash
-yarn lint && npx tsc --noEmit
+yarn lint && <type-check do projeto>   # o comando está no CLAUDE.md / package.json
 git add package.json yarn.lock .github/workflows
 git commit -m "chore(deps): bump <pkg> from <de> to <para> (re-extraído de #N)"
 git push -u origin chore/deps-<pkg-slug>-<versão>
@@ -255,12 +255,12 @@ e abre outro sem aquele pacote. Por isso grupo vai primeiro.
 de meses atrás; "verde" ali não diz nada sobre `develop`. É irrelevante — elas não são
 mergeadas de qualquer forma.
 
-**`e2e-gate` só roda em PR para `main`.** PR contra `develop` não paga a suíte e2e; "verde"
-aqui é lint + typecheck + build + unit. É o combinado do projeto (ver `dependabot.yml`),
-não uma lacuna sua — mas não venda como "e2e passou".
+**"Verde" é só o que `DEPENDABOT_REQUIRED_CHECKS` cobre.** Suíte e2e que só roda em PR
+para `main` não roda aqui. É o combinado do projeto, não uma lacuna sua, mas não venda como
+"e2e passou".
 
-**Bump de `next`/`react` no grupo.** Minor de framework às vezes muda comportamento de
-build; se `Build` passar mas o usuário quiser ver rodando, `/run` existe. Não invente
+**Bump de framework/ORM no grupo.** Minor de framework às vezes muda comportamento de
+build ou de query; se o CI passar mas o usuário quiser ver rodando, `/run` existe. Não invente
 verificação manual sem pedido.
 
 **Fechar PR de security update sem cobrir.** O alerta some da lista de PRs, não do

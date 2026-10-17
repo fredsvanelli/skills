@@ -9,12 +9,14 @@
 Códigos de saída: 0 = ok / coberto / mergeável; 1 = não; 2 = erro de uso ou de ferramenta.
 """
 import json
+import os
 import re
 import subprocess
 import sys
 import time
 
-REQUIRED_CHECKS = ("Lint", "Typecheck", "Build", "Unit tests")
+# checks que precisam estar em SUCCESS; cada projeto define no "env" do .claude/settings.json
+REQUIRED_CHECKS = tuple(c.strip() for c in os.environ.get("DEPENDABOT_REQUIRED_CHECKS", "").split(",") if c.strip())
 GROUP_RE = re.compile(r"bump the (?P<group>[\w-]+) group")
 SINGLE_RE = re.compile(r"bump (?P<pkg>\S+) from (?P<from>\S+) to (?P<to>\S+)")
 UPDATE_RE = re.compile(r"Updates? `(?P<pkg>[^`]+)` from (?P<from>\S+) to (?P<to>\S+)")
@@ -205,6 +207,10 @@ def main(argv):
         print(__doc__)
         return 2
     cmd, args = argv[1], argv[2:]
+    if not REQUIRED_CHECKS and cmd in ("list", "wait", "rebase"):
+        print('DEPENDABOT_REQUIRED_CHECKS não definido. Ponha os nomes dos checks obrigatórios no '
+              '.claude/settings.json do projeto: {"env": {"DEPENDABOT_REQUIRED_CHECKS": "Lint,Build"}}')
+        return 2
     if cmd == "list":
         return cmd_list("--json" in args) or 0
     if cmd == "covered" and len(args) >= 2:
