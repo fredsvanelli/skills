@@ -65,3 +65,31 @@ export function coverageMarkdown(result, scope) {
   if (result.warnings && result.warnings.length > 0) lines.push('### Warnings', '', ...bullets(result.warnings), '')
   return `${lines.join('\n')}`
 }
+
+export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLatest }) {
+  const name = title ? `${id} (${title})` : id
+  if (!latest) {
+    const dangling = lastRun?.report ? `\nlast_run cites ${lastRun.report}, which does not exist.` : ''
+    return `${name} has never ${full ? 'had a full run' : 'been run'}.${dangling}\n`
+  }
+  const where = [
+    latest.date,
+    latest.commit && `commit ${latest.commit}`,
+    latest.branch && `branch ${latest.branch}`,
+    latest.mode && `mode ${latest.mode}`,
+    latest.partial ? 'partial run (--steps)' : 'full run',
+  ].filter(Boolean).join(' · ')
+  const steps = Object.entries(latest.counts).map(([state, count]) => `${count} ${state}`).join(', ') || 'none found'
+  const lines = [
+    `Last ${full ? 'full run' : 'run'} of ${name}: ${latest.result ?? 'unknown'}`,
+    `Report: ${latest.path}`,
+    `Date: ${where}`,
+    `Steps: ${steps}`,
+  ]
+  if (!lastRunIsLatest) {
+    lines.push(lastRun?.date
+      ? `Last full run (last_run): ${lastRunText(lastRun)}, report ${lastRun.report}`
+      : 'Last full run (last_run): never')
+  }
+  return `${lines.join('\n')}\n`
+}

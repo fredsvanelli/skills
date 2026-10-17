@@ -11,7 +11,8 @@ import { computeCoverage, sliceOf } from './lib/coverage.mjs'
 import { nextStatus } from './lib/status.mjs'
 import { changedFiles, affectedRunbooks } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown } from './lib/format.mjs'
+import { latestReport } from './lib/reports.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown } from './lib/format.mjs'
 
 export const USAGE = `Usage: runbook.mjs <command> [options]
 
@@ -20,6 +21,7 @@ Commands:
   entries       [--slice name] [--path glob]
   requirements
   coverage      [--capability x | --feature y | --path glob | --slice name]
+  check         <id> [--full]
   status        --current <draft|active|deprecated> --states <s1,s2,...> [--partial]
 
 Global options:
@@ -92,6 +94,26 @@ function commandCoverage(root, config, options, warnings) {
   return options.json ? json({ scope, ...result }) : coverageMarkdown(result, scope)
 }
 
+function commandCheck(root, config, options, positionals) {
+  // parseArgs reads "--full <id>" as a value, so a string --full is the id.
+  const id = typeof options.full === 'string' ? options.full : positionals[0]
+  const full = options.full !== undefined
+  if (!id) throw new Error('check needs a runbook id')
+  const runbook = loadRunbooks(root, config).find((rb) => rb.id === id)
+  if (!runbook) throw new Error(`no runbook with id "${id}"`)
+  const latest = latestReport(root, config.paths.runbooks, id, { full })
+  const result = {
+    id,
+    title: runbook.title,
+    status: runbook.status,
+    lastRun: runbook.lastRun,
+    full,
+    latest,
+    lastRunIsLatest: latest !== null && `${config.paths.runbooks}/${runbook.lastRun?.report}` === latest.path,
+  }
+  return options.json ? json(result) : checkMarkdown(result)
+}
+
 function commandStatus(options) {
   if (typeof options.current !== 'string' || typeof options.states !== 'string') {
     throw new Error('status needs --current and --states')
@@ -101,12 +123,12 @@ function commandStatus(options) {
   return options.json ? json({ status }) : `${status}\n`
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check']
 
 export function run(argv) {
   const stderr = []
   const finish = (code, stdout = '') => ({ code, stdout, stderr: stderr.length > 0 ? `${stderr.join('\n')}\n` : '' })
-  const { command, options } = parseArgs(argv)
+  const { command, options, positionals } = parseArgs(argv)
   try {
     if (!command || command === 'help' || options.help) return finish(0, USAGE)
     if (command === 'status') return finish(0, commandStatus(options))
@@ -120,6 +142,7 @@ export function run(argv) {
     let stdout
     if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
+    else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
     else stdout = commandItems(root, config, options, command, warnings)
     stderr.push(...warnings.map((warning) => `warning: ${warning}`))
     return finish(0, stdout)

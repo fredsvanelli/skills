@@ -13,6 +13,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/fredsvanelli:runbook:create` | writes a runbook from a spec, diff, ticket or description |
 | `/fredsvanelli:runbook:update` | updates the steps of a runbook after the behavior it records changed |
 | `/fredsvanelli:runbook:run` | runs runbooks: guided, headless, headed, Claude in Chrome, or as a prompt for the Chrome extension |
+| `/fredsvanelli:runbook:check` | shows the result of a runbook's latest run, or says it was never run |
 | `/fredsvanelli:runbook:to-script` | turns a runbook into a Playwright spec |
 | `/fredsvanelli:runbook:audit-script` | checks runbooks still match the code |
 | `/fredsvanelli:runbook:audit-code` | coverage report, overall or per capability, feature, slice or path |

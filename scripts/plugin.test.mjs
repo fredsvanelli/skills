@@ -45,9 +45,9 @@ test('templates parse', () => {
   assert.equal(parseYaml(runbook.yaml).status, 'draft')
 })
 
-test('all eight commands exist and none is a stub', () => {
+test('all nine commands exist and none is a stub', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/runbook/*.md').map((rel) => path.basename(rel, '.md'))
-  assert.deepEqual(commands, ['audit-code', 'audit-script', 'create', 'list', 'run', 'setup', 'to-script', 'update'])
+  assert.deepEqual(commands, ['audit-code', 'audit-script', 'check', 'create', 'list', 'run', 'setup', 'to-script', 'update'])
   for (const name of commands) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, `commands/runbook/${name}.md`), 'utf8')
     assert.doesNotMatch(text, /Not implemented yet/, `${name}.md is still a stub`)

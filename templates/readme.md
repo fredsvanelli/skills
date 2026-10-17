@@ -27,6 +27,7 @@ They are managed with the `fredsvanelli` Claude Code plugin (`/fredsvanelli:runb
 | `/fredsvanelli:runbook:create` | writes a runbook from a spec, diff, ticket or description |
 | `/fredsvanelli:runbook:update` | updates the steps of a runbook after the behavior it records changed |
 | `/fredsvanelli:runbook:run` | runs runbooks: `--mode guided`, `headless`, `headed`, `chrome` or `prompt` |
+| `/fredsvanelli:runbook:check` | shows the result of a runbook's latest run, or says it was never run |
 | `/fredsvanelli:runbook:to-script` | turns a runbook into a Playwright spec |
 | `/fredsvanelli:runbook:audit-script` | checks runbooks still match the code |
 | `/fredsvanelli:runbook:audit-code` | coverage report |

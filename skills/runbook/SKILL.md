@@ -18,6 +18,7 @@ Each command file holds the full procedure. When the user asks for one of these 
 | write a new runbook from a spec, diff, ticket or description | `/fredsvanelli:runbook:create` | `${CLAUDE_PLUGIN_ROOT}/commands/runbook/create.md` |
 | change the steps of an existing runbook after the behavior changed | `/fredsvanelli:runbook:update` | `${CLAUDE_PLUGIN_ROOT}/commands/runbook/update.md` |
 | execute runbooks, or produce a prompt for the Chrome extension | `/fredsvanelli:runbook:run` | `${CLAUDE_PLUGIN_ROOT}/commands/runbook/run.md` |
+| see the result of a runbook's latest run, or whether it ever ran | `/fredsvanelli:runbook:check` | `${CLAUDE_PLUGIN_ROOT}/commands/runbook/check.md` |
 | turn a runbook into a Playwright spec | `/fredsvanelli:runbook:to-script` | `${CLAUDE_PLUGIN_ROOT}/commands/runbook/to-script.md` |
 | check runbooks still match the code | `/fredsvanelli:runbook:audit-script` | `${CLAUDE_PLUGIN_ROOT}/commands/runbook/audit-script.md` |
 | measure coverage | `/fredsvanelli:runbook:audit-code` | `${CLAUDE_PLUGIN_ROOT}/commands/runbook/audit-code.md` |
