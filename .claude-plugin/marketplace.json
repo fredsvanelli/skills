@@ -4,9 +4,14 @@
   "owner": { "name": "Fred Vanelli" },
   "plugins": [
     {
-      "name": "fredsvanelli",
-      "source": "./",
+      "name": "runbook",
+      "source": "./runbook",
       "description": "UAT runbooks kept as a project's verified knowledge base."
+    },
+    {
+      "name": "utils",
+      "source": "./utils",
+      "description": "Repo housekeeping: merged branches, Dependabot PR queue."
     }
   ]
 }

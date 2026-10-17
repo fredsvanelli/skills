@@ -1,25 +1,32 @@
-# fredsvanelli
+# fredsvanelli/skills
 
-Claude Code plugin with Fred Vanelli's skills.
+Claude Code plugin marketplace. Each folder is one plugin, installed on its own.
 
-## runbook
+| Plugin | Commands | Does |
+|---|---|---|
+| [`runbook`](runbook/) | `/runbook:*` | UAT runbooks kept as a project's verified knowledge base |
+| [`utils`](utils/) | `/utils:*` | repo housekeeping: merged branches, Dependabot PR queue |
 
-UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. The agent writes them, runs them in the browser, audits them against the code and measures coverage.
+## Install
 
-| Command | Does |
-|---|---|
-| `/fredsvanelli:runbook:setup` | prepares a project: folders, config, agents block, Playwright MCP servers |
-| `/fredsvanelli:runbook:list` | lists runbooks, filtered or by what a diff affects |
-| `/fredsvanelli:runbook:create` | writes a runbook from a spec, diff, ticket or description |
-| `/fredsvanelli:runbook:update` | updates the steps of a runbook after the behavior it records changed |
-| `/fredsvanelli:runbook:run` | runs runbooks: guided, headless, headed, Claude in Chrome, or as a prompt for the Chrome extension |
-| `/fredsvanelli:runbook:check` | shows the result of a runbook's latest run, or says it was never run |
-| `/fredsvanelli:runbook:to-script` | turns a runbook into a Playwright spec |
-| `/fredsvanelli:runbook:audit-script` | checks runbooks still match the code |
-| `/fredsvanelli:runbook:audit-code` | coverage report, overall or per capability, feature, slice or path |
+    claude plugin marketplace add fredsvanelli/skills
+    claude plugin install runbook@fredsvanelli
+    claude plugin install utils@fredsvanelli
 
-## Local development
+For a whole team, commit this to the project's `.claude/settings.json`:
 
-    claude --plugin-dir .claude/plugins/fredsvanelli
+```json
+{
+  "extraKnownMarketplaces": {
+    "fredsvanelli": { "source": { "source": "github", "repo": "fredsvanelli/skills" } }
+  },
+  "enabledPlugins": { "runbook@fredsvanelli": true, "utils@fredsvanelli": true }
+}
+```
 
-Run `/reload-plugins` after editing. Tests: `yarn --cwd .claude/plugins/fredsvanelli test` (Node 18+).
+## Adding a plugin
+
+1. `mkdir -p <name>/.claude-plugin <name>/skills` and write `<name>/.claude-plugin/plugin.json` with `"name": "<name>"`.
+2. Each skill goes in `<name>/skills/<skill>/SKILL.md`; it is invoked as `/<name>:<skill>`.
+3. Add the plugin to `.claude-plugin/marketplace.json`.
+4. Bump `version` in a plugin's `plugin.json` when you change it, so installs pick up the update.

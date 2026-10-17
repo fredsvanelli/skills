@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "language": "en",
+  "paths": { "runbooks": "docs/runbooks", "evidence": ".runbook/evidence", "e2e": "e2e" },
+  "app": { "baseUrl": "http://localhost:3001", "start": ["yarn dev"] },
+  "accounts": {
+    "admin": { "emailEnv": "UAT_ADMIN_EMAIL", "passwordEnv": "UAT_ADMIN_PASSWORD", "loginPath": "/signin" }
+  },
+  "uiText": ["src/messages/en.json"],
+  "data": { "seedHint": "" },
+  "entries": [
+    { "extractor": "next-app-router", "glob": "src/app/[locale]/**/page.tsx" },
+    { "extractor": "next-app-router", "root": "../api", "glob": "src/app/admin/**/route.ts" }
+  ],
+  "requirements": [
+    { "extractor": "regex", "glob": "docs/specs/*.md", "pattern": "^- (?<id>REQ-\\d+): (?<title>.+)$" }
+  ],
+  "slices": {
+    "billing": ["src/app/[locale]/(dashboard)/financeiro/**", "../api/src/app/admin/invoices/**"],
+    "deliveries": ["src/app/[locale]/(dashboard)/deliveries/**"]
+  },
+  "tickets": { "fetch": "" },
+  "git": { "base": "main", "protected": ["main"], "messageFormat": "docs(runbooks): {summary}" },
+  "commits": { "runbooks": "ask", "runs": "auto", "coverage": "auto", "setup": "ask" },
+  "mcp": { "headless": "runbook-playwright", "headed": "runbook-playwright-headed", "secretsFile": ".env.local" }
+}
