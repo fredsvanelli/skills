@@ -21,7 +21,7 @@
 | `git.base` | `main` | base for `--affected` and diffs |
 | `git.protected` | `["main"]` | branches where `auto` commits fall back to `ask` |
 | `git.messageFormat` | `docs(runbooks): {summary}` | commit message; `{summary}` is replaced |
-| `commits.runbooks/runs/coverage/setup` | `ask/auto/auto/ask` | commit policy per artifact (`never`, `ask`, `auto`) |
+| `commits.runbooks/setup` | `ask/ask` | commit policy per artifact (`never`, `ask`, `auto`) |
 | `mcp.headless` / `mcp.headed` | `runbook-playwright` / `runbook-playwright-headed` | `.mcp.json` server names for the automated modes |
 | `mcp.secretsFile` | `.env.local` | dotenv file passed to Playwright MCP `--secrets`; must be gitignored |
 

@@ -14,6 +14,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbook:to-script` | turns a runbook into a Playwright spec |
 | `/runbook:audit-script` | checks runbooks still match the code |
 | `/runbook:coverage` | coverage report, overall or per capability, feature, slice or path |
+| `/runbook:upgrade` | updates the installed plugin to the latest version from its marketplace |
 
 ## Install
 

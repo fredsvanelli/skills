@@ -5,9 +5,9 @@ Each command commits its own files by the policy in `commits.<type>` of the conf
 | Type | Files |
 |---|---|
 | `runbooks` | runbook files written or edited by `map`, `create`, `update`, `audit-script --fix`, `to-script` (with its spec file), and `status`/`last_run` updates from `run` |
-| `runs` | `_runs/*.md` reports |
-| `coverage` | `_coverage/*.md` reports |
-| `setup` | the config, `README.md`, `.gitkeep` files, `.gitignore`, the agents block, `.mcp.json`, `.claude/settings.json` |
+| `setup` | the config, `README.md`, the root `.gitignore` and the two in `_runs/` and `_coverage/`, the agents block, `.mcp.json`, `.claude/settings.json` |
+
+Run reports in `_runs/` and coverage reports in `_coverage/` stay local: each folder holds a `.gitignore` that ignores everything but itself, so no command commits them.
 
 | Policy | Behavior |
 |---|---|

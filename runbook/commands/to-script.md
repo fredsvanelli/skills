@@ -8,6 +8,15 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`
 
+## Parameters
+
+| Parameter | Use |
+|---|---|
+| `<id>` | required: the runbook to turn into a spec (`billing.issue-invoice`) |
+| `--out path` | where to write the spec. Default: `<paths.e2e>/<capability>/<flow>.runbook.spec.<ts or js>` |
+
+Examples: `/runbook:to-script billing.issue-invoice`, `/runbook:to-script billing.issue-invoice --out e2e/invoices.spec.ts`.
+
 Run `git status --porcelain` now and keep the list for the commit step.
 
 1. **Target.** A `placeholder` has no steps; stop and offer `/runbook:create --from placeholder <id>`.  `--out` when given; else `<paths.e2e>/<capability>/<flow>.runbook.spec.<ts|js>`, matching the extension of the project's specs. When `paths.e2e` is `null`, ask: stop (recommended), or create `e2e/runbooks/` and tell the user Playwright must be installed and configured to pick it up.

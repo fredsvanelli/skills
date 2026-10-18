@@ -47,12 +47,13 @@ test('templates parse', () => {
   assert.equal(parseYaml(placeholder.yaml).status, 'placeholder')
 })
 
-test('all ten commands exist and none is a stub', () => {
+test('all eleven commands exist and none is a stub', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/*.md').map((rel) => path.basename(rel, '.md'))
-  assert.deepEqual(commands, ['audit-script', 'check', 'coverage', 'create', 'list', 'map', 'run', 'setup', 'to-script', 'update'])
+  assert.deepEqual(commands, ['audit-script', 'check', 'coverage', 'create', 'list', 'map', 'run', 'setup', 'to-script', 'update', 'upgrade'])
   for (const name of commands) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, `commands/${name}.md`), 'utf8')
     assert.doesNotMatch(text, /Not implemented yet/, `${name}.md is still a stub`)
+    assert.match(text, /^## Parameters$/m, `${name}.md explains its parameters`)
   }
 })
 

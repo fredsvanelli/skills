@@ -8,6 +8,21 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`
 
+## Parameters
+
+Pick what to run with one of `<id...>`, `--capability` or `--affected`; the other parameters go with any of them.
+
+| Parameter | Use |
+|---|---|
+| `<id...>` | one or more runbook ids, separated by spaces |
+| `--capability x` | every runbook in the capability folder `x` |
+| `--affected [base]` | the runbooks `/runbook:list --affected` returns; `base` defaults to `git.base` |
+| `--mode m` | how the steps run: `guided` (you act and report), `headless` or `headed` (the agent through Playwright MCP), `chrome` (the agent through Claude in Chrome), `prompt` (a prompt for the Chrome extension), `script` (a temporary Playwright script). Without it, the command asks |
+| `--steps S01,S02` | run only these steps. The report is marked partial, and `status` and `last_run` stay unchanged |
+| `--import <file or text>` | bring back the reply of a `prompt` run, as a file path or pasted text, and write its report |
+
+Examples: `/runbook:run billing.issue-invoice --mode headless`, `/runbook:run --affected --mode guided`, `/runbook:run billing.issue-invoice --steps S03,S04`, `/runbook:run billing.issue-invoice --import .runbook/reply.md`.
+
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/format.md` (step states, dependency tree, status) and `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/run-modes.md` (the mode you will use).
 
 Run `git status --porcelain` now and keep the list for the commit step.
@@ -68,7 +83,7 @@ Print the results in the conversation before any commit question:
 
 ## 8. Commit
 
-Commit by policy: reports under `runs`, runbook frontmatter changes under `runbooks`. Ask an `ask` question only after the table from step 7 is on screen; the question names the files and the message and does not repeat the table.
+Commit the runbook frontmatter changes (`status`, `last_run`) by the `runbooks` policy. Reports are not committed: `_runs/` is ignored by Git, so they stay local. Ask an `ask` question only after the table from step 7 is on screen; the question names the files and the message and does not repeat the table.
 
 ## 9. Close
 

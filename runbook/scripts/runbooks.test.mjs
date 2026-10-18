@@ -35,7 +35,7 @@ test('loadConfig fills defaults', () => {
   assert.equal(config.paths.e2e, null)
   assert.deepEqual(config.entries, [])
   assert.deepEqual(config.slices, {})
-  assert.equal(config.commits.runs, 'auto')
+  assert.deepEqual(config.commits, { runbooks: 'ask', setup: 'ask' })
   assert.equal(config.git.base, 'main')
 })
 
@@ -47,7 +47,7 @@ test('loadConfig explains what is wrong', () => {
   assert.throws(() => loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1, "requirements": [{ "extractor": "regex", "glob": "x", "pattern": "^- (REQ)" }] }' })), /requirements\[0\]: pattern needs a named group \(\?<id>\.\.\.\)/)
   assert.throws(() => loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1, "requirements": [{ "extractor": "regex", "glob": "x", "pattern": "(?<id>[" }] }' })), /requirements\[0\]: invalid pattern/)
   assert.throws(() => loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1, "requirements": [{ "extractor": "command" }] }' })), /requirements\[0\]: "command" is required/)
-  assert.throws(() => loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1, "commits": { "runs": "yes" } }' })), /commits\.runs must be one of never, ask, auto/)
+  assert.throws(() => loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1, "commits": { "runbooks": "yes" } }' })), /commits\.runbooks must be one of never, ask, auto/)
 })
 
 test('loadRunbooks skips reports and README, sorts by path', () => {

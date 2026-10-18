@@ -8,6 +8,20 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`
 
+## Parameters
+
+Use at most one filter. Without one, the command maps the whole project.
+
+| Parameter | Use |
+|---|---|
+| `--capability x` | map only entries whose file is in the slice `x` of the config `slices` |
+| `--slice name` | the same as `--capability` |
+| `--path glob` | map only entries whose file matches the glob (`src/app/**/financeiro/**`) |
+
+With a filter, a requirement is mapped only when it belongs to a flow mapped in that scope.
+
+Examples: `/runbook:map`, `/runbook:map --capability billing`, `/runbook:map --path "src/app/**/deliveries/**"`.
+
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/format.md`.
 
 A placeholder is a runbook with frontmatter and a Goal but no steps (`status: placeholder`). It marks a flow that still needs a runbook. `/runbook:create` fills it later. This command writes new placeholders only and never edits an existing runbook, placeholders included, so running it again maps only what is still unmapped.

@@ -8,6 +8,22 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`
 
+## Parameters
+
+`--from` is required and takes exactly one source.
+
+| Parameter | Use |
+|---|---|
+| `--from spec <path>` | a spec or design doc in the repository |
+| `--from diff [base]` | the changes from `base` to `HEAD`; `base` defaults to `git.base` |
+| `--from ticket <id>` | a tracker ticket, read through a tracker MCP tool, else the config `tickets.fetch`, else pasted by the user |
+| `--from text "<description>"` | a description of the flow in your own words |
+| `--from placeholder <id>` | a placeholder written by `/runbook:map`; this run fills that file |
+
+Whatever the source, the command looks for a placeholder of the same flow and fills it instead of writing a new file.
+
+Examples: `/runbook:create --from spec docs/specs/billing.md`, `/runbook:create --from diff develop`, `/runbook:create --from ticket CHE-581`, `/runbook:create --from text "partner downloads an invoice PDF"`, `/runbook:create --from placeholder billing.issue-invoice`.
+
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/format.md`.
 
 A runbook is worth what was investigated. Every step names a real route, a real control and the exact text the UI shows.

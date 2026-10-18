@@ -8,6 +8,20 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`
 
+## Parameters
+
+`<id>` and `--from` are both required; `--from` takes exactly one source.
+
+| Parameter | Use |
+|---|---|
+| `<id>` | the runbook to update; `deprecated` runbooks are not updated |
+| `--from spec <path>` | a spec or design doc describing the new behavior |
+| `--from diff [base]` | the changes from `base` to `HEAD`; `base` defaults to `git.base` |
+| `--from ticket <id>` | a tracker ticket, read as in `create` |
+| `--from text "<description>"` | the change in your own words |
+
+Examples: `/runbook:update billing.issue-invoice --from diff`, `/runbook:update billing.issue-invoice --from ticket CHE-612`, `/runbook:update billing.issue-invoice --from text "the Issue button is now Generate invoice"`.
+
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/format.md`.
 
 An update changes what the runbook expects, so it is investigated like a new runbook, but only where the change reaches. Every edited or added step names a real route, a real control and the exact text the UI shows.

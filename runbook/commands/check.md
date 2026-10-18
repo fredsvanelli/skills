@@ -8,9 +8,18 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`
 
+## Parameters
+
+| Parameter | Use |
+|---|---|
+| `<id>` | required: the runbook whose latest run to show (`billing.issue-invoice`) |
+| `--full` | skip partial runs (`--steps`) and show the newest full run, the one `last_run` records |
+
+Examples: `/runbook:check billing.issue-invoice`, `/runbook:check billing.issue-invoice --full`.
+
 This command only reads. It opens no browser, writes no file and commits nothing.
 
-By default the latest run is the newest report of the id, partial runs (`--steps`) included. `--full` skips partial runs and shows the newest full run, the kind `last_run` records.
+By default the latest run is the newest report of the id, partial runs (`--steps`) included.
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" check $ARGUMENTS --json`.
    - Exit code 2 means the script could not run. Show its message: an unknown id gets the ids from `... list` that look closest; a missing config gets an offer of `/runbook:setup`.

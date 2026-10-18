@@ -8,6 +8,10 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`
 
+## Parameters
+
+None. Run `/runbook:setup` on its own; running it again reconfigures the project and shows the diff of every file before writing.
+
 Prepares the project so the other `/runbook:*` commands work. Running it again is safe: show the diff of every file you would change and write only after the user approves.
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/config.md` and `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/commits.md`.
@@ -39,7 +43,7 @@ One `AskUserQuestion` round, only for keys detection could not settle, each with
 - `app.baseUrl` and `app.start`.
 - `accounts`: role names and the env var names holding each email and password. Ask for names only.
 - `mcp.secretsFile`, when it is not `.env.local`.
-- The `commits` policy for `runbooks`, `runs`, `coverage`, `setup`; suggest `ask`, `auto`, `auto`, `ask`.
+- The `commits` policy for `runbooks` and `setup`; suggest `ask` for both.
 - Whether to add the two Playwright MCP servers to `.mcp.json`.
 
 ## 3. Write
@@ -48,13 +52,14 @@ One `AskUserQuestion` round, only for keys detection could not settle, each with
 |---|---|
 | `docs/runbooks/runbook.config.json` | `${CLAUDE_PLUGIN_ROOT}/templates/runbook.config.json` filled with steps 1 and 2 |
 | `docs/runbooks/README.md` | `${CLAUDE_PLUGIN_ROOT}/templates/readme.md` |
-| `docs/runbooks/_runs/.gitkeep`, `docs/runbooks/_coverage/.gitkeep` | empty files |
+| `docs/runbooks/_runs/.gitignore`, `docs/runbooks/_coverage/.gitignore` | two lines, `*` and `!.gitignore`: the folder is tracked, the reports in it stay local |
 | `.gitignore` | add `.runbook/` when missing |
 | agents block | `${CLAUDE_PLUGIN_ROOT}/templates/agents-block.md` |
 | `.mcp.json` (when approved) | `${CLAUDE_PLUGIN_ROOT}/templates/mcp-servers.json` |
 
 - Agents block: when one of `AGENTS.md` and `CLAUDE.md` is a symlink to the other, write once to the real file. Otherwise prefer `AGENTS.md` when it exists, else `CLAUDE.md`. Replace the text between `<!-- runbook:start -->` and `<!-- runbook:end -->` when the markers exist; otherwise append the block at the end of the file.
 - `.mcp.json`: merge the two servers into `mcpServers`, keeping every existing server. Replace `<mcp.secretsFile>` and `<paths.evidence>`. Confirm the secrets file is ignored with `git check-ignore -q <file>`; when it is not, stop and tell the user, because the MCP server would read a tracked file.
+- Report folders: when `git ls-files <paths.runbooks>/_runs <paths.runbooks>/_coverage` lists anything besides the two `.gitignore` files (reports or `.gitkeep` from an older setup), show the list and offer `git rm -r --cached --quiet -- <files>`. The files stay on disk; the removal goes into the setup commit.
 - Plugin registration: when `${CLAUDE_PLUGIN_ROOT}` is inside this project, the plugin is in local development. Print `claude --plugin-dir <path relative to the project>` and leave `.claude/settings.json` alone. When it is outside (installed from a marketplace), add the marketplace to `extraKnownMarketplaces` and `"runbook@<marketplace>": true` to `enabledPlugins` in `.claude/settings.json`, keeping existing keys.
 
 Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" entries` and `... requirements`. Fix the config until both exit 0 and every warning is understood.

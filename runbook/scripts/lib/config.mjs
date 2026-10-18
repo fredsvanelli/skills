@@ -23,7 +23,7 @@ const DEFAULTS = {
   slices: {},
   tickets: { fetch: '' },
   git: { base: 'main', protected: ['main'], messageFormat: 'docs(runbooks): {summary}' },
-  commits: { runbooks: 'ask', runs: 'auto', coverage: 'auto', setup: 'ask' },
+  commits: { runbooks: 'ask', setup: 'ask' },
   mcp: { headless: 'runbook-playwright', headed: 'runbook-playwright-headed', secretsFile: '.env.local' },
 }
 

@@ -5,7 +5,7 @@ description: Runbooks are the project's UAT knowledge base in docs/runbooks/, ve
 
 # Runbooks
 
-A runbook is a versioned UAT script for one user flow: preconditions, ordered steps, and the exact result the browser shows after each step. Runbooks are the project's official record of how the product behaves. Each execution produces a separate report in `_runs/`; the runbook itself changes only when the expected behavior changes.
+A runbook is a versioned UAT script for one user flow: preconditions, ordered steps, and the exact result the browser shows after each step. Runbooks are the project's official record of how the product behaves. Each execution produces a separate report in `_runs/`, kept local and ignored by Git; the runbook itself changes only when the expected behavior changes.
 
 ## Commands
 
@@ -23,6 +23,7 @@ Each command file holds the full procedure. When the user asks for one of these 
 | turn a runbook into a Playwright spec | `/runbook:to-script` | `${CLAUDE_PLUGIN_ROOT}/commands/to-script.md` |
 | check runbooks still match the code | `/runbook:audit-script` | `${CLAUDE_PLUGIN_ROOT}/commands/audit-script.md` |
 | measure coverage | `/runbook:coverage` | `${CLAUDE_PLUGIN_ROOT}/commands/coverage.md` |
+| update the installed runbook plugin to its latest version | `/runbook:upgrade` | `${CLAUDE_PLUGIN_ROOT}/commands/upgrade.md` |
 
 Before calling feature work done, run `list --affected` and then `run` on what it returns.
 
