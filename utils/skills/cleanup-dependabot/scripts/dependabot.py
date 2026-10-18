@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Helper da skill /utils:cleanup-dependabot. Só usa `gh` e `git` — sem jq.
+"""Helper for the /utils:cleanup-dependabot skill. Uses only `gh` and `git` — no jq.
 
-  dependabot.py list [--json]              PRs abertas do Dependabot, classificadas
-  dependabot.py covered PKG VER [REF]      VER já está resolvida em REF (padrão origin/develop)?
-  dependabot.py wait N [--timeout S]       espera mergeable + checks e diz se pode mergear
-  dependabot.py rebase N [--timeout S]     comenta @dependabot rebase e espera o head mudar
+  dependabot.py list [--json]              open Dependabot PRs, classified
+  dependabot.py covered PKG VER [REF]      is VER already resolved in REF (default origin/develop)?
+  dependabot.py wait N [--timeout S]       waits for mergeable + checks and says whether it can merge
+  dependabot.py rebase N [--timeout S]     comments @dependabot rebase and waits for the head to change
 
-Códigos de saída: 0 = ok / coberto / mergeável; 1 = não; 2 = erro de uso ou de ferramenta.
+Exit codes: 0 = ok / covered / mergeable; 1 = no; 2 = usage or tool error.
 """
 import json
 import os
@@ -15,13 +15,13 @@ import subprocess
 import sys
 import time
 
-# checks que precisam estar em SUCCESS; cada projeto define no "env" do .claude/settings.json
+# checks that must be SUCCESS; each project sets them in the "env" of .claude/settings.json
 REQUIRED_CHECKS = tuple(c.strip() for c in os.environ.get("DEPENDABOT_REQUIRED_CHECKS", "").split(",") if c.strip())
 GROUP_RE = re.compile(r"bump the (?P<group>[\w-]+) group")
 SINGLE_RE = re.compile(r"bump (?P<pkg>\S+) from (?P<from>\S+) to (?P<to>\S+)")
 UPDATE_RE = re.compile(r"Updates? `(?P<pkg>[^`]+)` from (?P<from>\S+) to (?P<to>\S+)")
-# tabela do topo do corpo de um grupo: | [pkg](url) | `de` | `para` |  — o GitHub trunca o
-# corpo em ~65 KB e os blocos "Updates `pkg`" do fim somem; a tabela é a fonte completa.
+# table at the top of a group's body: | [pkg](url) | `from` | `to` |  — GitHub truncates the
+# body at ~65 KB and the "Updates `pkg`" blocks at the end disappear; the table is the full source.
 TABLE_RE = re.compile(r"^\| \[(?P<pkg>[^\]]+)\]\([^)]*\) \| `(?P<from>[^`]+)` \| `(?P<to>[^`]+)` \|", re.M)
 
 
@@ -38,7 +38,7 @@ def gh_json(*args):
 
 
 def semver(v):
-    """Tupla comparável; ignora prefixo 'v' e pré-release ("1.2.3-beta.1" < "1.2.3")."""
+    """Comparable tuple; ignores the 'v' prefix and orders pre-releases first ("1.2.3-beta.1" < "1.2.3")."""
     v = v.lstrip("v")
     core, _, pre = v.partition("-")
     nums = tuple(int(x) if x.isdigit() else 0 for x in core.split("."))
@@ -71,7 +71,7 @@ def parse_updates(title, body):
 
 
 def checks_summary(rollup):
-    """(all_required_green, list_of_failed_or_missing). Job pulado NÃO é verde."""
+    """(all_required_green, list_of_failed_or_missing). A skipped job is NOT green."""
     by_name = {}
     for c in rollup or []:
         name = c.get("name") or c.get("context") or ""
@@ -81,7 +81,7 @@ def checks_summary(rollup):
     for req in REQUIRED_CHECKS:
         st = by_name.get(req)
         if st != "SUCCESS":
-            bad.append(f"{req}={st or 'ausente'}")
+            bad.append(f"{req}={st or 'missing'}")
     for name, st in by_name.items():
         if st in ("FAILURE", "ERROR", "TIMED_OUT", "CANCELLED") and name not in REQUIRED_CHECKS:
             bad.append(f"{name}={st}")
@@ -107,28 +107,28 @@ def cmd_list(as_json):
             mergeable=p["mergeable"], mergeState=p["mergeStateStatus"],
             ci_green=green, ci_problems=bad,
         ))
-    # ordem de trabalho: develop antes de main; grupo antes de single; sem major antes de major
+    # working order: develop before main; group before single; no major before major
     rows.sort(key=lambda r: (r["base"] != "develop", not r["group"], r["has_major"], r["number"]))
     if as_json:
         print(json.dumps(rows, indent=2, ensure_ascii=False))
         return
-    print(f"{'PR':>5}  {'base':8} {'nível':6} {'mergeable':12} {'CI':6} pacotes")
+    print(f"{'PR':>5}  {'base':8} {'level':6} {'mergeable':12} {'CI':6} packages")
     for r in rows:
-        lvl = "grupo" if r["group"] else (r["updates"][0]["level"] if r["updates"] else "?")
+        lvl = "group" if r["group"] else (r["updates"][0]["level"] if r["updates"] else "?")
         pk = ", ".join(f"{u['pkg']} {u['from']}→{u['to']}" for u in r["updates"][:3])
         if len(r["updates"]) > 3:
             pk += f" (+{len(r['updates']) - 3})"
-        ci = "verde" if r["ci_green"] else "NÃO"
+        ci = "green" if r["ci_green"] else "NO"
         print(f"#{r['number']:>4}  {r['base']:8} {lvl:6} {r['mergeable']:12} {ci:6} {pk}")
         if r["has_major"] and r["group"]:
-            print(f"{'':6} ⚠ grupo contém major: " + ", ".join(u["pkg"] for u in r["updates"] if u["level"] == "major"))
+            print(f"{'':6} ⚠ group contains major: " + ", ".join(u["pkg"] for u in r["updates"] if u["level"] == "major"))
         if not r["ci_green"]:
             print(f"{'':6} CI: " + "; ".join(r["ci_problems"]))
 
 
 def cmd_covered(pkg, ver, ref):
-    """npm: toda entrada `pkg@...` do yarn.lock em REF resolve para >= ver.
-    github-actions (pkg com '/', sem '@'): todo `uses: pkg@vN` nos workflows tem N >= major(ver)."""
+    """npm: every `pkg@...` entry of yarn.lock in REF resolves to >= ver.
+    github-actions (pkg with '/', no '@'): every `uses: pkg@vN` in the workflows has N >= major(ver)."""
     if "/" in pkg and not pkg.startswith("@"):
         files = sh("git", "ls-tree", "-r", "--name-only", ref, ".github/workflows").split()
         found = []
@@ -136,22 +136,22 @@ def cmd_covered(pkg, ver, ref):
             txt = sh("git", "show", f"{ref}:{f}")
             found += re.findall(rf"uses:\s*{re.escape(pkg)}@v?([\w.]+)", txt)
         if not found:
-            print(f"{pkg}: não usado em {ref}")
+            print(f"{pkg}: not used in {ref}")
             return 0
         ok = all(semver(v)[0] >= semver(ver)[0] for v in found)
-        print(f"{pkg} em {ref}: uses@ {sorted(set(found))} — {'coberto' if ok else 'NÃO coberto'} (alvo v{semver(ver)[0]})")
+        print(f"{pkg} in {ref}: uses@ {sorted(set(found))} — {'covered' if ok else 'NOT covered'} (target v{semver(ver)[0]})")
         return 0 if ok else 1
     lock = sh("git", "show", f"{ref}:yarn.lock")
-    # cabeçalho de entrada: `"@scope/pkg@^1.0.0", "@scope/pkg@^1.2.0":` ou `pkg@^1.0.0:`
+    # entry header: `"@scope/pkg@^1.0.0", "@scope/pkg@^1.2.0":` or `pkg@^1.0.0:`
     resolved = []
     for m in re.finditer(r'^"?(' + re.escape(pkg) + r')@[^\n]*:\n  version "([^"]+)"', lock, re.M):
         resolved.append(m.group(2))
     if not resolved:
-        print(f"{pkg}: não usado em {ref} (nenhuma entrada em yarn.lock) — nada a cobrir; "
-              f"confira o nome, e se o pacote foi removido do projeto feche a PR como obsoleta")
+        print(f"{pkg}: not used in {ref} (no entry in yarn.lock) — nothing to cover; "
+              f"check the name, and if the package was removed from the project close the PR as obsolete")
         return 0
     ok = all(semver(v) >= semver(ver) for v in resolved)
-    print(f"{pkg} em {ref}: resolvido {sorted(set(resolved))} — {'coberto' if ok else 'NÃO coberto'} (alvo {ver})")
+    print(f"{pkg} in {ref}: resolved {sorted(set(resolved))} — {'covered' if ok else 'NOT covered'} (target {ver})")
     return 0 if ok else 1
 
 
@@ -173,32 +173,32 @@ def cmd_wait(n, timeout):
                       for c in p["statusCheckRollup"] or [])
         settled = p["mergeable"] != "UNKNOWN" and not pending
         if settled or time.time() > deadline:
-            verdict = "PODE MERGEAR" if (p["mergeable"] == "MERGEABLE" and green) else "NÃO MERGEAR"
+            verdict = "CAN MERGE" if (p["mergeable"] == "MERGEABLE" and green) else "DO NOT MERGE"
             print(f"#{n} ({p['baseRefName']}): mergeable={p['mergeable']} state={p['mergeStateStatus']} "
-                  f"checks={'verde' if green else 'não'} → {verdict}")
+                  f"checks={'green' if green else 'no'} → {verdict}")
             if bad:
-                print("  problemas: " + "; ".join(bad))
+                print("  problems: " + "; ".join(bad))
             if not settled:
-                print("  (timeout — estado ainda instável)")
-            return 0 if verdict == "PODE MERGEAR" else 1
+                print("  (timeout — state still unsettled)")
+            return 0 if verdict == "CAN MERGE" else 1
         time.sleep(20)
 
 
 def cmd_rebase(n, timeout):
     before = pr_state(n)["headRefOid"]
     sh("gh", "pr", "comment", str(n), "--body", "@dependabot rebase")
-    print(f"#{n}: pedido @dependabot rebase (head {before[:8]}); esperando o head mudar…")
+    print(f"#{n}: asked @dependabot rebase (head {before[:8]}); waiting for the head to change…")
     deadline = time.time() + timeout
     while time.time() < deadline:
         time.sleep(30)
         p = pr_state(n)
         if p["state"] != "OPEN":
-            print(f"#{n}: {p['state']} durante o rebase")
+            print(f"#{n}: {p['state']} during the rebase")
             return 1
         if p["headRefOid"] != before:
-            print(f"#{n}: head agora {p['headRefOid'][:8]}; esperando checks…")
+            print(f"#{n}: head now {p['headRefOid'][:8]}; waiting for checks…")
             return cmd_wait(n, timeout)
-    print(f"#{n}: Dependabot não rebaseou em {timeout}s — ver comentários da PR; rota de re-extração manual")
+    print(f"#{n}: Dependabot did not rebase in {timeout}s — see the PR comments; take the manual re-extraction route")
     return 1
 
 
@@ -208,14 +208,14 @@ def main(argv):
         return 2
     cmd, args = argv[1], argv[2:]
     if not REQUIRED_CHECKS and cmd in ("list", "wait", "rebase"):
-        print('DEPENDABOT_REQUIRED_CHECKS não definido. Ponha os nomes dos checks obrigatórios no '
-              '.claude/settings.json do projeto: {"env": {"DEPENDABOT_REQUIRED_CHECKS": "Lint,Build"}}')
+        print('DEPENDABOT_REQUIRED_CHECKS is not set. Put the names of the required checks in the '
+              'project\'s .claude/settings.json: {"env": {"DEPENDABOT_REQUIRED_CHECKS": "Lint,Build"}}')
         return 2
     if cmd == "list":
         return cmd_list("--json" in args) or 0
     if cmd == "covered" and len(args) >= 2:
         if " " in args[0] or " " in args[1]:
-            print("uso: covered PKG VER [REF] — um pacote por chamada")
+            print("usage: covered PKG VER [REF] — one package per call")
             return 2
         return cmd_covered(args[0], args[1], args[2] if len(args) > 2 else "origin/develop")
     if cmd in ("wait", "rebase") and args:

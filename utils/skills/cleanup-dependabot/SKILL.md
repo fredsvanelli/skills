@@ -1,6 +1,6 @@
 ---
 name: cleanup-dependabot
-description: "Use quando o usuário digitar /utils:cleanup-dependabot ou pedir para limpar, resolver, rebasear ou mergear as PRs do Dependabot (bumps de dependência, security updates) deste repositório."
+description: "Use when the user types /utils:cleanup-dependabot or asks to clean up, resolve, rebase or merge this repository's Dependabot PRs (dependency bumps, security updates)."
 argument-hint: "[--dry-run] [--only N,N,...]"
 allowed-tools:
   - Read
@@ -13,266 +13,266 @@ allowed-tools:
 
 # /utils:cleanup-dependabot
 
-Esvazia a fila de PRs do Dependabot **sem furar o fluxo do projeto**: tudo chega a `main`
-por `develop`, ninguém mergeia CI vermelho, e major só entra com alguém olhando.
+Empties the Dependabot PR queue **without breaking the project's flow**: everything reaches `main`
+through `develop`, nobody merges red CI, and a major only goes in with someone watching.
 
-Lê a fila de verdade (nunca de memória), resolve conflito PR a PR, mergeia o que pode e
-devolve um relatório do que entrou, do que fechou e do que ficou — com o motivo de cada um.
+Reads the real queue (never from memory), resolves conflicts PR by PR, merges what it can and
+returns a report of what went in, what was closed and what was left, with the reason for each.
 
-## Uso
+## Usage
 
 ```
-/utils:cleanup-dependabot                # a fila inteira
-/utils:cleanup-dependabot --dry-run      # só inventário + plano; não comenta, não mergeia, não fecha
-/utils:cleanup-dependabot --only 215,180 # só essas PRs (as outras nem são tocadas)
+/utils:cleanup-dependabot                # the whole queue
+/utils:cleanup-dependabot --dry-run      # inventory + plan only; no comment, no merge, no close
+/utils:cleanup-dependabot --only 215,180 # only these PRs (the others are not touched)
 ```
 
-Qualquer outro argumento é inválido — diga e pare.
+Any other argument is invalid — say so and stop.
 
-**Onde funciona:** raiz do repositório, com `gh` autenticado (`gh auth status`) e `python3`.
-Os checks que contam como CI verde vêm de `DEPENDABOT_REQUIRED_CHECKS` (nomes separados por vírgula), definido no `env` do `.claude/settings.json` do projeto; sem ele o helper sai 2. O helper é `${CLAUDE_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py` (sem `jq` — não há
-`jq` nesta máquina). Rode `python3 <helper>` sem argumentos para ver os subcomandos.
+**Where it works:** the repository root, with `gh` authenticated (`gh auth status`) and `python3`.
+The checks that count as green CI come from `DEPENDABOT_REQUIRED_CHECKS` (comma-separated names), set in the `env` of the project's `.claude/settings.json`; without it the helper exits 2. The helper is `${CLAUDE_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py` (no `jq` — there is no
+`jq` on this machine). Run `python3 <helper>` with no arguments to see the subcommands.
 
-## O que esta skill faz e o que não faz
+## What this skill does and does not do
 
-| Faz | Não faz |
+| Does | Does not |
 |---|---|
-| Lista e classifica as PRs abertas do Dependabot (alvo, nível semver, grupo, CI) | Mergear em `main` — **nunca**, nem com CI verde |
-| Pede `@dependabot rebase` e, se não resolver, refaz o bump numa branch própria | Editar `yarn.lock` à mão |
-| Mergeia em `develop` com `--merge` quando CI verde e `mergeable` | Mergear com check faltando, pulado ou vermelho; `--admin`; force-push |
-| Para PR contra `main`: cobre via `develop` e fecha com comentário | Fechar PR de `main` sem a versão já estar em `develop` |
-| Major: resume breaking changes e **pergunta** antes de mergear | Mergear major sem um "sim" explícito para aquela PR |
-| Deixa `develop` local sincronizado e entrega o relatório | Stash automático, `git reset`, trocar de branch com árvore suja |
+| Lists and classifies the open Dependabot PRs (target, semver level, group, CI) | Merge into `main` — **never**, not even with green CI |
+| Asks `@dependabot rebase` and, if that does not work, redoes the bump on its own branch | Edit `yarn.lock` by hand |
+| Merges into `develop` with `--merge` when CI is green and the PR is `mergeable` | Merge with a missing, skipped or red check; `--admin`; force-push |
+| For a PR against `main`: covers it through `develop` and closes it with a comment | Close a `main` PR before the version is in `develop` |
+| Major: summarizes the breaking changes and **asks** before merging | Merge a major without an explicit "yes" for that PR |
+| Leaves the local `develop` in sync and delivers the report | Auto stash, `git reset`, switch branches with a dirty tree |
 
 ---
 
-## Passo 1 — Pré-condições
+## Step 1 — Preconditions
 
-Da raiz do repo:
+From the repo root:
 
 ```bash
-gh auth status                                  # falhou? pare
-git status --porcelain --untracked-files=no     # modificação rastreada? pare e devolva — nada de stash
+gh auth status                                  # failed? stop
+git status --porcelain --untracked-files=no     # tracked changes? stop and hand back — no stash
 git fetch origin
 D="${CLAUDE_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py"
 ```
 
-Arquivo untracked não bloqueia (só avise); com `--dry-run` a árvore nem precisa estar limpa,
-porque nada troca de branch.
+An untracked file does not block (just warn); with `--dry-run` the tree does not even need to be clean,
+because nothing switches branches.
 
-Confira que `.github/dependabot.yml` ainda tem `target-branch: develop` em todo
-ecossistema configurado. Se alguém mudou isso, o raciocínio de "PR contra `main` é resíduo" deixa
-de valer — diga e pergunte antes de seguir.
+Check that `.github/dependabot.yml` still has `target-branch: develop` in every
+configured ecosystem. If someone changed that, the reasoning "a PR against `main` is leftover" no
+longer holds — say so and ask before going on.
 
-## Passo 2 — Inventário
-
-```bash
-python3 $D list          # tabela na ordem de trabalho
-python3 $D list --json   # quando precisar dos campos (updates, ci_problems…)
-```
-
-Mostre a tabela ao usuário e, em uma linha por PR, o que pretende fazer com ela — use o
-vocabulário do relatório (passo 6): **mergear**, **perguntar** (major), **rebase**,
-**re-extrair**, **esperar**, **fechar**, **pular**. Com `--dry-run`, **pare aqui**.
-
-A ordem que o helper devolve é a ordem de trabalho, e ela não é estética:
-
-1. **Alvo `develop` antes de `main`** — as de `main` só se resolvem depois que `develop`
-   recebeu os bumps, porque a regra para elas é "já está coberto em `develop`?".
-2. **Grupo antes de single** — o grupo `minor-and-patch` costuma cobrir vários singles;
-   mergeá-lo primeiro fecha os outros de graça. Mergear um single que está no grupo
-   faz o Dependabot **recriar o grupo** sem ele — retrabalho.
-3. **Sem major antes de major** — o que não precisa de pergunta entra primeiro.
-
-Com `--only`, respeite a mesma ordem dentro do subconjunto. PRs que a própria skill criar
-por re-extração (passo 5) de uma PR listada estão dentro do escopo — são a mesma PR em
-outra roupa.
-
-## Passo 3 — Loop nas PRs contra `develop`
-
-Para cada PR, nesta ordem, **uma de cada vez** — cada merge pode virar as seguintes em
-`CONFLICTING` (todas mexem em `yarn.lock`), e o `wait` da próxima é o que absorve isso.
-
-### 3.1 · Estado
+## Step 2 — Inventory
 
 ```bash
-python3 $D wait N        # espera mergeable ≠ UNKNOWN e checks terminarem; sai 0 = pode mergear
+python3 $D list          # table in working order
+python3 $D list --json   # when you need the fields (updates, ci_problems…)
 ```
 
-`UNKNOWN` é o GitHub ainda calculando; o helper espera. Não conclua nada a partir de
+Show the table to the user and, in one line per PR, what you plan to do with it — use the
+report's vocabulary (step 6): **merge**, **ask** (major), **rebase**,
+**re-extract**, **wait**, **close**, **skip**. With `--dry-run`, **stop here**.
+
+The order the helper returns is the working order, and it is not cosmetic:
+
+1. **`develop` target before `main`** — the `main` ones are only settled after `develop`
+   received the bumps, because their rule is "is it already covered in `develop`?".
+2. **Group before single** — the `minor-and-patch` group usually covers several singles;
+   merging it first closes the others for free. Merging a single that is in the group
+   makes Dependabot **recreate the group** without it — rework.
+3. **No major before major** — what needs no question goes in first.
+
+With `--only`, keep the same order within the subset. PRs the skill itself creates
+by re-extraction (step 5) from a listed PR are in scope — they are the same PR in
+other clothes.
+
+## Step 3 — Loop over the PRs against `develop`
+
+For each PR, in this order, **one at a time** — each merge can turn the next ones
+`CONFLICTING` (they all touch `yarn.lock`), and the next one's `wait` is what absorbs that.
+
+### 3.1 · State
+
+```bash
+python3 $D wait N        # waits for mergeable ≠ UNKNOWN and the checks to finish; exit 0 = can merge
+```
+
+`UNKNOWN` is GitHub still computing; the helper waits. Conclude nothing from
 `UNKNOWN`.
 
-### 3.2 · Conflito → rebase → re-extração
+### 3.2 · Conflict → rebase → re-extraction
 
 `mergeable=CONFLICTING`:
 
 ```bash
-python3 $D rebase N      # comenta "@dependabot rebase", espera o head mudar, depois wait
+python3 $D rebase N      # comments "@dependabot rebase", waits for the head to change, then wait
 ```
 
-Se o Dependabot não responder no prazo (ele desiste quando o conflito não é só `yarn.lock`,
-ou quando a branch já recebeu push humano), vá para a **re-extração** (passo 5) e, ao
-final, feche a PR original.
+If Dependabot does not answer in time (it gives up when the conflict is not only `yarn.lock`,
+or when the branch already got a human push), go to **re-extraction** (step 5) and, at
+the end, close the original PR.
 
-**Nunca resolva `yarn.lock` à mão** e **nunca faça push na branch do Dependabot**: a
-partir do primeiro push humano ele para de mantê-la, e o lockfile editado à mão é a
-forma mais rápida de quebrar `--frozen-lockfile` no CI.
+**Never resolve `yarn.lock` by hand** and **never push to Dependabot's branch**: from
+the first human push on it stops maintaining it, and a hand-edited lockfile is the
+fastest way to break `--frozen-lockfile` in CI.
 
-### 3.3 · CI vermelho
+### 3.3 · Red CI
 
-Não mergeie. Descubra o job:
+Do not merge. Find the job:
 
 ```bash
 gh pr checks N
 gh run view <run-id> --log-failed | tail -60
 ```
 
-- Falha que o bump explica (tipo novo, API removida, peer dep) → **pular**, reportar com o
-  trecho do log. Esse bump precisa de código, e código é ticket — sugira
+- A failure the bump explains (new type, removed API, peer dep) → **skip**, report it with the
+  log excerpt. That bump needs code, and code is a ticket — suggest
   `/linear-create-ticket`.
-- Falha sem relação com o bump (rede, runner, teste flaky conhecido) → `gh run rerun <run-id> --failed`
-  **uma vez**, `wait` de novo. Vermelho duas vezes = pular e reportar; não insista.
-- **Job pulado não é verde.** O helper exige cada check de `DEPENDABOT_REQUIRED_CHECKS` em
-  `SUCCESS`; `ausente`/`SKIPPED` conta como não verde. Se o projeto pausou o CI (por exemplo
-  `.github/ci-pause.json`), os jobs nem rodam e a PR parece limpa. `rerun --failed` não
-  reexecuta job pulado: **pule** a PR, com motivo "CI pausado até <data>", e não espere a
-  pausa acabar dentro desta execução.
+- A failure unrelated to the bump (network, runner, known flaky test) → `gh run rerun <run-id> --failed`
+  **once**, `wait` again. Red twice = skip and report; do not insist.
+- **A skipped job is not green.** The helper requires each check in `DEPENDABOT_REQUIRED_CHECKS` to be
+  `SUCCESS`; `missing`/`SKIPPED` counts as not green. If the project paused CI (for example
+  `.github/ci-pause.json`), the jobs do not even run and the PR looks clean. `rerun --failed` does not
+  rerun a skipped job: **skip** the PR, with the reason "CI paused until <date>", and do not wait for the
+  pause to end within this run.
 
-### 3.4 · Major → perguntar
+### 3.4 · Major → ask
 
-Vale para single major e para grupo que contenha um major (o helper marca `⚠`).
-Antes de mergear, leia o corpo da PR e extraia, em até 6 linhas: o que quebra, se o
-projeto usa a API afetada (confira no código com `grep`), e a versão de Node/React exigida.
+Applies to a single major and to a group that contains a major (the helper marks it `⚠`).
+Before merging, read the PR body and extract, in up to 6 lines: what breaks, whether the
+project uses the affected API (check the code with `grep`), and the required Node/React version.
 
 ```bash
 gh pr view N --json body --jq .body | grep -n -iE 'breaking|deprecat|drop|requires? node' | head
 ```
 
-Depois pergunte com `AskUserQuestion`: mergear / pular / re-extrair como PR própria para
-olhar melhor. **Sem "sim", não mergeia.** Um "sim" vale para aquela PR; o próximo major
-pergunta de novo.
+Then ask with `AskUserQuestion`: merge / skip / re-extract as its own PR to
+take a closer look. **No "yes", no merge.** A "yes" applies to that PR; the next major
+asks again.
 
 ### 3.5 · Merge
 
-Só quando `wait` saiu 0 (e o major foi autorizado):
+Only when `wait` exited 0 (and the major was approved):
 
 ```bash
-gh pr merge N --merge    # --merge, como o resto do repo; nunca --admin, nunca squash
-python3 $D wait N        # confirma MERGED
+gh pr merge N --merge    # --merge, like the rest of the repo; never --admin, never squash
+python3 $D wait N        # confirms MERGED
 git pull --ff-only origin develop
 ```
 
-Se o `--ff-only` falhar, a `develop` local divergiu — pare e pergunte; não force.
+If `--ff-only` fails, the local `develop` diverged — stop and ask; do not force.
 
-## Passo 4 — PRs contra `main`
+## Step 4 — PRs against `main`
 
-O Dependabot abre security updates contra o default branch (`main`) mesmo com
-`target-branch: develop`. Elas **não são mergeadas**: `main` só recebe `develop` no
-release. Por isso `mergeable`, `CONFLICTING` e o CI dessas PRs são **irrelevantes** —
-não peça `rebase` nelas; a única pergunta é se `develop` tem a versão. Para cada uma, e
-para cada pacote dela (grupo tem vários):
+Dependabot opens security updates against the default branch (`main`) even with
+`target-branch: develop`. They are **not merged**: `main` only receives `develop` at
+release. So `mergeable`, `CONFLICTING` and the CI of these PRs are **irrelevant** —
+do not ask for a `rebase` on them; the only question is whether `develop` has the version. For each one, and
+for each package in it (a group has several):
 
 ```bash
-python3 $D covered <pkg> <versão-alvo>            # confere yarn.lock (npm) ou uses: (actions) em origin/develop
+python3 $D covered <pkg> <target-version>         # checks yarn.lock (npm) or uses: (actions) on origin/develop
 ```
 
-| `covered` | Ação |
+| `covered` | Action |
 |---|---|
-| **coberto** | Fechar com comentário (abaixo). Nada a fazer em `develop`. |
-| **não usado** (pacote não está mais em `develop`) | Confirme que foi removido (`git log -S'"<pkg>"' --oneline -1 origin/develop -- package.json yarn.lock`) e feche como **obsoleta**, citando o commit. Nome errado no `covered` também dá "não usado" — confira antes. |
-| **não coberto**, mas uma PR aberta contra `develop` traz a versão | Esperar o passo 3 terminar; rodar `covered` de novo. |
-| **não coberto** de vez | **Re-extrair** (passo 5) contra `develop`, mergear, e só então fechar a de `main`. |
+| **covered** | Close with a comment (below). Nothing to do in `develop`. |
+| **not used** (the package is no longer in `develop`) | Confirm it was removed (`git log -S'"<pkg>"' --oneline -1 origin/develop -- package.json yarn.lock`) and close it as **obsolete**, citing the commit. A wrong name in `covered` also gives "not used" — check before. |
+| **NOT covered**, but an open PR against `develop` brings the version | Wait for step 3 to finish; run `covered` again. |
+| **NOT covered** for good | **Re-extract** (step 5) against `develop`, merge, and only then close the `main` one. |
 
-Comentário de fechamento — Markdown, curto, com o link do que cobre:
+Closing comment — Markdown, short, with the link to what covers it:
 
 ```bash
-gh pr comment N --body "Coberto em \`develop\` por #215 (\`js-yaml\` resolvido em 4.3.2). Chega a \`main\` no próximo release \`develop → main\`; PRs de bump não entram em \`main\` diretamente neste repo (ver \`.github/dependabot.yml\`)."
+gh pr comment N --body "Covered in \`develop\` by #215 (\`js-yaml\` resolved to 4.3.2). It reaches \`main\` in the next \`develop → main\` release; bump PRs do not go into \`main\` directly in this repo (see \`.github/dependabot.yml\`)."
 gh pr close N
 ```
 
-O alerta do Dependabot em `main` **continua aberto até o release** — isso é esperado. Diga
-no relatório, para ninguém reabrir a PR achando que o alerta foi esquecido.
+The Dependabot alert on `main` **stays open until the release** — that is expected. Say so
+in the report, so nobody reopens the PR thinking the alert was forgotten.
 
-## Passo 5 — Re-extração (bump refeito numa branch própria)
+## Step 5 — Re-extraction (bump redone on its own branch)
 
-Quando o rebase do Dependabot não resolveu, ou a PR mira `main` e `develop` não tem a
-versão. Uma branch por PR original:
+When Dependabot's rebase did not solve it, or the PR targets `main` and `develop` does not have the
+version. One branch per original PR:
 
 ```bash
-git checkout -b chore/deps-<pkg-slug>-<versão> origin/develop
+git checkout -b chore/deps-<pkg-slug>-<version> origin/develop
 ```
 
-- **Dependência direta** (está em `package.json`): edite o range em `package.json` para a
-  versão-alvo (ferramenta `Edit`) e rode `yarn install` — o `yarn.lock` vem do yarn, nunca
-  de você.
-- **Transitiva** (só em `yarn.lock`): `yarn upgrade <pkg>` — sem `@versão`, senão o yarn
-  clássico a promove a dependência direta.
-- **GitHub Action**: edite `uses: <action>@vN` em `.github/workflows/*.yml`.
+- **Direct dependency** (in `package.json`): edit the range in `package.json` to the
+  target version (the `Edit` tool) and run `yarn install` — `yarn.lock` comes from yarn, never
+  from you.
+- **Transitive** (only in `yarn.lock`): `yarn upgrade <pkg>` — without `@version`, otherwise classic
+  yarn promotes it to a direct dependency.
+- **GitHub Action**: edit `uses: <action>@vN` in `.github/workflows/*.yml`.
 
-Confira com `python3 $D covered <pkg> <versão> HEAD`. Depois:
+Check with `python3 $D covered <pkg> <version> HEAD`. Then:
 
 ```bash
-yarn lint && <type-check do projeto>   # o comando está no CLAUDE.md / package.json
+yarn lint && <project type-check>   # the command is in CLAUDE.md / package.json
 git add package.json yarn.lock .github/workflows
-git commit -m "chore(deps): bump <pkg> from <de> to <para> (re-extraído de #N)"
-git push -u origin chore/deps-<pkg-slug>-<versão>
-gh pr create --base develop --title "chore(deps): bump <pkg> from <de> to <para>" --body "Re-extraído de #N, que mira \`main\`. Fecha #N ao mergear."
+git commit -m "chore(deps): bump <pkg> from <from> to <to> (re-extracted from #N)"
+git push -u origin chore/deps-<pkg-slug>-<version>
+gh pr create --base develop --title "chore(deps): bump <pkg> from <from> to <to>" --body "Re-extracted from #N, which targets \`main\`. Closes #N when merged."
 ```
 
-Aí a PR nova segue o passo 3 (é uma PR contra `develop` como outra qualquer — inclusive
-a pergunta de major). Mergeada, feche a original com comentário apontando a nova.
+The new PR then follows step 3 (it is a PR against `develop` like any other — including
+the major question). Once merged, close the original with a comment pointing to the new one.
 
-Se o `yarn upgrade` não chegar à versão-alvo (range do pai não permite), isso não é
-bump de dependência, é mudança no pai — pare, reporte, sugira ticket.
+If `yarn upgrade` does not reach the target version (the parent's range does not allow it), this is not
+a dependency bump, it is a change in the parent — stop, report, suggest a ticket.
 
-## Passo 6 — Relatório
+## Step 6 — Report
 
-Uma tabela, uma linha por PR original:
+One table, one row per original PR:
 
-| PR | Pacote(s) | Resultado |
+| PR | Package(s) | Result |
 |---|---|---|
-| #215 | grupo minor-and-patch (7) | **mergeada** em `develop` (`<sha>`) |
-| #180 | actions/upload-artifact 4→7 | **mergeada** após confirmação (major) |
-| #204 | js-yaml 4.3.2 | **fechada** — coberta por #215 |
-| #176 | @fullcalendar/react 6.1.21 | **re-extraída** em #2xx → mergeada; original fechada |
-| #177 | react-apexcharts 2.1.1 | **fechada** — `develop` já tinha 2.1.1 |
-| #1xx | … | **pulada** — CI vermelho: `<job>`, `<motivo em uma linha>` |
+| #215 | group minor-and-patch (7) | **merged** into `develop` (`<sha>`) |
+| #180 | actions/upload-artifact 4→7 | **merged** after confirmation (major) |
+| #204 | js-yaml 4.3.2 | **closed** — covered by #215 |
+| #176 | @fullcalendar/react 6.1.21 | **re-extracted** into #2xx → merged; original closed |
+| #177 | react-apexcharts 2.1.1 | **closed** — `develop` already had 2.1.1 |
+| #1xx | … | **skipped** — red CI: `<job>`, `<reason in one line>` |
 
-Abaixo da tabela: a nota do alerta em `main` (passo 4), o estado final da `develop` local
-(`git log --oneline -1`), e o que ficou pendente com o próximo passo de cada um.
+Below the table: the note about the alert on `main` (step 4), the final state of the local `develop`
+(`git log --oneline -1`), and what was left pending with the next step for each.
 
 ---
 
-## Armadilhas
+## Pitfalls
 
-**`mergeable` demora a atualizar depois de cada merge.** O GitHub recalcula as outras
-PRs em background; `UNKNOWN` por um minuto é normal. O helper espera — não decida na mão.
+**`mergeable` takes a while to update after each merge.** GitHub recomputes the other
+PRs in the background; `UNKNOWN` for a minute is normal. The helper waits — do not decide by hand.
 
-**Mergear um membro do grupo separadamente recria o grupo.** O Dependabot fecha o grupo
-e abre outro sem aquele pacote. Por isso grupo vai primeiro.
+**Merging a group member separately recreates the group.** Dependabot closes the group
+and opens another without that package. That is why the group goes first.
 
-**`gh pr checks` lista check antigo em PR de `main`.** O CI dessas rodou contra a árvore
-de meses atrás; "verde" ali não diz nada sobre `develop`. É irrelevante — elas não são
-mergeadas de qualquer forma.
+**`gh pr checks` lists an old check on a `main` PR.** Their CI ran against the tree
+from months ago; "green" there says nothing about `develop`. It is irrelevant — they are not
+merged anyway.
 
-**"Verde" é só o que `DEPENDABOT_REQUIRED_CHECKS` cobre.** Suíte e2e que só roda em PR
-para `main` não roda aqui. É o combinado do projeto, não uma lacuna sua, mas não venda como
-"e2e passou".
+**"Green" is only what `DEPENDABOT_REQUIRED_CHECKS` covers.** An e2e suite that only runs on PRs
+to `main` does not run here. That is the project's agreement, not a gap of yours, but do not sell it as
+"e2e passed".
 
-**Bump de framework/ORM no grupo.** Minor de framework às vezes muda comportamento de
-build ou de query; se o CI passar mas o usuário quiser ver rodando, `/run` existe. Não invente
-verificação manual sem pedido.
+**A framework/ORM bump in the group.** A framework minor sometimes changes build or query
+behavior; if CI passes but the user wants to see it running, `/run` exists. Do not invent
+manual verification nobody asked for.
 
-**Fechar PR de security update sem cobrir.** O alerta some da lista de PRs, não do
-painel de segurança — e ninguém volta para olhar. Só feche com `covered` = coberto, ou
-com o pacote comprovadamente removido do projeto.
+**Closing a security update PR without covering it.** The alert leaves the PR list, not the
+security panel — and nobody goes back to look. Only close with `covered` = covered, or
+with the package proven removed from the project.
 
-## Pronto quando
+## Done when
 
-- O inventário foi lido do `gh`, mostrado ao usuário, e cada PR tem um resultado no relatório.
-- Nenhuma PR foi mergeada em `main`; nenhuma foi mergeada com check ausente, pulado ou vermelho.
-- Nenhum major entrou sem uma resposta explícita de "mergear" para aquela PR.
-- Toda PR de `main` fechada tem comentário apontando o que a cobre em `develop` — ou o
-  commit que removeu o pacote.
-- Toda PR pulada tem o motivo e o próximo passo (rerun, ticket, decisão do usuário).
-- `develop` local está em `origin/develop` (`--ff-only` limpo) e a árvore está limpa.
+- The inventory was read from `gh`, shown to the user, and every PR has a result in the report.
+- No PR was merged into `main`; none was merged with a missing, skipped or red check.
+- No major went in without an explicit "merge" answer for that PR.
+- Every closed `main` PR has a comment pointing to what covers it in `develop` — or the
+  commit that removed the package.
+- Every skipped PR has its reason and the next step (rerun, ticket, user decision).
+- The local `develop` is at `origin/develop` (clean `--ff-only`) and the tree is clean.
