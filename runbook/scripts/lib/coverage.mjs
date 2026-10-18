@@ -13,13 +13,16 @@ export function sliceOf(file, slices) {
 
 function refsByStatus(runbooks, field) {
   const pick = (status) => new Set(runbooks.filter((rb) => rb.status === status).flatMap((rb) => rb.covers[field]))
-  return { active: pick('active'), draft: pick('draft') }
+  return { active: pick('active'), draft: pick('draft'), placeholder: pick('placeholder') }
 }
 
 function withState(items, refs) {
   return items.map((item) => ({
     ...item,
-    state: refs.active.has(item.id) ? 'covered' : refs.draft.has(item.id) ? 'pending' : 'uncovered',
+    state: refs.active.has(item.id) ? 'covered'
+      : refs.draft.has(item.id) ? 'pending'
+      : refs.placeholder.has(item.id) ? 'planned'
+      : 'uncovered',
   }))
 }
 
@@ -28,6 +31,7 @@ function summarize(items) {
     total: items.length,
     covered: items.filter((i) => i.state === 'covered').length,
     pending: items.filter((i) => i.state === 'pending').length,
+    planned: items.filter((i) => i.state === 'planned').length,
     uncovered: items
       .filter((i) => i.state === 'uncovered')
       .map((i) => {
@@ -73,10 +77,11 @@ export function computeCoverage({
   const groupMap = new Map()
   for (const entry of scopedEntries) {
     const name = entry.slice ?? NO_SLICE
-    const group = groupMap.get(name) ?? { name, total: 0, covered: 0, pending: 0 }
+    const group = groupMap.get(name) ?? { name, total: 0, covered: 0, pending: 0, planned: 0 }
     group.total++
     if (entry.state === 'covered') group.covered++
     if (entry.state === 'pending') group.pending++
+    if (entry.state === 'planned') group.planned++
     groupMap.set(name, group)
   }
   const groups = [...groupMap.values()].sort((a, b) => {
@@ -114,6 +119,7 @@ export function computeCoverage({
     runbooks: {
       active: active.length,
       draft: scoped.filter((rb) => rb.status === 'draft').length,
+      placeholder: scoped.filter((rb) => rb.status === 'placeholder').length,
       automated: active.filter((rb) => rb.scripts.length > 0).length,
     },
     invalid: runbooks.filter((rb) => rb.problems.length > 0).map((rb) => ({ id: rb.id, path: rb.path, problems: rb.problems })),

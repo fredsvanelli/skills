@@ -6,7 +6,8 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 |---|---|
 | `/runbook:setup` | prepares a project: folders, config, agents block, Playwright MCP servers |
 | `/runbook:list` | lists runbooks, filtered or by what a diff affects |
-| `/runbook:create` | writes a runbook from a spec, diff, ticket or description |
+| `/runbook:map` | scans the code and writes a placeholder runbook for each flow no runbook cites |
+| `/runbook:create` | writes a runbook from a spec, diff, ticket, description or placeholder, filling the matching placeholder |
 | `/runbook:update` | updates the steps of a runbook after the behavior it records changed |
 | `/runbook:run` | runs runbooks: guided, headless, headed, Claude in Chrome, or as a prompt for the Chrome extension |
 | `/runbook:check` | shows the result of a runbook's latest run, or says it was never run |

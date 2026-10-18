@@ -15,7 +15,8 @@ Each command file holds the full procedure. When the user asks for one of these 
 |---|---|---|
 | prepare a project or change its runbook config | `/runbook:setup` | `${CLAUDE_PLUGIN_ROOT}/commands/setup.md` |
 | find runbooks, or the ones a change affects | `/runbook:list` | `${CLAUDE_PLUGIN_ROOT}/commands/list.md` |
-| write a new runbook from a spec, diff, ticket or description | `/runbook:create` | `${CLAUDE_PLUGIN_ROOT}/commands/create.md` |
+| map the code into placeholder runbooks for the flows no runbook cites | `/runbook:map` | `${CLAUDE_PLUGIN_ROOT}/commands/map.md` |
+| write a new runbook from a spec, diff, ticket, description or placeholder | `/runbook:create` | `${CLAUDE_PLUGIN_ROOT}/commands/create.md` |
 | change the steps of an existing runbook after the behavior changed | `/runbook:update` | `${CLAUDE_PLUGIN_ROOT}/commands/update.md` |
 | execute runbooks, or produce a prompt for the Chrome extension | `/runbook:run` | `${CLAUDE_PLUGIN_ROOT}/commands/run.md` |
 | see the result of a runbook's latest run, or whether it ever ran | `/runbook:check` | `${CLAUDE_PLUGIN_ROOT}/commands/check.md` |

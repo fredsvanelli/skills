@@ -37,19 +37,20 @@ test('overall coverage counts only active runbooks; drafts are pending', () => {
     total: 9,
     covered: 3,
     pending: 2,
+    planned: 0,
     uncovered: ['/', '/deliveries/[id]', '/settings', 'GET /admin/invoices'],
   })
   assert.deepEqual({ ...result.requirements, uncovered: ids(result.requirements.uncovered) }, {
-    total: 3, covered: 1, pending: 1, uncovered: ['REQ-3'],
+    total: 3, covered: 1, pending: 1, planned: 0, uncovered: ['REQ-3'],
   })
-  assert.deepEqual(result.runbooks, { active: 2, draft: 1, automated: 1 })
+  assert.deepEqual(result.runbooks, { active: 2, draft: 1, placeholder: 0, automated: 1 })
 })
 
 test('groups by slice with (no slice) last', () => {
   assert.deepEqual(fixtureCoverage().groups, [
-    { name: 'billing', total: 5, covered: 2, pending: 2 },
-    { name: 'deliveries', total: 2, covered: 1, pending: 0 },
-    { name: '(no slice)', total: 2, covered: 0, pending: 0 },
+    { name: 'billing', total: 5, covered: 2, pending: 2, planned: 0 },
+    { name: 'deliveries', total: 2, covered: 1, pending: 0, planned: 0 },
+    { name: '(no slice)', total: 2, covered: 0, pending: 0, planned: 0 },
   ])
 })
 
@@ -58,6 +59,25 @@ test('an id that does not exist exactly is an orphan, not silent', () => {
     { runbook: 'deliveries.list-deliveries', kind: 'entry', ref: '/deliveries/[deliveryId]' },
     { runbook: 'deliveries.list-deliveries', kind: 'requirement', ref: 'REQ-9' },
   ])
+})
+
+test('placeholders make an item planned, never covered or pending', () => {
+  const config = loadConfig(FIXTURE)
+  const placeholder = {
+    id: 'settings.edit-settings', path: 'docs/runbooks/settings/edit-settings.md', capability: 'settings', feature: null, tags: [], roles: [],
+    covers: { entries: ['/settings', '/financeiro/faturas'], requirements: ['REQ-3'] }, sources: [], scripts: [], status: 'placeholder', lastRun: null, problems: [],
+  }
+  const result = computeCoverage({
+    runbooks: [...loadRunbooks(FIXTURE, config), placeholder],
+    entries: extractItems(FIXTURE, config.entries, 'entries').items,
+    requirements: extractItems(FIXTURE, config.requirements, 'requirements').items,
+    requirementsConfigured: true,
+    slices: config.slices,
+  })
+  assert.deepEqual([result.entries.covered, result.entries.pending, result.entries.planned], [3, 2, 1])
+  assert.deepEqual(ids(result.entries.uncovered), ['/', '/deliveries/[id]', 'GET /admin/invoices'])
+  assert.deepEqual([result.requirements.planned, result.requirements.uncovered], [1, []])
+  assert.equal(result.runbooks.placeholder, 1)
 })
 
 test('invalid runbooks are reported and never count', () => {
@@ -86,7 +106,7 @@ test('filters: capability and slice use the slice map', () => {
     assert.equal(result.entries.covered, 2)
     assert.deepEqual(ids(result.entries.uncovered), ['GET /admin/invoices'])
   }
-  assert.deepEqual(fixtureCoverage({ capability: 'billing' }).runbooks, { active: 1, draft: 1, automated: 1 })
+  assert.deepEqual(fixtureCoverage({ capability: 'billing' }).runbooks, { active: 1, draft: 1, placeholder: 0, automated: 1 })
 })
 
 test('filters: feature keeps the entries its runbooks cite', () => {

@@ -13,9 +13,9 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 
 ## Lifecycle
 
-1. `create` writes a runbook as `draft`. When the behavior changes, `update` edits its steps and keeps its status until the next full run.
+1. `map` writes a `placeholder` for each flow no runbook cites: a title and goal, no steps. `create` writes a runbook as `draft`, filling the placeholder of its flow when there is one. When the behavior changes, `update` edits its steps and keeps its status until the next full run.
 2. `run` executes it. A full run where every step passes (or is waived, with at least one pass) makes it `active`.
-3. Only `active` runbooks count as coverage.
+3. Only `active` runbooks count as coverage; `draft` ones count as pending, placeholders as planned.
 4. `audit-script` checks runbooks against the code; `coverage` measures coverage.
 5. `deprecated` runbooks stay for history and never count.
 
@@ -24,7 +24,8 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 | Command | Does |
 |---|---|
 | `/runbook:list` | lists runbooks, or the ones a diff affects (`--affected`) |
-| `/runbook:create` | writes a runbook from a spec, diff, ticket or description |
+| `/runbook:map` | writes a placeholder runbook for each flow no runbook cites |
+| `/runbook:create` | writes a runbook from a spec, diff, ticket, description or placeholder |
 | `/runbook:update` | updates the steps of a runbook after the behavior it records changed |
 | `/runbook:run` | runs runbooks: `--mode guided`, `headless`, `headed`, `chrome` or `prompt` |
 | `/runbook:check` | shows the result of a runbook's latest run, or says it was never run |

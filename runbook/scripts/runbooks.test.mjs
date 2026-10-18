@@ -97,7 +97,7 @@ test('id, capability, status and depth are checked against the path', () => {
   assert.deepEqual(byId['x.y'].problems, [
     'id "x.z" does not match the path, expected "x.y"',
     'capability "w" does not match the folder "x"',
-    'status "done" must be one of draft, active, deprecated',
+    'status "done" must be one of placeholder, draft, active, deprecated',
   ])
   assert.equal(byId['x.y'].status, null)
   assert.deepEqual(byId['a.b.c'].problems, ['runbooks live exactly one folder deep: <capability>/<flow>.md'])

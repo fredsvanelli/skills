@@ -18,7 +18,7 @@ Run `git status --porcelain` now and keep the list for the commit step.
 - `--capability x`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" list --capability x --json`.
 - `--affected [base]`: `... list --affected [base] --json`.
 
-Leave out `deprecated` and invalid runbooks and name them in the final summary.
+Leave out `deprecated`, `placeholder` and invalid runbooks and name them in the final summary. A placeholder has no steps; offer `/runbook:create --from placeholder <id>` for it.
 
 Mode: `--mode` when given; otherwise ask the user to choose among the available modes, as "Choosing the mode" in `run-modes.md` describes. With `--import`, go to step 6.
 

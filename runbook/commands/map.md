@@ -1,0 +1,64 @@
+---
+description: Map the code as it is now into placeholder runbooks, one per user flow no runbook cites yet
+argument-hint: "[--capability x | --slice name | --path glob]"
+disable-model-invocation: true
+---
+
+# Map the code into placeholders
+
+Arguments: `$ARGUMENTS`
+
+Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/format.md`.
+
+A placeholder is a runbook with frontmatter and a Goal but no steps (`status: placeholder`). It marks a flow that still needs a runbook. `/runbook:create` fills it later. This command writes new placeholders only and never edits an existing runbook, placeholders included, so running it again maps only what is still unmapped.
+
+Run `git status --porcelain` now and keep the list for the commit step.
+
+## 1. Find what no runbook cites
+
+1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" coverage $ARGUMENTS --json`. Exit code 2 stops the command; show the message. Keep the numbers for step 4.
+2. `entries.uncovered` and `requirements.uncovered` are the items no runbook cites in any status. Map only these. Slice and path filters reach entries only, so with a filter, map a requirement only when it belongs to a flow mapped in this scope.
+3. `... list --status placeholder --json`: the existing placeholders. An `orphans` item whose runbook is one of them is a stale placeholder for step 4.
+
+Done when you hold the uncovered entries and requirements and the stale placeholders.
+
+## 2. Group into flows
+
+For each uncovered entry, read its code: the page and its components, the API endpoints it calls, the route guards and navigation config. Group the entries into user flows, one placeholder per flow a user goes through (`list-deliveries`: the list page, the detail page and the endpoints they call; `issue-invoice`: the form and its POST).
+
+- Every uncovered entry goes into at least one placeholder. An entry no user flow reaches through the UI (webhook, cron, health check, internal endpoint) goes on the not-mapped list with the reason.
+- Every uncovered requirement goes into the placeholder of the flow it describes, or on the not-mapped list with the reason.
+- `covers` lists every entry and requirement the flow touches, including ones other runbooks already cite.
+- `capability` is the slice of the flow's main entry; without a slice, its first route segment after dropped segments and groups. The flow name is kebab-case verb-object. The id must not clash with any existing runbook.
+
+Done when every uncovered item is in a placeholder or on the not-mapped list with its reason.
+
+## 3. Write the placeholders
+
+Path `<paths.runbooks>/<capability>/<flow>.md`, from `${CLAUDE_PLUGIN_ROOT}/templates/placeholder.md`:
+
+- `title` and `Goal`: the user outcome, in the config language;
+- `roles`: the account roles the guards let in, when the code shows them; otherwise `[]`;
+- `covers.entries` and `covers.requirements`: ids exactly as the script printed them;
+- `sources`: `map <short sha of HEAD>`.
+
+Then run `... list --json` and confirm every new placeholder has an empty `problems` list, and `... coverage $ARGUMENTS --json` and confirm every item from step 1 is now `planned` or on the not-mapped list.
+
+## 4. Show the map
+
+Print the summary in the conversation before any commit question:
+
+- a table per capability: placeholder id, title, entries, requirements;
+- the not-mapped list with reasons;
+- the stale placeholders from step 1, each with the ids that no longer exist;
+- the entry and requirement counts from step 1 next to the new ones: uncovered before, planned after.
+
+## 5. Commit
+
+Commit by the `runbooks` policy. Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
+
+## 6. Close
+
+Give the commit outcome: the short sha, or the paths left uncommitted. Offer `/runbook:create --from placeholder <id>` for the first three placeholders, ranked by risk of the flow as in `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/coverage.md`.
+
+Done when every uncovered item is in a placeholder or on the not-mapped list, every new placeholder has an empty `problems` list, and the user has seen the map before any commit question.

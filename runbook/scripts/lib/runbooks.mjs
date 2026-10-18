@@ -3,7 +3,7 @@ import path from 'node:path'
 import { findFiles } from './glob.mjs'
 import { splitFrontmatter, parseYaml } from './yaml.mjs'
 
-const STATUSES = ['draft', 'active', 'deprecated']
+const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
 
 const asList = (value) => {
   if (value === null || value === undefined) return []

@@ -5,7 +5,7 @@ Two metrics, computed by `runbook.mjs coverage`:
 - **Entry points:** UI routes and API endpoints from the config `entries` sources.
 - **Requirements:** ids from the config `requirements` sources. Without a source, the report says "no requirement source configured".
 
-An item is **covered** when an `active` runbook lists its id in `covers`, **pending** when only `draft` runbooks do, and **uncovered** otherwise. `deprecated` and invalid runbooks never count. Ids match exactly: `/deliveries/[deliveryId]` does not cover `/deliveries/[id]`, and the report lists such references under Orphans. When a source of a list did not run (a sibling `root` that is not cloned, a failing `command`), the report skips the orphan check for that list and says so, because a missing id could just be unread.
+An item is **covered** when an `active` runbook lists its id in `covers`, **pending** when only `draft` runbooks do, **planned** when only placeholders do, and **uncovered** otherwise. `deprecated` and invalid runbooks never count. Ids match exactly: `/deliveries/[deliveryId]` does not cover `/deliveries/[id]`, and the report lists such references under Orphans. When a source of a list did not run (a sibling `root` that is not cloned, a failing `command`), the report skips the orphan check for that list and says so, because a missing id could just be unread.
 
 ## Filters
 

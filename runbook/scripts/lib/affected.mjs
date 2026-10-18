@@ -20,7 +20,8 @@ export function affectedRunbooks({ runbooks, entries, slices, changed }) {
   const changedSet = new Set(changed)
   const fileOf = new Map(entries.map((entry) => [entry.id, entry.file]))
   return runbooks.flatMap((runbook) => {
-    if (runbook.status === 'deprecated') return []
+    // Placeholders have no steps to run.
+    if (runbook.status === 'deprecated' || runbook.status === 'placeholder') return []
     const reasons = []
     if (changedSet.has(runbook.path)) reasons.push('runbook changed')
     for (const id of runbook.covers.entries) {

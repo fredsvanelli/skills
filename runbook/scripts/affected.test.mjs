@@ -33,6 +33,18 @@ test('a changed page affects the runbooks citing it and its slice', () => {
   ])
 })
 
+test('placeholders never show: they have no steps to run', () => {
+  const config = loadConfig(FIXTURE)
+  const placeholder = { ...loadRunbooks(FIXTURE, config).find((rb) => rb.id === 'billing.cancel-invoice'), status: 'placeholder' }
+  const hits = affectedRunbooks({
+    runbooks: [placeholder],
+    entries: extractItems(FIXTURE, config.entries, 'entries').items,
+    slices: config.slices,
+    changed: [placeholder.path, 'src/app/[locale]/(dashboard)/financeiro/faturas/page.tsx'],
+  })
+  assert.deepEqual(hits, [])
+})
+
 test('a changed runbook file affects that runbook; deprecated ones never show', () => {
   const hits = fixtureAffected(['docs/runbooks/deliveries/list-deliveries.md', 'src/app/[locale]/(dashboard)/deliveries/page.tsx'])
   assert.deepEqual(hits.map((h) => h.runbook.id), ['deliveries.list-deliveries'])
