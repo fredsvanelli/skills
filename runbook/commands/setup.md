@@ -25,7 +25,8 @@ Collect without asking:
 - Manifest and scripts: `package.json` or the project's equivalent.
 - Framework. For Next.js, every `app/` folder with `page.*` or `route.*` files becomes an `entries` source with the `next-app-router` extractor; pick a glob that skips public marketing pages only when the user says so later.
 - Sibling repos the app calls: an API base URL in `.env.example` plus a sibling folder holding that API's code. Offer it as an `entries` source with `root`, limited to the routes this app calls.
-- Playwright: `playwright.config.*` and its `testDir` give `paths.e2e`. No config means `null`.
+- Playwright: installed when `@playwright/test` is in the manifest's dependencies and a `playwright.config.*` exists; its `testDir` is the candidate for `paths.e2e`. Keep the result for the E2E question in step 2.
+- Package manager: from the lockfile (`pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, else npm).
 - UI text: i18n message files (`messages/*.json`, `locales/**`), default locale first.
 - Integration branch: `develop` when `git rev-parse --verify origin/develop` succeeds, otherwise the default branch from `git symbolic-ref refs/remotes/origin/HEAD`. `git.protected` lists the default branch and the integration branch.
 - Commit message convention: a commitlint config when present; otherwise the prefix pattern of `git log -20 --format=%s`. Write `git.messageFormat` with a `{summary}` placeholder in that pattern.
@@ -45,6 +46,13 @@ One `AskUserQuestion` round, only for keys detection could not settle, each with
 - `mcp.secretsFile`, when it is not `.env.local`.
 - The `commits` policy for `runbooks` and `setup`; suggest `ask` for both.
 - Whether to add the two Playwright MCP servers to `.mcp.json`.
+- Whether the project wants E2E tests with Playwright (always asked; recommend yes when Playwright is installed). When Playwright is installed, the question names its `testDir`.
+
+E2E answer:
+
+- **No**: `paths.e2e` is `null`, even when Playwright is installed.
+- **Yes, installed**: `paths.e2e` is the detected `testDir`.
+- **Yes, not installed**: ask one more question, install now (recommended) or later. Now: run `npm init playwright@latest -- --quiet --browser=chromium` (`pnpm create playwright`, `yarn create playwright` or `bun create playwright` with the same flags, by package manager), then read `paths.e2e` from the `testDir` of the config it created. Later: `paths.e2e` is `null`, and step 6 lists the install command.
 
 ## 3. Write
 
@@ -83,9 +91,9 @@ Commit by the `setup` policy. Ask an `ask` question only after the summary from 
 Tell the user:
 
 - the commit outcome: the short sha, or the paths left uncommitted;
-- tools missing, each with its install command (Node 18+, `npx @playwright/mcp@0.0.83 --help` to pre-fetch the MCP server);
+- tools missing, each with its install command (Node 18+, `npx @playwright/mcp@0.0.83 --help` to pre-fetch the MCP server, the Playwright install command from step 2 when E2E was wanted but not installed);
 - what needs a restart: new `.mcp.json` servers load in a new session or through `/mcp`.
 
-Install nothing without asking. Offer `/runbook:coverage` for a coverage baseline.
+Install nothing without asking; the only install setup runs itself is Playwright, after a yes in step 2. Offer `/runbook:coverage` for a coverage baseline.
 
 Done when the user has seen the summary before any commit question.
