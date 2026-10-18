@@ -5,7 +5,7 @@ Claude Code plugin marketplace. Each folder is one plugin, installed on its own.
 | Plugin | Commands | Does |
 |---|---|---|
 | [`runbook`](runbook/) | `/runbook:*` | UAT runbooks kept as a project's verified knowledge base |
-| [`utils`](utils/) | `/utils:*` | repo housekeeping: merged branches, Dependabot PR queue |
+| [`utils`](utils/) | `/utils:*` | repo housekeeping: merged branches, Dependabot PR queue, PR descriptions |
 
 ## Install
 

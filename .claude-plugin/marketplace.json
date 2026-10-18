@@ -11,7 +11,7 @@
     {
       "name": "utils",
       "source": "./utils",
-      "description": "Repo housekeeping: merged branches, Dependabot PR queue."
+      "description": "Repo housekeeping: merged branches, Dependabot PR queue, PR descriptions."
     }
   ]
 }
