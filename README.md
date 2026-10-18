@@ -23,10 +23,3 @@ For a whole team, commit this to the project's `.claude/settings.json`:
   "enabledPlugins": { "runbook@fredsvanelli": true, "utils@fredsvanelli": true }
 }
 ```
-
-## Adding a plugin
-
-1. `mkdir -p <name>/.claude-plugin <name>/skills` and write `<name>/.claude-plugin/plugin.json` with `"name": "<name>"`.
-2. Each skill goes in `<name>/skills/<skill>/SKILL.md`; it is invoked as `/<name>:<skill>`.
-3. Add the plugin to `.claude-plugin/marketplace.json`.
-4. Bump `version` in a plugin's `plugin.json` when you change it, so installs pick up the update.
