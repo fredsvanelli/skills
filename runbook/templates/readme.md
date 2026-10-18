@@ -16,7 +16,7 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 1. `create` writes a runbook as `draft`. When the behavior changes, `update` edits its steps and keeps its status until the next full run.
 2. `run` executes it. A full run where every step passes (or is waived, with at least one pass) makes it `active`.
 3. Only `active` runbooks count as coverage.
-4. `audit-script` checks runbooks against the code; `audit-code` measures coverage.
+4. `audit-script` checks runbooks against the code; `coverage` measures coverage.
 5. `deprecated` runbooks stay for history and never count.
 
 ## Commands
@@ -30,5 +30,5 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 | `/runbook:check` | shows the result of a runbook's latest run, or says it was never run |
 | `/runbook:to-script` | turns a runbook into a Playwright spec |
 | `/runbook:audit-script` | checks runbooks still match the code |
-| `/runbook:audit-code` | coverage report |
+| `/runbook:coverage` | coverage report |
 | `/runbook:setup` | (re)configures this folder |

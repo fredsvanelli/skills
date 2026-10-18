@@ -21,7 +21,7 @@ Each command file holds the full procedure. When the user asks for one of these 
 | see the result of a runbook's latest run, or whether it ever ran | `/runbook:check` | `${CLAUDE_PLUGIN_ROOT}/commands/check.md` |
 | turn a runbook into a Playwright spec | `/runbook:to-script` | `${CLAUDE_PLUGIN_ROOT}/commands/to-script.md` |
 | check runbooks still match the code | `/runbook:audit-script` | `${CLAUDE_PLUGIN_ROOT}/commands/audit-script.md` |
-| measure coverage | `/runbook:audit-code` | `${CLAUDE_PLUGIN_ROOT}/commands/audit-code.md` |
+| measure coverage | `/runbook:coverage` | `${CLAUDE_PLUGIN_ROOT}/commands/coverage.md` |
 
 Before calling feature work done, run `list --affected` and then `run` on what it returns.
 

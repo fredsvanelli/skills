@@ -81,6 +81,6 @@ Tell the user:
 - tools missing, each with its install command (Node 18+, `npx @playwright/mcp@0.0.83 --help` to pre-fetch the MCP server);
 - what needs a restart: new `.mcp.json` servers load in a new session or through `/mcp`.
 
-Install nothing without asking. Offer `/runbook:audit-code` for a coverage baseline.
+Install nothing without asking. Offer `/runbook:coverage` for a coverage baseline.
 
 Done when the user has seen the summary before any commit question.

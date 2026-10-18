@@ -1,6 +1,6 @@
 # Runbook coverage: <scope>
 
-Generated on <YYYY-MM-DD> at commit `<short sha>` by `/runbook:audit-code <arguments>`.
+Generated on <YYYY-MM-DD> at commit `<short sha>` by `/runbook:coverage <arguments>`.
 
 <script output, unchanged>
 

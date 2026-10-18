@@ -12,7 +12,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbook:check` | shows the result of a runbook's latest run, or says it was never run |
 | `/runbook:to-script` | turns a runbook into a Playwright spec |
 | `/runbook:audit-script` | checks runbooks still match the code |
-| `/runbook:audit-code` | coverage report, overall or per capability, feature, slice or path |
+| `/runbook:coverage` | coverage report, overall or per capability, feature, slice or path |
 
 ## Install
 
