@@ -69,7 +69,7 @@ Per runbook:
    - `last_run: { date: <YYYY-MM-DD>, commit: "<short sha>", result: <result>, report: _runs/<run id>.md }`.
 3. With `--steps`, leave `status` and `last_run` unchanged.
 
-Then, once for the whole run, with or without `--steps`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" output`. It rewrites `<paths.runbooks>/runs.json` and `runs.html`: every runbook with the date and result of its last full run. Keep them ignored by the rules in `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/commits.md`.
+Then, once for the whole run, with or without `--steps`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" output`. It rewrites `<paths.runbooks>/runs.json` and `runs.html`: every runbook with the date, time and result of its last full run. Keep them ignored by the rules in `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/commits.md`.
 
 ## 6. Import (prompt mode)
 

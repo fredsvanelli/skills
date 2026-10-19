@@ -139,7 +139,7 @@ test('output writes runs.json and runs.html with the same rows and removes the o
   assert.ok(!fs.existsSync(path.join(root, 'docs/runbooks/_runs/output.html')))
   assert.ok(!fs.existsSync(path.join(root, 'docs/runbooks/coverage.json')))
   const rows = JSON.parse(fs.readFileSync(path.join(root, 'docs/runbooks/runs.json'), 'utf8'))
-  assert.deepEqual(rows.find((row) => row.id === 'billing.issue-invoice'), { id: 'billing.issue-invoice', title: 'Issue a partner invoice', date: '2026-10-01', result: 'passed' })
+  assert.deepEqual(rows.find((row) => row.id === 'billing.issue-invoice'), { id: 'billing.issue-invoice', title: 'Issue a partner invoice', date: '2026-10-01 09:00', result: 'passed' })
   assert.deepEqual(rows.find((row) => row.id === 'billing.cancel-invoice'), { id: 'billing.cancel-invoice', title: 'Cancel an invoice', date: null, result: null })
   const html = fs.readFileSync(path.join(root, 'docs/runbooks/runs.html'), 'utf8')
   assert.ok(html.includes(`const rows = ${JSON.stringify(rows, null, 2)}`))
