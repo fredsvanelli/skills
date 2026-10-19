@@ -13,7 +13,8 @@ Each command file holds the full procedure. When the user asks for one of these 
 
 | Request | Command | File |
 |---|---|---|
-| prepare a project or change its runbook config | `/runbook:setup` | `${CLAUDE_PLUGIN_ROOT}/commands/setup.md` |
+| prepare a project for runbooks | `/runbook:setup` | `${CLAUDE_PLUGIN_ROOT}/commands/setup.md` |
+| change part of the runbook config: stack, test library, design reference, accounts, viewports, commit policy, ... | `/runbook:settings` | `${CLAUDE_PLUGIN_ROOT}/commands/settings.md` |
 | find runbooks, or the ones a change affects | `/runbook:list` | `${CLAUDE_PLUGIN_ROOT}/commands/list.md` |
 | map the code into placeholder runbooks for the flows no runbook cites | `/runbook:map` | `${CLAUDE_PLUGIN_ROOT}/commands/map.md` |
 | write a new runbook from a spec, diff, ticket, description or placeholder | `/runbook:create` | `${CLAUDE_PLUGIN_ROOT}/commands/create.md` |

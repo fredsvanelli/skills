@@ -51,20 +51,24 @@ For `ui` runbooks:
 - The app answers at `app.baseUrl` (`curl -s -o /dev/null -w '%{http_code}' <baseUrl>`). This reachability check is the only direct request allowed; it verifies nothing about a result. When the app is down, show the `app.start` commands and stop.
 - Each account the runbooks' `roles` need has its env var names in `mcp.secretsFile`: `grep -c '^<NAME>=' <secretsFile>` prints a count, never a value. A missing name blocks the steps that log in as that role.
 - In the browser, each precondition's data is visible. A missing precondition makes the steps that need it `blocked`, with the reason.
+- With design references and a mode that compares them (`run-modes.md`, Design): the `design.mcp` server's tools are loaded, or the Artifact tool for `claude-design`. When they are not, say before the first step that the design is not compared in this run, and why; the steps still run.
 
 ## 3. Order
 
-Build each runbook's dependency tree from the `Parents:` lines and order the steps by the rules in `format.md`. With `--steps`, run only the listed steps, plus nothing else; a listed step whose parent is not in the list runs only when the user confirms the parent's state from the last report.
+Build each runbook's dependency tree from the `Parents:` lines and order the steps by the rules in `format.md`. A `ui` runbook with `viewports` runs that order once per viewport, in the frontmatter order, each pass holding the steps its `Viewports:` lines allow. Before every pass after the first, follow the runbook's Cleanup and check its preconditions again, because the previous pass used the data. With `--steps`, run only the listed steps, plus nothing else; a listed step whose parent is not in the list runs only when the user confirms the parent's state from the last report.
 
 ## 4. Execute
 
 `api` runbooks: items 3 to 5 of "test" in `run-modes.md`. With `--steps`, run the whole script and keep only those steps from the `junit` output.
 
+`ui` runbooks with `viewports`: before each pass, set the browser to the viewport's size as "Viewports" in `run-modes.md` says for the selected mode.
+
 `ui` runbooks, for each step in order:
 
-1. A parent that is not `passed` makes the step `blocked-by-parent`; move on.
+1. A parent that is not `passed` at the same viewport makes the step `blocked-by-parent`; move on.
 2. Perform the actions in the selected mode.
-3. Compare the screen with Expected, record the state, what was seen (quoted on failure) and the evidence path.
+3. Compare the screen with Expected, record the state, the viewport, what was seen (quoted on failure) and the evidence path.
+4. With a `Design:` line, compare the screen with its design reference, as "Design" in `run-modes.md` says, and record the differences. They do not change the state.
 
 Execute everything before fixing anything. A failure is a finding for the report.
 
@@ -74,7 +78,7 @@ Per runbook:
 
 1. Write `<paths.runbooks>/_runs/<run id>.md` from `${CLAUDE_PLUGIN_ROOT}/templates/run-report.md`. `result` is `failed` when any step failed, else `blocked` when any step is `blocked` or `blocked-by-parent`, else `passed`. `partial: true` with `--steps`.
 2. Without `--steps`:
-   - new status: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" status --current <status> --states <comma-separated states>`; write it to the runbook's `status`;
+   - new status: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" status --current <status> --states <comma-separated states>`, with the states of every viewport; write it to the runbook's `status`;
    - `last_run: { date: <YYYY-MM-DD>, commit: "<short sha>", result: <result>, report: _runs/<run id>.md }`.
 3. With `--steps`, leave `status` and `last_run` unchanged.
 
@@ -88,8 +92,9 @@ Parse the reply by the Import rules in `run-modes.md`, resolve every question wi
 
 Print the results in the conversation before any commit question:
 
-- a table with one row per runbook: passed, failed, blocked, waived counts, the report path, and any status change;
-- for each failure: step, Expected, Seen;
+- a table with one row per runbook: its viewports, passed, failed, blocked, waived counts over all of them, the report path, and any status change;
+- for each failure: step, viewport, Expected, Seen;
+- for runbooks with design references: the count of `major` and `minor` differences, each `major` one with its step, viewport, and what the design and the page show, and the references not compared;
 - the runbooks left out in step 1, with the reason;
 - for `api` runbooks: the scripts written or edited through `to-test`, the script mistakes fixed during the run, and the tests outside the runbook that failed.
 
@@ -99,7 +104,7 @@ Commit the runbook frontmatter changes (`status`, `last_run`, and `scripts` when
 
 ## 9. Close
 
-Give the commit outcome: the short sha, or the paths left uncommitted. Then offer to investigate the causes of the failures (with `superpowers:systematic-debugging` when available); the fix is separate work.
+Give the commit outcome: the short sha, or the paths left uncommitted. Then offer to investigate the causes of the failures (with `superpowers:systematic-debugging` when available), and to fix the `major` design differences; the fix is separate work.
 
 End with a link to the HTML table: `[runs.html](file://<absolute path of <paths.runbooks>/runs.html>)`.
 

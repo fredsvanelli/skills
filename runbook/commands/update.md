@@ -58,7 +58,9 @@ For each change, mark every step it reaches:
 - **edit**: the step's Page, an Action's control or label, or an Expected text changes (on `api`: its Endpoint, As, Request or Expected);
 - **remove**: the step proves something the product no longer does;
 - **add**: the change brings behavior no step proves, including its edge case and, when it saves something, a reload check;
-- **preconditions**: services, migrations, accounts or data the steps now need.
+- **preconditions**: services, migrations, accounts or data the steps now need;
+- **design**: the change brings a screen, or a new design for a screen the runbook shows. Find and confirm its references as `create` does (step 3, "Design references"), when the config has `design`;
+- **viewports**: the change reaches the layout at some sizes only (responsive classes, media queries). Edit or add the steps of those viewports, with `Viewports:` lines. When the change brings a layout at a size the runbook does not run at, or the runbook has no `viewports` and the change is responsive, ask which viewports it runs at as `create` does (step 2, item 6).
 
 Then follow the tree down: the children of every edited or removed step stay valid only if what they inherit still holds. Mark the ones that change.
 
@@ -74,7 +76,7 @@ For an `api` runbook, investigate each edited or added step as `create` does for
 - the API endpoints the screen calls, as entry ids from `... entries --json`;
 - the data the step needs, as a precondition. The skillset reads no database and writes no SQL.
 
-Re-check unmarked steps that share a screen with a marked one: a moved control or a renamed label reaches them too.
+Re-check unmarked steps that share a screen with a marked one, at every viewport of the runbook: a moved control or a renamed label reaches them too.
 
 Done when every edited or added step names a route, a control and an exact expected text.
 
@@ -90,6 +92,8 @@ Then:
 
 - `covers.entries` and `covers.requirements`: add the ids the new steps reach and drop the ones no step reaches any more;
 - `sources`: append the change's source;
+- `design`: the references from step 3 added or replaced, the ones of screens no step reaches any more removed, and the `Design:` lines of the steps that end on them;
+- `viewports`: the answer from step 3, when it changed; a size the config lacks goes into the config `viewports`, as in `create`;
 - "Not covered": add what the surface cannot show about the change, and remove what a step now proves;
 - `scripts` of an `api` runbook: leave the files alone here. The next `/runbook:run` finds new step ids without a test and completes the script, and `/runbook:audit-runbook` finds assertions that no longer match;
 - `status` and `last_run` stay as they are. `last_run` now describes the old text, and only the next full run moves either of them.
@@ -103,11 +107,13 @@ Print the changes in the conversation before any commit question:
 - A table of the steps that changed: number, edited / added / removed, and what changed in one line. When no step changed, say so and name the sections that did. Then the preconditions that changed.
 - The steps as a tree with their parents.
 - The entries and requirements added or dropped, and the "Not covered" changes.
+- The viewports added or dropped, with the viewports added to the config.
+- The design references added, replaced or removed.
 - The unverified steps: every edited and added step and their children.
 
 ## 7. Commit
 
-Commit by the `runbooks` policy. Ask an `ask` question only after the table from step 6 is on screen; the question names the files and the message and does not repeat the table.
+Commit by the `runbooks` policy, and the config by the `setup` policy when step 5 added a viewport to it. Ask an `ask` question only after the table from step 6 is on screen; the question names the files and the message and does not repeat the table.
 
 ## 8. Close
 

@@ -14,6 +14,11 @@ surface: ui
 feature: invoices
 tags: [financial, critical]
 roles: [admin]
+viewports: [desktop, mobile]
+design:
+  invoices-list: "https://www.figma.com/design/AbC123/Billing?node-id=12-34"
+  invoices-list.mobile: "https://www.figma.com/design/AbC123/Billing?node-id=12-90"
+  issue-dialog: "https://www.figma.com/design/AbC123/Billing?node-id=15-2"
 covers:
   entries: ["/financeiro/faturas", "POST /admin/internal/invoices"]
   requirements: ["CHE-581#AC2"]
@@ -32,6 +37,8 @@ last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2
 | `feature` | finer grouping inside a capability; free text |
 | `tags` | free labels; `critical` marks the runbooks to run first |
 | `roles` | account roles from the config `accounts` that the steps log in as |
+| `viewports` | `ui` only: names from the config `viewports`, the screen sizes the steps run at, in run order. Missing or empty means the steps run once, at the browser's default size |
+| `design` | `ui` only, and only when the config has `design`: a map from a screen name (kebab-case) to its design reference, a frame link or a file path (`config.md`, Design). `<name>.<viewport>` is the variant used at that viewport; without one, every viewport uses `<name>`. Steps cite the names in their `Design:` line |
 | `covers.entries` | entry ids exactly as `runbook.mjs entries` prints them |
 | `covers.requirements` | requirement ids exactly as `runbook.mjs requirements` prints them, or ids from the source when no requirement source is configured |
 | `sources` | spec paths, ticket ids, `diff <base>...<sha>`, `map <sha>` for a placeholder, and test files read as evidence only (tests of the code behind an entry, which cannot run the steps), that the runbook came from |
@@ -62,6 +69,8 @@ Each step:
 - `Requirement:` the requirement id it verifies, or `none`.
 - `ui` steps:
   - `Page:` the route the step starts on, as an entry id.
+  - `Design:` optional, the name in `design` of the screen the step ends on. `run` compares that screen with its design.
+  - `Viewports:` optional, the viewports the step runs at when it runs at only some of the runbook's: an action or an Expected that exists only at some sizes, such as a menu behind a button on mobile. Missing means every viewport of the runbook.
   - `Actions:` numbered, naming each control by its visible label.
   - `Expected:` the exact UI text and state. A persistence check reloads the page and states what remains.
 - `api` steps:
@@ -74,7 +83,7 @@ Number steps `S01`, `S02`, and keep numbers stable: a removed step leaves a gap.
 
 ### What a step can verify
 
-- `ui`: every expected result is observable in the browser. A behavior the UI does not show goes under "Not covered" with the reason.
+- `ui`: every expected result is observable in the browser. A behavior the UI does not show goes under "Not covered" with the reason. The design comparison of a `Design:` line is a separate finding: it never changes the step's state.
 - `api`, in this order of preference:
   1. the response: status, body fields, headers;
   2. persistence, through another call (`GET /invoices/{id}` after the POST), the API's own reload check;
@@ -101,10 +110,11 @@ A step depends on another when the parent's failure invalidates the child's resu
 - A parent that is `failed`, `blocked` or `blocked-by-parent` makes the child `blocked-by-parent`, down the whole branch.
 - Run order: every parent before its children. Among independent steps, keep the open screen, and leave steps that issue, cancel or delete data for last.
 - The tree has no cycles.
+- With `viewports`, the tree runs once per viewport, in the frontmatter order. Each step runs only at the viewports its `Viewports:` line allows, and its parents must run at each of them. A parent's state counts only for its children at the same viewport.
 
 ## Step states
 
-Only run reports hold step states.
+Only run reports hold step states. With `viewports`, a step has one state per viewport it runs at.
 
 | State | Use when |
 |---|---|
@@ -121,7 +131,7 @@ Only run reports hold step states.
 ## Status
 
 - `map` writes `placeholder`. `create` writes `draft`, also when it fills a placeholder.
-- A full run (no `--steps`) where every step ends `passed` or `waived`, at least one is `passed`, and none is in another state promotes `draft` to `active`. Compute it with `runbook.mjs status`.
+- A full run (no `--steps`) where every step ends `passed` or `waived`, at least one is `passed`, and none is in another state promotes `draft` to `active`. With `viewports`, this counts every state at every viewport. Compute it with `runbook.mjs status`.
 - An `active` runbook that later fails stays `active`; `last_run` shows the failure.
 - `deprecated` runbooks are listed but never count as coverage and never appear in `list --affected`.
 - A runbook with frontmatter problems shows as `invalid` and never counts until fixed.

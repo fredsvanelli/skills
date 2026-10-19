@@ -6,6 +6,8 @@ surface: ui
 feature: <feature>
 tags: []
 roles: [<role>]
+viewports: [<viewport>]
+design: {}  # with a design system in the config, one line per screen, indented: <screen>: "<frame link or file path>"
 covers:
   entries: []
   requirements: []
@@ -34,6 +36,8 @@ last_run: null
 Parents: none
 Requirement: <requirement id or none>
 Page: `<route>`
+Design: <only when the step ends on a screen in `design`: its name; else leave the line out>
+Viewports: <only when the step runs at fewer viewports than the runbook; else leave the line out>
 
 Actions:
 

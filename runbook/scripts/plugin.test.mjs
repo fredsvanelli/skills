@@ -29,6 +29,15 @@ test('the runbook skill has a name and a description', () => {
   assert.equal(typeof data.description, 'string')
 })
 
+test('the scenarios skill is invoked by the model only', () => {
+  const parts = splitFrontmatter(fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/scenarios/SKILL.md'), 'utf8'))
+  const data = parseYaml(parts.yaml)
+  assert.equal(data.name, 'scenarios')
+  assert.equal(typeof data.description, 'string')
+  assert.equal(data['user-invocable'], false)
+  assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/create.md'), 'utf8'), /`runbook:scenarios`/)
+})
+
 test('every command has a description and is user-invoked', () => {
   for (const rel of findFiles(PLUGIN_ROOT, 'commands/*.md')) {
     const parts = splitFrontmatter(fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8'))
@@ -50,9 +59,9 @@ test('templates parse', () => {
   assert.equal(parseYaml(placeholder.yaml).status, 'placeholder')
 })
 
-test('all eleven commands exist and none is a stub', () => {
+test('all twelve commands exist and none is a stub', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/*.md').map((rel) => path.basename(rel, '.md'))
-  assert.deepEqual(commands, ['audit-runbook', 'check', 'coverage', 'create', 'list', 'map', 'run', 'setup', 'to-test', 'update', 'upgrade'])
+  assert.deepEqual(commands, ['audit-runbook', 'check', 'coverage', 'create', 'list', 'map', 'run', 'settings', 'setup', 'to-test', 'update', 'upgrade'])
   for (const name of commands) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, `commands/${name}.md`), 'utf8')
     assert.doesNotMatch(text, /Not implemented yet/, `${name}.md is still a stub`)

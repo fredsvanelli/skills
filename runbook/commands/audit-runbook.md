@@ -47,6 +47,10 @@ Run `... coverage --json` once and read its `orphans`. Then, for each runbook, c
 | every quoted Expected text exists in a `uiText` file; for text with interpolated values, its static part | `drift` |
 | every `Page:` route still exists and the runbook's roles can still open it (route guards, navigation config) | `drift` |
 | every control named in Actions still has that visible label | `drift` |
+| every `Design:` line names a key of the runbook's `design` | `broken` |
+| every file in `design` exists, and every frame link opens through the design server when it is loaded in this session | `drift` |
+| every `Viewports:` line names viewports of the runbook, and each step's parents run at every viewport the step runs at | `broken` |
+| every control named in Actions is visible at each viewport the step runs at (responsive classes such as `hidden md:flex`, media queries) | `drift` |
 
 `api` runbooks:
 

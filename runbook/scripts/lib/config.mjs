@@ -31,6 +31,37 @@ const DEFAULTS = {
   git: { base: 'main', protected: ['main'], messageFormat: 'docs(runbooks): {summary}' },
   commits: { runbooks: 'ask', setup: 'ask' },
   mcp: { headless: 'runbook-playwright', headed: 'runbook-playwright-headed', secretsFile: '.env.local' },
+  viewports: {},
+  design: null,
+}
+
+const DESIGN_SYSTEMS = ['figma', 'claude-design', 'adobe-xd', 'files', 'other']
+// Where each design system's references come from: an MCP server, exported files, or either.
+const DESIGN_NEEDS = { figma: ['mcp', 'files'], 'adobe-xd': ['files'], files: ['files'], other: ['mcp', 'files'] }
+
+function validateDesign(design, stack) {
+  if (design === null) return
+  if (typeof design !== 'object' || Array.isArray(design)) throw new ConfigError('design must be an object with a "system"')
+  if (!surfacesOf(stack).includes('ui')) throw new ConfigError(`design applies only to ui runbooks, and a ${stack} stack has none`)
+  if (!DESIGN_SYSTEMS.includes(design.system)) throw new ConfigError(`design.system must be one of ${DESIGN_SYSTEMS.join(', ')}`)
+  const needs = DESIGN_NEEDS[design.system] ?? []
+  if (needs.length > 0 && !needs.some((key) => design[key])) {
+    throw new ConfigError(`design: ${design.system} needs ${needs.map((key) => `"${key}"`).join(' or ')}`)
+  }
+}
+
+const isSize = (value) => Number.isInteger(value) && value > 0
+
+function validateViewports(viewports) {
+  if (typeof viewports !== 'object' || viewports === null || Array.isArray(viewports)) {
+    throw new ConfigError('viewports must map each name to { "width", "height" }')
+  }
+  for (const [name, size] of Object.entries(viewports)) {
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) throw new ConfigError(`viewports.${name}: names are kebab-case`)
+    if (!isSize(size?.width) || !isSize(size?.height)) {
+      throw new ConfigError(`viewports.${name}: width and height must be positive integers`)
+    }
+  }
 }
 
 function validateSource(listName, source, index) {
@@ -77,6 +108,8 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
   for (const listName of ['entries', 'requirements']) {
     config[listName].forEach((source, index) => validateSource(listName, source, index))
   }
+  validateViewports(config.viewports)
+  validateDesign(config.design, config.stack)
   for (const [type, policy] of Object.entries(config.commits)) {
     if (!COMMIT_POLICIES.includes(policy)) {
       throw new ConfigError(`commits.${type} must be one of ${COMMIT_POLICIES.join(', ')}`)

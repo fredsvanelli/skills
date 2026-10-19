@@ -1,0 +1,9 @@
+{
+  "figma-remote": { "type": "http", "url": "https://mcp.figma.com/mcp" },
+  "figma-desktop": { "type": "http", "url": "http://127.0.0.1:3845/mcp" },
+  "figma-framelink": {
+    "command": "npx",
+    "args": ["-y", "figma-developer-mcp@<version>", "--stdio"],
+    "env": { "FIGMA_API_KEY": "${FIGMA_API_KEY}" }
+  }
+}

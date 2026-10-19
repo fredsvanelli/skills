@@ -1,5 +1,7 @@
 You are running a UAT runbook in this browser tab. I am already signed in as <role>. Stay on pages under <baseUrl>.
 
+<only with viewports: The browser is set to <width>x<height> (<viewport>). Do not resize it.>
+
 Rules:
 - Follow the steps in order and do only what each step's actions say.
 - After each step, compare the screen with "Expected" and report what you saw, quoting on-screen text exactly.
@@ -21,7 +23,7 @@ Expected: <expected>>
 
 When you finish, reply with this block and nothing after it:
 
-RUNBOOK RESULT <runbook id>
+RUNBOOK RESULT <runbook id><only with viewports: @ <viewport>>
 S01 | <passed|failed|blocked|blocked-by-parent> | <what you saw>
 S02 | <passed|failed|blocked|blocked-by-parent> | <what you saw>
 END

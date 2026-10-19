@@ -72,6 +72,8 @@ test('loadRunbooks maps frontmatter fields', () => {
     feature: 'invoices',
     tags: ['financial', 'critical'],
     roles: ['admin'],
+    viewports: [],
+    design: {},
     covers: { entries: ['/financeiro/faturas', 'POST /admin/invoices'], requirements: ['REQ-1'] },
     sources: ['docs/specs/billing.md'],
     scripts: ['e2e/billing/issue-invoice.runbook.spec.ts'],
@@ -131,6 +133,67 @@ test('loadConfig reads stack and tests, and migrates paths.e2e', () => {
   const api = { framework: 'phpunit', dir: 'tests/Feature', command: 'php artisan test {files} --log-junit {junit}' }
   assert.deepEqual(load(JSON.stringify({ version: 1, stack: 'backend', tests: { api } })).tests, { api })
   assert.throws(() => load('{ "version": 1, "stack": "mobile" }'), /stack must be one of frontend, backend, fullstack/)
+})
+
+test('loadConfig checks viewports', () => {
+  const load = (viewports) => loadConfig(tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, viewports }) }))
+  assert.deepEqual(loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1 }' })).viewports, {})
+  assert.deepEqual(load({ mobile: { width: 390, height: 844 } }).viewports, { mobile: { width: 390, height: 844 } })
+  assert.throws(() => load(['mobile']), /viewports must map each name to \{ "width", "height" \}/)
+  assert.throws(() => load({ Mobile: { width: 390, height: 844 } }), /viewports\.Mobile: names are kebab-case/)
+  assert.throws(() => load({ mobile: { width: 390 } }), /viewports\.mobile: width and height must be positive integers/)
+  assert.throws(() => load({ mobile: { width: '390', height: 844 } }), /viewports\.mobile: width and height must be positive integers/)
+})
+
+test('viewports must be in the config and apply only to ui runbooks', () => {
+  const runbook = (id, extra) => `---\nid: v.${id}\ncapability: v\nstatus: draft\n${extra}\n---\n`
+  const dir = tmpProject({
+    [CONFIG_PATH]: JSON.stringify({ version: 1, stack: 'fullstack', viewports: { desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } } }),
+    'docs/runbooks/v/ok.md': runbook('ok', 'viewports: [desktop, mobile]'),
+    'docs/runbooks/v/unknown.md': runbook('unknown', 'viewports: [desktop, watch]'),
+    'docs/runbooks/v/api.md': runbook('api', 'surface: api\nviewports: [mobile]'),
+  })
+  const byId = Object.fromEntries(loadRunbooks(dir, loadConfig(dir)).map((rb) => [rb.id, rb]))
+  assert.deepEqual(byId['v.ok'].viewports, ['desktop', 'mobile'])
+  assert.deepEqual(byId['v.ok'].problems, [])
+  assert.deepEqual(byId['v.unknown'].problems, ['viewport "watch" is not in the config viewports'])
+  assert.deepEqual(byId['v.api'].problems, ['viewports apply only to ui runbooks'])
+})
+
+test('loadConfig checks the design system', () => {
+  const load = (json) => loadConfig(tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, ...json }) }))
+  assert.equal(load({}).design, null)
+  assert.deepEqual(load({ design: { system: 'figma', mcp: 'figma' } }).design, { system: 'figma', mcp: 'figma' })
+  assert.deepEqual(load({ design: { system: 'claude-design' } }).design, { system: 'claude-design' })
+  assert.throws(() => load({ design: 'figma' }), /design must be an object with a "system"/)
+  assert.throws(() => load({ design: { system: 'sketchbook' } }), /design\.system must be one of figma, claude-design, adobe-xd, files, other/)
+  assert.throws(() => load({ design: { system: 'figma' } }), /design: figma needs "mcp" or "files"/)
+  assert.throws(() => load({ design: { system: 'adobe-xd', mcp: 'xd' } }), /design: adobe-xd needs "files"/)
+  assert.throws(() => load({ stack: 'backend', design: { system: 'files', files: 'design/**' } }), /design applies only to ui runbooks, and a backend stack has none/)
+})
+
+test('design references need a system, a ui surface and known viewports', () => {
+  const runbook = (id, extra) => `---\nid: d.${id}\ncapability: d\nstatus: draft\n${extra}\n---\n`
+  const files = {
+    'docs/runbooks/d/ok.md': runbook('ok', 'viewports: [mobile]\ndesign:\n  list: "https://www.figma.com/design/AbC/App?node-id=1-2"\n  list.mobile: design/list-mobile.png'),
+    'docs/runbooks/d/bad.md': runbook('bad', 'design:\n  list.watch: design/list.png\n  empty: ""'),
+    'docs/runbooks/d/api.md': runbook('api', 'surface: api\ndesign:\n  list: design/list.png'),
+    'docs/runbooks/d/list.md': runbook('list', 'design: [design/list.png]'),
+  }
+  const load = (design) => {
+    const dir = tmpProject({
+      [CONFIG_PATH]: JSON.stringify({ version: 1, stack: 'fullstack', viewports: { mobile: { width: 390, height: 844 } }, design }),
+      ...files,
+    })
+    return Object.fromEntries(loadRunbooks(dir, loadConfig(dir)).map((rb) => [rb.id, rb]))
+  }
+  const byId = load({ system: 'figma', mcp: 'figma' })
+  assert.deepEqual(byId['d.ok'].design, { list: 'https://www.figma.com/design/AbC/App?node-id=1-2', 'list.mobile': 'design/list-mobile.png' })
+  assert.deepEqual(byId['d.ok'].problems, [])
+  assert.deepEqual(byId['d.bad'].problems, ['design "list.watch": "watch" is not one of the runbook\'s viewports', 'design "empty" needs a reference'])
+  assert.deepEqual(byId['d.api'].problems, ['design applies only to ui runbooks'])
+  assert.deepEqual(byId['d.list'].problems, ['design must map each name to a reference'])
+  assert.deepEqual(load(null)['d.ok'].problems, ['design references need a design system in the config'])
 })
 
 test('filterRunbooks', () => {

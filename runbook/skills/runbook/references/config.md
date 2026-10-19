@@ -26,6 +26,8 @@
 | `commits.runbooks/setup` | `ask/ask` | commit policy per artifact (`never`, `ask`, `auto`) |
 | `mcp.headless` / `mcp.headed` | `runbook-playwright` / `runbook-playwright-headed` | `.mcp.json` server names for the automated modes |
 | `mcp.secretsFile` | `.env.local` | dotenv file passed to Playwright MCP `--secrets`; must be gitignored |
+| `viewports.<name>` | `{}` | `{ width, height }` in CSS pixels: a screen size `ui` runbooks cite in their `viewports` (below) |
+| `design` | `null` | the design reference `run` compares `ui` steps with (below); `null` means the project has none. Only in a stack with `ui` |
 
 ## Tests
 
@@ -53,6 +55,62 @@ One key per surface the stack allows, `tests.ui` and `tests.api`. A key for a su
 JUnit flags by framework: Jest `--reporters=default --reporters=jest-junit` with `JEST_JUNIT_OUTPUT_FILE={junit}` (needs `jest-junit`), Vitest `--reporter=junit --outputFile={junit}`, PHPUnit and Pest `--log-junit {junit}`, Playwright `--reporter=junit` with `PLAYWRIGHT_JUNIT_OUTPUT_NAME={junit}`, Cypress `--reporter junit --reporter-options mochaFile={junit}`.
 
 Endpoint sources: the `next-app-router` extractor marks route handlers `api-endpoint`. A `regex` source for endpoints (`routes/api.php`, Nest controllers) sets `"kind": "api-endpoint"`, so coverage can tell endpoints from screens.
+
+## Viewports
+
+Each name is a screen size that `ui` runbooks run at. `create` adds one when the user picks a size the config lacks; `setup` keeps the existing ones. Names are kebab-case; width and height are positive integers.
+
+```json
+"viewports": {
+  "desktop": { "width": 1440, "height": 900 },
+  "tablet":  { "width": 768,  "height": 1024 },
+  "mobile":  { "width": 390,  "height": 844 }
+}
+```
+
+Put each width inside one range of the project's breakpoints, so the page gets the layout of that range. The project declares its breakpoints in one of these places:
+
+- Tailwind v4: `--breakpoint-*` in `@theme`. Defaults: `sm` 640, `md` 768, `lg` 1024, `xl` 1280, `2xl` 1536.
+- Tailwind v3: `theme.screens` in `tailwind.config.*`, with the same defaults.
+- Bootstrap: `$grid-breakpoints`. Defaults: 576, 768, 992, 1200, 1400.
+- MUI: `theme.breakpoints.values`. Defaults: 600, 900, 1200, 1536.
+- Plain CSS and JS: `@media` rules with `min-width` or `max-width`, and `matchMedia` or `useMediaQuery` calls.
+
+The sizes in the example fit the Tailwind defaults: 390 is below `sm`, 768 is where `md` starts, and 1440 falls between `xl` and `2xl`.
+
+## Design
+
+`setup` writes it when the user names a design reference. `create` and `update` link a runbook's screens to it (`format.md`, the `design` key), and `run` compares each linked step with its design.
+
+| Key | Meaning |
+|---|---|
+| `system` | `figma`, `claude-design`, `adobe-xd`, `files` or `other` |
+| `name` | for `other`: the tool's name (Penpot, Sketch, Framer, ...) |
+| `mcp` | the `.mcp.json` server that reads the designs. Required for `figma` and `other` unless `files` is set |
+| `files` | a glob of designs exported into the repository (PNG, JPG, WebP, SVG, PDF). Required for `files` and `adobe-xd` |
+| `url` | optional: the design file or project the runbooks' frames come from (a Figma file link, a Claude Design link). `create` searches there first |
+
+```json
+"design": { "system": "figma", "mcp": "figma", "url": "https://www.figma.com/design/AbC123/Billing" }
+```
+
+How each system is read, and what a runbook cites:
+
+| `system` | Read through | A reference in a runbook |
+|---|---|---|
+| `figma` | the `mcp` server, or the exported files in `files` | a frame link with its `node-id` (`https://www.figma.com/design/AbC123/Billing?node-id=12-34`), or a file path |
+| `claude-design` | the Artifact tool, with Claude Code signed in to claude.ai. No server to add | a claude.ai link to a design |
+| `adobe-xd` | artboards exported as PNG into `files`. Adobe XD has no MCP server | a file path |
+| `files` | the files in `files`, read as images or PDF | a file path |
+| `other` | the `mcp` server the user added, or the files in `files` | what that server takes (a link or an id), or a file path |
+
+The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design-servers.json`, and each one is written to `.mcp.json` under the name `figma`:
+
+| Template | Server | Needs |
+|---|---|---|
+| `figma-remote` | Figma's remote MCP server | sign-in with Figma through `/mcp`, once |
+| `figma-desktop` | Figma's desktop MCP server, served by the Figma desktop app | the app open, with its MCP server turned on in Dev Mode |
+| `figma-framelink` | the `figma-developer-mcp` package, pinned to the version `npm view figma-developer-mcp version` prints | a Figma personal access token in the env var `FIGMA_API_KEY` of the shell that starts Claude Code. `.mcp.json` holds only `${FIGMA_API_KEY}`, never the token |
 
 ## Sources
 
