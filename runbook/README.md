@@ -8,7 +8,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbook:settings` | changes part of what setup configured (stack, test library, design reference, accounts, viewports, commit policy, ...) and the files that depend on it, without asking every setup question again |
 | `/runbook:list` | lists runbooks, filtered or by what a diff affects |
 | `/runbook:map` | scans the code and writes a placeholder runbook for each flow no runbook cites |
-| `/runbook:create` | writes a runbook from a spec, diff, ticket, description or placeholder, filling the matching placeholder, with one step per happy path, expected error and edge case it finds in the code; for a `ui` runbook, asks the screen sizes it runs at and links its screens to their designs |
+| `/runbook:create` | writes a runbook from a spec, diff, ticket, description, code file, directory, route or placeholder, filling the matching placeholder, with one step per happy path, expected error and edge case it finds in the code; for a `ui` runbook, asks the screen sizes it runs at and links its screens to their designs |
 | `/runbook:update` | updates the steps of a runbook after the behavior it records changed |
 | `/runbook:run` | runs runbooks: `ui` ones guided, headless, headed, in Claude in Chrome or as a prompt for the Chrome extension, once per screen size, comparing each linked screen with its design; `api` ones through their test script |
 | `/runbook:check` | shows the result of a runbook's latest run, or says it was never run |

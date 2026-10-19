@@ -41,7 +41,7 @@ last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2
 | `design` | `ui` only, and only when the config has `design`: a map from a screen name (kebab-case) to its design reference, a frame link or a file path (`config.md`, Design). `<name>.<viewport>` is the variant used at that viewport; without one, every viewport uses `<name>`. Steps cite the names in their `Design:` line |
 | `covers.entries` | entry ids exactly as `runbook.mjs entries` prints them |
 | `covers.requirements` | requirement ids exactly as `runbook.mjs requirements` prints them, or ids from the source when no requirement source is configured |
-| `sources` | spec paths, ticket ids, `diff <base>...<sha>`, `map <sha>` for a placeholder, and test files read as evidence only (tests of the code behind an entry, which cannot run the steps), that the runbook came from |
+| `sources` | spec paths, ticket ids, `diff <base>...<sha>`, `file <path>`, `dir <path>` and `route <entry id>` for code read as the source, `map <sha>` for a placeholder, and test files read as evidence only (tests of the code behind an entry, which cannot run the steps), that the runbook came from |
 | `scripts` | the automated tests that run this runbook's steps, written or adopted by `to-test`. Optional for `ui`; required for `api`, whose runbook runs only through it. In a placeholder, the existing tests `map` fitted to the flow, which may cover it only in part: candidates `to-test` offers to adopt |
 | `status` | `placeholder`, `draft`, `active` or `deprecated` (see Status) |
 | `last_run` | the latest full run: `date`, `commit` (quoted), `result` (`passed`, `failed`, `blocked`), `report` (path relative to `paths.runbooks`) |
