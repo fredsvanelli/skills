@@ -24,7 +24,7 @@ Examples: `/runbook:update billing.issue-invoice --from diff`, `/runbook:update 
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/format.md`.
 
-An update changes what the runbook expects, so it is investigated like a new runbook, but only where the change reaches. Every edited or added step names a real route, a real control and the exact text the UI shows.
+An update changes what the runbook expects, so it is investigated like a new runbook, but only where the change reaches. Every edited or added `ui` step names a real route, a real control and the exact text the UI shows; every `api` step a real endpoint, role, request and the exact status and body (`create.md`, step 3).
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
@@ -55,7 +55,7 @@ Done when every behavior change the source promises is on the list.
 
 For each change, mark every step it reaches:
 
-- **edit**: the step's Page, an Action's control or label, or an Expected text changes;
+- **edit**: the step's Page, an Action's control or label, or an Expected text changes (on `api`: its Endpoint, As, Request or Expected);
 - **remove**: the step proves something the product no longer does;
 - **add**: the change brings behavior no step proves, including its edge case and, when it saves something, a reload check;
 - **preconditions**: services, migrations, accounts or data the steps now need.
@@ -66,7 +66,7 @@ Done when every change on the list maps to steps, preconditions, or a "Not cover
 
 ## 4. Investigate the code
 
-For each edited or added step, as in `create`:
+For an `api` runbook, investigate each edited or added step as `create` does for an `api` flow. For a `ui` runbook, as in `create`:
 
 - the route the user opens and the controls they use, with visible labels;
 - the roles that see the screen and the roles that must not;
@@ -90,7 +90,8 @@ Then:
 
 - `covers.entries` and `covers.requirements`: add the ids the new steps reach and drop the ones no step reaches any more;
 - `sources`: append the change's source;
-- "Not covered": add what the browser cannot show about the change, and remove what a step now proves;
+- "Not covered": add what the surface cannot show about the change, and remove what a step now proves;
+- `scripts` of an `api` runbook: leave the files alone here. The next `/runbook:run` finds new step ids without a test and completes the script, and `/runbook:audit-runbook` finds assertions that no longer match;
 - `status` and `last_run` stay as they are. `last_run` now describes the old text, and only the next full run moves either of them.
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" list --json` and confirm the runbook has an empty `problems` list.

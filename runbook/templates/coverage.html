@@ -151,12 +151,12 @@
     r ? stat('Requirements', pct(r.covered, r.total), `${r.covered} of ${r.total} covered · ${r.pending} pending · ${r.planned} planned`)
       : stat('Requirements', '-', data.requirementsNote ?? 'no requirement source configured'),
     stat('Runbooks', String(rb.active), `active · ${rb.draft} draft · ${rb.placeholder} placeholder`),
-    stat('With a Playwright spec', String(rb.automated), `of ${rb.active} active`),
+    stat('With a script', String(rb.automated), `of ${rb.active} active`),
   )
   document.getElementById('count').textContent = `entry points ${pct(e.covered, e.total)}`
 
   document.getElementById('slices').append(...data.groups.map((g) => row([
-    [g.name, 'id'], [String(g.covered), 'num'], [String(g.pending), 'num'], [String(g.planned), 'num'], [String(g.total), 'num'],
+    [g.surface ? `${g.name} (${g.surface})` : g.name, 'id'], [String(g.covered), 'num'], [String(g.pending), 'num'], [String(g.planned), 'num'], [String(g.total), 'num'],
     [meter(g)],
   ])))
 

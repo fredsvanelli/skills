@@ -170,3 +170,32 @@ test('requirement sources that all failed are reported as unavailable, not as ze
   assert.equal(result.requirementsNote, 'requirement sources did not run')
   assert.equal(result.orphans.some((o) => o.kind === 'requirement'), false)
 })
+
+test('with api runbooks in the stack, an endpoint is covered only through an api runbook', () => {
+  const runbook = (id, surface, entries) => ({
+    id, path: `docs/runbooks/${id.replace('.', '/')}.md`, capability: id.split('.')[0], surface, feature: null, tags: [], roles: [],
+    covers: { entries, requirements: [] }, sources: [], scripts: [], status: 'active', lastRun: null, problems: [],
+  })
+  const entries = [
+    { id: '/invoices', kind: 'ui-route', file: 'src/app/invoices/page.tsx' },
+    { id: 'POST /invoices', kind: 'api-endpoint', file: 'src/app/api/invoices/route.ts' },
+    { id: 'GET /invoices', kind: 'api-endpoint', file: 'src/app/api/invoices/route.ts' },
+  ]
+  const runbooks = [
+    runbook('billing.issue-invoice', 'ui', ['/invoices', 'POST /invoices', 'GET /invoices']),
+    runbook('billing.create-invoice', 'api', ['POST /invoices']),
+  ]
+  const slices = { billing: ['src/app/**'] }
+  const coverage = (stack) => computeCoverage({ runbooks, entries, requirements: [], requirementsConfigured: false, slices, stack })
+
+  const frontend = coverage('frontend')
+  assert.equal(frontend.entries.covered, 3)
+  assert.deepEqual(frontend.groups, [{ name: 'billing', total: 3, covered: 3, pending: 0, planned: 0 }])
+
+  const fullstack = coverage('fullstack')
+  assert.deepEqual(ids(fullstack.entries.uncovered), ['GET /invoices'])
+  assert.deepEqual(fullstack.groups, [
+    { name: 'billing', surface: 'api', total: 2, covered: 1, pending: 0, planned: 0 },
+    { name: 'billing', surface: 'ui', total: 1, covered: 1, pending: 0, planned: 0 },
+  ])
+})

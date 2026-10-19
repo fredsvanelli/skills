@@ -6,6 +6,10 @@ export const DEFAULT_CONFIG_PATH = 'docs/runbooks/runbook.config.json'
 export class ConfigError extends Error {}
 
 const COMMIT_POLICIES = ['never', 'ask', 'auto']
+const STACKS = { frontend: ['ui'], backend: ['api'], fullstack: ['ui', 'api'] }
+
+// The surfaces a stack allows runbooks to have.
+export const surfacesOf = (stack) => STACKS[stack] ?? STACKS.frontend
 const EXTRACTORS = {
   entries: ['next-app-router', 'regex'],
   requirements: ['regex', 'command'],
@@ -13,6 +17,8 @@ const EXTRACTORS = {
 
 const DEFAULTS = {
   language: 'en',
+  stack: 'frontend',
+  tests: {},
   paths: { runbooks: 'docs/runbooks', evidence: '.runbook/evidence', e2e: null },
   app: { baseUrl: '', start: [] },
   accounts: {},
@@ -64,6 +70,10 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
   for (const key of ['paths', 'app', 'data', 'tickets', 'git', 'commits', 'mcp']) {
     config[key] = { ...DEFAULTS[key], ...raw[key] }
   }
+  if (!STACKS[config.stack]) throw new ConfigError(`stack must be one of ${Object.keys(STACKS).join(', ')}`)
+  config.tests = { ...raw.tests }
+  // Configs written before tests.ui kept the Playwright folder in paths.e2e.
+  if (!config.tests.ui && config.paths.e2e) config.tests.ui = { framework: 'playwright', dir: config.paths.e2e }
   for (const listName of ['entries', 'requirements']) {
     config[listName].forEach((source, index) => validateSource(listName, source, index))
   }

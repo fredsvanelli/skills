@@ -1,7 +1,9 @@
 {
   "version": 1,
   "language": "en",
-  "paths": { "runbooks": "docs/runbooks", "evidence": ".runbook/evidence", "e2e": null },
+  "stack": "frontend",
+  "tests": {},
+  "paths": { "runbooks": "docs/runbooks", "evidence": ".runbook/evidence" },
   "app": { "baseUrl": "http://localhost:3000", "start": [] },
   "accounts": {},
   "uiText": [],

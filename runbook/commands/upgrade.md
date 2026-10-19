@@ -40,4 +40,6 @@ Run `claude plugin list --json` again and read the new `version` of each install
 
 When a version changed, offer `/runbook:setup` after the restart: running it again is safe, and it brings the project's config and folders in line with what the new version expects.
 
+When the project's config has no `stack` (written before stacks existed), say that `setup` now asks for it, along with a test library per surface, and migrates `paths.e2e` to `tests.ui.dir`. Choosing `backend` or `fullstack` adds `api` runbooks, and from then on endpoints count as covered only through `api` runbooks, so endpoint coverage drops on the next `/runbook:coverage` (`${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/coverage.md`, By surface).
+
 Done when every install that applies here has been updated or reported as up to date, and the user knows a restart is needed.

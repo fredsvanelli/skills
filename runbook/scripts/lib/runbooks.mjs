@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { findFiles } from './glob.mjs'
 import { splitFrontmatter, parseYaml } from './yaml.mjs'
+import { surfacesOf } from './config.mjs'
 
 const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
 
@@ -10,7 +11,9 @@ const asList = (value) => {
   return (Array.isArray(value) ? value : [value]).map(String)
 }
 
-function readRunbook(file, rel, runbooksDir) {
+const SURFACES = ['ui', 'api']
+
+function readRunbook(file, rel, runbooksDir, stack) {
   const segments = rel.split('/')
   const flow = segments.join('.').replace(/\.md$/, '')
   const runbook = {
@@ -18,6 +21,7 @@ function readRunbook(file, rel, runbooksDir) {
     path: `${runbooksDir}/${rel}`,
     title: '',
     capability: segments[0],
+    surface: 'ui',
     feature: null,
     tags: [],
     roles: [],
@@ -48,6 +52,11 @@ function readRunbook(file, rel, runbooksDir) {
   if (STATUSES.includes(data.status)) runbook.status = data.status
   else runbook.problems.push(`status "${data.status}" must be one of ${STATUSES.join(', ')}`)
 
+  const surface = data.surface ?? 'ui'
+  if (!SURFACES.includes(surface)) runbook.problems.push(`surface "${surface}" must be one of ${SURFACES.join(', ')}`)
+  else if (!surfacesOf(stack).includes(surface)) runbook.problems.push(`surface "${surface}" is not allowed in a ${stack} stack`)
+  else runbook.surface = surface
+
   runbook.title = data.title === null || data.title === undefined ? '' : String(data.title)
   runbook.feature = data.feature ?? null
   runbook.tags = asList(data.tags)
@@ -64,5 +73,5 @@ export function loadRunbooks(projectRoot, config) {
   const dir = path.resolve(projectRoot, runbooksDir)
   return findFiles(dir, '**/*.md')
     .filter((rel) => rel.includes('/') && !rel.split('/').some((segment) => segment.startsWith('_')))
-    .map((rel) => readRunbook(path.join(dir, rel), rel, runbooksDir))
+    .map((rel) => readRunbook(path.join(dir, rel), rel, runbooksDir, config.stack))
 }

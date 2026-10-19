@@ -38,10 +38,24 @@ Run `... coverage --json` once and read its `orphans`. Then, for each runbook, c
 | every `covers.entries` id exists (not in `orphans`) | `broken` |
 | every `covers.requirements` id exists, when requirement sources are configured | `broken` |
 | every `Parents:` names an existing step and the tree has no cycle | `broken` |
+| every path in `sources` and `scripts` still exists | `drift` |
+
+`ui` runbooks:
+
+| Check | Verdict when it fails |
+|---|---|
 | every quoted Expected text exists in a `uiText` file; for text with interpolated values, its static part | `drift` |
 | every `Page:` route still exists and the runbook's roles can still open it (route guards, navigation config) | `drift` |
 | every control named in Actions still has that visible label | `drift` |
-| every path in `sources` and `scripts` still exists | `drift` |
+
+`api` runbooks:
+
+| Check | Verdict when it fails |
+|---|---|
+| every `Endpoint:` still exists, and its guards and middleware still let the `As:` role in (or still refuse it, on a 401 or 403 step) | `drift` |
+| the fields in `Request:` and `Expected:` match the validation rules and the response shape in the code (form requests, DTOs, schemas, resources, serializers) | `drift` |
+| `scripts` is not empty, unless the runbook is a placeholder | `drift`, suggesting `/runbook:run <id>`, which writes it |
+| every step has one test with its id in the script, and every runbook test asserts its step's Expected | `drift` |
 
 The runbook's verdict is the worst of its findings; none means `in-sync`.
 
@@ -51,7 +65,7 @@ A table (runbook, verdict, findings count), then the findings per runbook. Print
 
 ## 4. Fix (with `--fix`)
 
-Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`.
+Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbook:update` for it.
 
 ## 5. Show the fixes (with `--fix`)
 

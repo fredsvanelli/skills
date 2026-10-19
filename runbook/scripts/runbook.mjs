@@ -13,7 +13,9 @@ import { changedFiles, affectedRunbooks } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
 import { latestReport } from './lib/reports.mjs'
 import { outputRows, writeRuns, writeCoverage } from './lib/output.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown } from './lib/format.mjs'
+import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
+import { splitFrontmatter } from './lib/yaml.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown } from './lib/format.mjs'
 
 export const USAGE = `Usage: runbook.mjs <command> [options]
 
@@ -24,6 +26,8 @@ Commands:
   coverage      [--capability x | --feature y | --path glob | --slice name]
   check         <id> [--full]
   status        --current <draft|active|deprecated> --states <s1,s2,...> [--partial]
+  junit         <id> --file <junit.xml> [--waive S03,S04] maps the JUnit report of an api runbook's
+                script onto its steps: one state per step, parents resolved
   output        [--coverage] writes runs.json and runs.html in the runbooks folder: every runbook
                 with its last full run; with --coverage, also coverage.json and coverage.html (overall)
 
@@ -88,6 +92,7 @@ function coverageResult(root, config, filters, warnings) {
     requirementsConfigured: config.requirements.length > 0,
     requirementsRan: requirementsStatus.ran > 0,
     slices: config.slices,
+    stack: config.stack,
     filters,
     unavailable: { entries: !entriesStatus.complete, requirements: !requirementsStatus.complete },
   })
@@ -131,6 +136,21 @@ function commandStatus(options) {
   return options.json ? json({ status }) : `${status}\n`
 }
 
+function commandJunit(root, config, options, positionals) {
+  const id = positionals[0]
+  if (!id || typeof options.file !== 'string') throw new Error('junit needs a runbook id and --file <junit.xml>')
+  const runbook = loadRunbooks(root, config).find((rb) => rb.id === id)
+  if (!runbook) throw new Error(`no runbook with id "${id}"`)
+  const file = path.resolve(root, options.file)
+  if (!fs.existsSync(file)) throw new Error(`${options.file} not found: the test command wrote no JUnit report`)
+  const parts = splitFrontmatter(fs.readFileSync(path.resolve(root, runbook.path), 'utf8'))
+  const steps = parseSteps(parts ? parts.body : '')
+  if (steps.length === 0) throw new Error(`${runbook.path} has no steps`)
+  const waived = typeof options.waive === 'string' ? options.waive.split(',').map((s) => s.trim()) : []
+  const result = { id, ...stepStates(steps, parseJunit(fs.readFileSync(file, 'utf8')), { waived }) }
+  return options.json ? json(result) : junitMarkdown(result)
+}
+
 function commandOutput(root, config, options, warnings) {
   const runbooks = loadRunbooks(root, config)
   const written = writeRuns(root, config.paths.runbooks, outputRows(runbooks))
@@ -142,7 +162,7 @@ function commandOutput(root, config, options, warnings) {
   return `${written.join('\n')}\n`
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'output']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'output']
 
 export function run(argv) {
   const stderr = []
@@ -162,6 +182,7 @@ export function run(argv) {
     if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
+    else if (command === 'junit') stdout = commandJunit(root, config, options, positionals)
     else if (command === 'output') stdout = commandOutput(root, config, options, warnings)
     else stdout = commandItems(root, config, options, command, warnings)
     stderr.push(...warnings.map((warning) => `warning: ${warning}`))

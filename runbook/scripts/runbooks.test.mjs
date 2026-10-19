@@ -68,6 +68,7 @@ test('loadRunbooks maps frontmatter fields', () => {
     path: 'docs/runbooks/billing/issue-invoice.md',
     title: 'Issue a partner invoice',
     capability: 'billing',
+    surface: 'ui',
     feature: 'invoices',
     tags: ['financial', 'critical'],
     roles: ['admin'],
@@ -102,6 +103,34 @@ test('id, capability, status and depth are checked against the path', () => {
   assert.equal(byId['x.y'].status, null)
   assert.deepEqual(byId['a.b.c'].problems, ['runbooks live exactly one folder deep: <capability>/<flow>.md'])
   assert.deepEqual(byId['n.none'].problems, ['missing frontmatter block'])
+})
+
+test('surface defaults to ui and must be allowed by the stack', () => {
+  const runbook = (surface) => `---\nid: s.${surface}\ncapability: s\nsurface: ${surface}\nstatus: draft\n---\n`
+  const files = { 'docs/runbooks/s/ui.md': runbook('ui'), 'docs/runbooks/s/api.md': runbook('api'), 'docs/runbooks/s/cli.md': runbook('cli') }
+  const load = (config) => {
+    const dir = tmpProject({ [CONFIG_PATH]: config, ...files, 'docs/runbooks/s/none.md': '---\nid: s.none\ncapability: s\nstatus: draft\n---\n' })
+    return Object.fromEntries(loadRunbooks(dir, loadConfig(dir)).map((rb) => [rb.id, rb]))
+  }
+  const frontend = load('{ "version": 1 }')
+  assert.equal(frontend['s.none'].surface, 'ui')
+  assert.deepEqual(frontend['s.ui'].problems, [])
+  assert.deepEqual(frontend['s.api'].problems, ['surface "api" is not allowed in a frontend stack'])
+  assert.deepEqual(frontend['s.cli'].problems, ['surface "cli" must be one of ui, api'])
+  const fullstack = load('{ "version": 1, "stack": "fullstack" }')
+  assert.equal(fullstack['s.api'].surface, 'api')
+  assert.deepEqual(fullstack['s.api'].problems, [])
+  assert.deepEqual(load('{ "version": 1, "stack": "backend" }')['s.ui'].problems, ['surface "ui" is not allowed in a backend stack'])
+})
+
+test('loadConfig reads stack and tests, and migrates paths.e2e', () => {
+  const load = (json) => loadConfig(tmpProject({ [CONFIG_PATH]: json }))
+  assert.equal(load('{ "version": 1 }').stack, 'frontend')
+  assert.deepEqual(load('{ "version": 1 }').tests, {})
+  assert.deepEqual(load('{ "version": 1, "paths": { "e2e": "e2e" } }').tests, { ui: { framework: 'playwright', dir: 'e2e' } })
+  const api = { framework: 'phpunit', dir: 'tests/Feature', command: 'php artisan test {files} --log-junit {junit}' }
+  assert.deepEqual(load(JSON.stringify({ version: 1, stack: 'backend', tests: { api } })).tests, { api })
+  assert.throws(() => load('{ "version": 1, "stack": "mobile" }'), /stack must be one of frontend, backend, fullstack/)
 })
 
 test('filterRunbooks', () => {

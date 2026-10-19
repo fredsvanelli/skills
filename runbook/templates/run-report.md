@@ -4,8 +4,8 @@ run: <run id>
 date: <YYYY-MM-DD HH:MM>
 commit: "<short sha>"
 branch: <branch>
-mode: <guided | headless | headed | chrome | prompt | script>
-executor: <the user | the agent | Claude in Chrome extension, result reported by the user>
+mode: <guided | headless | headed | chrome | prompt | script | test>
+executor: <the user | the agent | Claude in Chrome extension, result reported by the user | the project's test command>
 partial: false
 result: <passed | failed | blocked>
 ---
@@ -32,6 +32,10 @@ Seen: <exact text or state observed>
 
 - S0N: <reason, in the user's words>
 
+## Other tests in the file
+
+<api runbooks only: tests in the script without a step prefix, with their outcome. They do not change `result`. Leave the section out when there are none.>
+
 ## Notes
 
-<base URL, accounts used by role, data used, anything unusual about this run>
+<base URL or test command, accounts used by role, data used, script mistakes fixed during the run, anything unusual about this run>

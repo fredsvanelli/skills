@@ -7,6 +7,12 @@ Two metrics, computed by `runbook.mjs coverage`:
 
 An item is **covered** when an `active` runbook lists its id in `covers`, **pending** when only `draft` runbooks do, **planned** when only placeholders do, and **uncovered** otherwise. `deprecated` and invalid runbooks never count. Ids match exactly: `/deliveries/[deliveryId]` does not cover `/deliveries/[id]`, and the report lists such references under Orphans. When a source of a list did not run (a sibling `root` that is not cloned, a failing `command`), the report skips the orphan check for that list and says so, because a missing id could just be unread.
 
+### By surface
+
+When the `stack` is `backend` or `fullstack`, an entry counts only through runbooks of its own surface: an `api-endpoint` through `api` runbooks, any other entry through `ui` runbooks. A `ui` runbook still lists the endpoints its screens call, so `list --affected` finds it when one changes, but that reference does not cover the endpoint. The by-slice table then has one row per slice and surface. A `frontend` stack keeps one row per slice, and its runbooks cover any entry they cite. Why: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0002-endpoint-coverage-by-surface.md`.
+
+Requirements count through runbooks of any surface.
+
 ## Filters
 
 | Filter | Keeps |

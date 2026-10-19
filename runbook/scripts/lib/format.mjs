@@ -51,8 +51,12 @@ export function coverageMarkdown(result, scope) {
     ['Entry points', e.covered, e.pending, e.planned, e.total, pct(e.covered, e.total)],
     r ? ['Requirements', r.covered, r.pending, r.planned, r.total, pct(r.covered, r.total)] : ['Requirements', '-', '-', '-', '-', result.requirementsNote ?? 'no requirement source configured'],
   ]), '')
-  lines.push(`Active runbooks: ${result.runbooks.active}. Draft runbooks: ${result.runbooks.draft}. Placeholders: ${result.runbooks.placeholder}. Active runbooks with a to-test spec: ${result.runbooks.automated}.`, '')
-  lines.push('### By slice', '', table(['Slice', 'Covered', 'Pending (draft)', 'Planned (placeholder)', 'Total', 'Coverage'], result.groups.map((g) => [g.name, g.covered, g.pending, g.planned, g.total, pct(g.covered, g.total)])), '')
+  lines.push(`Active runbooks: ${result.runbooks.active}. Draft runbooks: ${result.runbooks.draft}. Placeholders: ${result.runbooks.placeholder}. Active runbooks with a script: ${result.runbooks.automated}.`, '')
+  const bySurface = result.groups.some((g) => g.surface)
+  const sliceHeader = ['Slice', ...(bySurface ? ['Surface'] : []), 'Covered', 'Pending (draft)', 'Planned (placeholder)', 'Total', 'Coverage']
+  const sliceRows = result.groups.map((g) => [g.name, ...(bySurface ? [g.surface] : []), g.covered, g.pending, g.planned, g.total, pct(g.covered, g.total)])
+  lines.push('### By slice', '', table(sliceHeader, sliceRows), '')
+  if (bySurface) lines.push('An API endpoint counts as covered only through an `api` runbook; a `ui` runbook citing it does not.', '')
   lines.push('### Uncovered entry points', '', ...bullets(e.uncovered.map((i) => `\`${i.id}\`${i.file ? ` (\`${i.file}\`)` : ''}`)), '')
   if (r) lines.push('### Uncovered requirements', '', ...bullets(r.uncovered.map((i) => `\`${i.id}\`${i.title ? `: ${i.title}` : ''}`)), '')
   lines.push('### Orphans', '')
@@ -90,6 +94,21 @@ export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLates
     lines.push(lastRun?.date
       ? `Last full run (last_run): ${lastRunText(lastRun)}, report ${lastRun.report}`
       : 'Last full run (last_run): never')
+  }
+  return `${lines.join('\n')}\n`
+}
+
+export function junitMarkdown({ id, steps, result, extra, others }) {
+  const missing = steps.filter((s) => s.tests.length === 0).map((s) => s.step)
+  const duplicates = steps.filter((s) => s.tests.length > 1).map((s) => s.step)
+  const lines = [`Result of ${id}: ${result}`, '']
+  lines.push(table(['Step', 'State', 'Seen', 'Tests'], steps.map((s) => [s.step, s.state, s.seen, s.tests.join('; ')])), '')
+  lines.push(`States: ${steps.map((s) => s.state).join(',')}`, '')
+  if (missing.length > 0) lines.push(`Steps with no test: ${missing.join(', ')}`)
+  if (duplicates.length > 0) lines.push(`Steps with more than one test: ${duplicates.join(', ')}`)
+  if (extra.length > 0) lines.push(`Tests for steps the runbook does not have: ${extra.map((e) => `${e.step} (${e.test})`).join('; ')}`)
+  if (others.length > 0) {
+    lines.push('', '### Other tests in the file', '', ...others.map((o) => `- ${o.name}: ${o.outcome}${o.seen ? `, ${o.seen}` : ''}`))
   }
   return `${lines.join('\n')}\n`
 }

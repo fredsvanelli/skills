@@ -58,7 +58,7 @@ test('coverage Markdown carries the script numbers', () => {
   assert.match(stdout, /^Scope: overall$/m)
   assert.match(stdout, /^\| Entry points \| 3 \| 2 \| 0 \| 9 \| 33\.3% \|$/m)
   assert.match(stdout, /^\| Requirements \| 1 \| 1 \| 0 \| 3 \| 33\.3% \|$/m)
-  assert.match(stdout, /^Active runbooks: 2\. Draft runbooks: 1\. Placeholders: 0\. Active runbooks with a to-test spec: 1\.$/m)
+  assert.match(stdout, /^Active runbooks: 2\. Draft runbooks: 1\. Placeholders: 0\. Active runbooks with a script: 1\.$/m)
   assert.match(stdout, /^\| billing \| 2 \| 2 \| 0 \| 5 \| 40% \|$/m)
   assert.match(stdout, /^- `GET \/admin\/invoices` \(`\.\.\/api\/src\/app\/admin\/invoices\/route\.ts`\)$/m)
   assert.match(stdout, /^- `REQ-3`: Partner downloads an invoice PDF$/m)

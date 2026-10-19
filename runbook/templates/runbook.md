@@ -2,6 +2,7 @@
 id: <capability>.<flow>
 title: <user outcome, in the config language>
 capability: <capability>
+surface: ui
 feature: <feature>
 tags: []
 roles: [<role>]

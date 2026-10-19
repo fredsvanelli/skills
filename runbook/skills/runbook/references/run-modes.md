@@ -1,5 +1,7 @@
 # Run modes
 
+Modes apply to `ui` runbooks. An `api` runbook always runs in mode `test`, through its script (see "test" below), and `--mode` does not change that.
+
 | Mode | Who acts | Who sets the state | Login |
 |---|---|---|---|
 | `guided` | the user | the user | the user |
@@ -8,10 +10,11 @@
 | `chrome` | the agent, Claude in Chrome | the agent | the user, beforehand |
 | `prompt` | the Claude in Chrome extension | the user, by pasting the reply | the user, beforehand |
 | `script` | a temporary Playwright script (fallback) | the agent, from the script output | env vars read by the script |
+| `test` | `api` runbooks only: the project's test command on the runbook's `scripts` | `runbook.mjs junit`, from the JUnit report | the script's own helpers |
 
 ## Choosing the mode
 
-`--mode` decides. Without it, ask with `AskUserQuestion` before any precondition check or browser action. There is no default mode.
+`--mode` decides. Without it, ask with `AskUserQuestion` before any precondition check or browser action. There is no default mode. Ask only when the selection has a `ui` runbook; when it also has `api` runbooks, say in the question that they run through their scripts.
 
 A mode is available when:
 
@@ -49,6 +52,20 @@ Needs Node 20.12+ (`process.loadEnvFile`). Write `.runbook/tmp/<run id>.mjs` usi
 - skip a step whose parent did not pass and print it as `blocked-by-parent`.
 
 Run it with `node .runbook/tmp/<run id>.mjs`, read the JSON lines, and set the states from them. Delete the script after the report is written.
+
+`script` is offered only when the project has Playwright (`@playwright/test` or `playwright` in the manifest), whatever `tests.ui.framework` says.
+
+## test
+
+For `api` runbooks. Needs `tests.api` in the config.
+
+1. **Preconditions.** `tests.api.command` is set, and `tests.api.root` exists when given. When `tests.api.baseUrl` is set, it answers (`curl -s -o /dev/null -w '%{http_code}' <baseUrl>`); otherwise the app is not checked, because the scripts boot it themselves.
+2. **Sync.** Every step has exactly one test whose name starts with its id in `scripts`, and no test there names a step the runbook does not have. Read the test names in the script files. When `scripts` is empty, or a step has no test, or a test names a missing step, follow `${CLAUDE_PLUGIN_ROOT}/commands/to-test.md` for the runbook first, skipping its "Run once" item: this run is that run. Content (whether each assertion matches its Expected) is not checked here; that is `audit-runbook`'s job.
+3. **Execute.** Run `tests.api.command` in `tests.api.root` (default the project root), with `{files}` replaced by the `scripts` paths relative to that folder and `{junit}` by `.runbook/junit/<run id>.xml` (absolute path). Create the folder first.
+4. **Read.** `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" junit <id> --file .runbook/junit/<run id>.xml --json`, with `--waive <steps>` when the user asked before the run to skip steps. It gives one state per step with parents resolved, the run `result`, and the tests outside the runbook. A missing report means the command did not write `{junit}`: show its output and stop.
+5. **Script mistakes.** A failure caused by the script itself (an import, a helper, a fixture, a typo in a route) may be fixed and the run repeated; say in the report's Notes what was fixed. Never loosen or remove an assertion so the app passes: a step whose Expected the app does not meet is a `failed` finding.
+
+The report's `mode` is `test` and its `executor` is "the project's test command". Evidence is the JUnit report path. Tests outside the runbook go in the report's "Other tests in the file" section and do not change its `result`.
 
 ## chrome
 

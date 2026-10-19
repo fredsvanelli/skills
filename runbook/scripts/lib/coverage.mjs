@@ -1,5 +1,6 @@
 import { matchesGlob } from './glob.mjs'
 import { filterRunbooks } from './filter.mjs'
+import { surfacesOf } from './config.mjs'
 
 const NO_SLICE = '(no slice)'
 
@@ -16,14 +17,20 @@ function refsByStatus(runbooks, field) {
   return { active: pick('active'), draft: pick('draft'), placeholder: pick('placeholder') }
 }
 
-function withState(items, refs) {
-  return items.map((item) => ({
-    ...item,
-    state: refs.active.has(item.id) ? 'covered'
-      : refs.draft.has(item.id) ? 'pending'
-      : refs.placeholder.has(item.id) ? 'planned'
-      : 'uncovered',
-  }))
+export const surfaceOfEntry = (entry) => (entry.kind === 'api-endpoint' ? 'api' : 'ui')
+
+// refsFor(item) picks the refs that can cover the item; see docs/adr/0002.
+function withState(items, refsFor) {
+  return items.map((item) => {
+    const refs = refsFor(item)
+    return {
+      ...item,
+      state: refs.active.has(item.id) ? 'covered'
+        : refs.draft.has(item.id) ? 'pending'
+        : refs.placeholder.has(item.id) ? 'planned'
+        : 'uncovered',
+    }
+  })
 }
 
 function summarize(items) {
@@ -49,6 +56,7 @@ export function computeCoverage({
   requirementsConfigured,
   requirementsRan = true,
   slices,
+  stack = 'frontend',
   filters = {},
   unavailable = { entries: false, requirements: false },
 }) {
@@ -59,6 +67,11 @@ export function computeCoverage({
   const featureEntries = filters.feature ? new Set(scoped.flatMap((rb) => rb.covers.entries)) : null
   const featureRequirements = filters.feature ? new Set(scoped.flatMap((rb) => rb.covers.requirements)) : null
 
+  const bySurface = surfacesOf(stack).includes('api')
+  const entryRefs = bySurface
+    ? Object.fromEntries(['ui', 'api'].map((surface) => [surface, refsByStatus(valid.filter((rb) => rb.surface === surface), 'entries')]))
+    : null
+  const allEntryRefs = refsByStatus(valid, 'entries')
   const scopedEntries = withState(
     entries
       .map((entry) => ({ ...entry, slice: sliceOf(entry.file, slices) }))
@@ -67,28 +80,28 @@ export function computeCoverage({
         (!filters.path || (entry.file !== null && matchesGlob(entry.file, filters.path))) &&
         (!featureEntries || featureEntries.has(entry.id)),
       ),
-    refsByStatus(valid, 'entries'),
+    (entry) => (bySurface ? entryRefs[surfaceOfEntry(entry)] : allEntryRefs),
   )
 
+  const requirementRefs = refsByStatus(valid, 'requirements')
   const scopedRequirements = requirementsAvailable
-    ? withState(requirements.filter((r) => !featureRequirements || featureRequirements.has(r.id)), refsByStatus(valid, 'requirements'))
+    ? withState(requirements.filter((r) => !featureRequirements || featureRequirements.has(r.id)), () => requirementRefs)
     : null
 
   const groupMap = new Map()
   for (const entry of scopedEntries) {
     const name = entry.slice ?? NO_SLICE
-    const group = groupMap.get(name) ?? { name, total: 0, covered: 0, pending: 0, planned: 0 }
+    const surface = bySurface ? surfaceOfEntry(entry) : null
+    const key = `${name}\0${surface}`
+    const group = groupMap.get(key) ?? { name, ...(bySurface && { surface }), total: 0, covered: 0, pending: 0, planned: 0 }
     group.total++
     if (entry.state === 'covered') group.covered++
     if (entry.state === 'pending') group.pending++
     if (entry.state === 'planned') group.planned++
-    groupMap.set(name, group)
+    groupMap.set(key, group)
   }
-  const groups = [...groupMap.values()].sort((a, b) => {
-    if (a.name === NO_SLICE) return 1
-    if (b.name === NO_SLICE) return -1
-    return a.name.localeCompare(b.name)
-  })
+  const groups = [...groupMap.values()].sort((a, b) =>
+    (a.name === NO_SLICE) - (b.name === NO_SLICE) || a.name.localeCompare(b.name) || (a.surface ?? '').localeCompare(b.surface ?? ''))
 
   const entryIds = new Set(entries.map((e) => e.id))
   const requirementIds = new Set(requirements.map((r) => r.id))
