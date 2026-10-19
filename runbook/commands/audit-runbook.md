@@ -69,11 +69,11 @@ A table (runbook, verdict, findings count), then the findings per runbook. Print
 
 ## 4. Fix (with `--fix`)
 
-Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbook:update` for it.
+Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`. When its `last_run` is set and a fix changed a step, a precondition, `viewports` or `design`, add `outdated: true` to `last_run` and keep its other fields: the run verified the old text. A fix that touches only `sources`, `scripts` paths or a script file leaves `last_run` as it is. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbook:update` for it.
 
 ## 5. Show the fixes (with `--fix`)
 
-Print the summary in the conversation before any commit question: a table with one row per applied fix (runbook, step, finding, the edit in one line), then the findings left unfixed with the reason, and the runbooks whose `last_run` now describes the old text.
+Print the summary in the conversation before any commit question: a table with one row per applied fix (runbook, step, finding, the edit in one line), then the findings left unfixed with the reason, and the runbooks whose `last_run` is now marked `outdated`.
 
 ## 6. Commit (with `--fix`)
 
@@ -81,6 +81,6 @@ Commit by the `runbooks` policy. Ask an `ask` question only after the summary fr
 
 ## 7. Close (with `--fix`)
 
-Give the commit outcome: the short sha, or the paths left uncommitted. Offer `/runbook:run <id>` for each edited runbook.
+Give the commit outcome: the short sha, or the paths left uncommitted. Offer `/runbook:run <id>` for each edited runbook, and say that only a full run clears `outdated`.
 
 Done when every selected runbook has a verdict and every finding names its evidence; with `--fix`, also when the user has seen the summary of the fixes before any commit question.

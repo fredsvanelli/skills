@@ -102,7 +102,7 @@ Then:
 - `viewports`: the answer from step 3, when it changed; a size the config lacks goes into the config `viewports`, as in `create`;
 - "Not covered": add what the surface cannot show about the change, and remove what a step now proves;
 - `scripts` of an `api` runbook: leave the files alone here. The next `/runbook:run` finds new step ids without a test and completes the script, and `/runbook:audit-runbook` finds assertions that no longer match;
-- `status` and `last_run` stay as they are. `last_run` now describes the old text, and only the next full run moves either of them.
+- `status` stays as it is. When `last_run` is set and this update changed a step, a precondition, `viewports` or `design`, add `outdated: true` to it and keep its other fields: the run verified the old text. Only the next full run replaces `last_run` and moves `status`.
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" list --json` and confirm the runbook has an empty `problems` list.
 
@@ -116,6 +116,7 @@ Print the changes in the conversation before any commit question:
 - The viewports added or dropped, with the viewports added to the config.
 - The design references added, replaced or removed.
 - The unverified steps: every edited and added step and their children.
+- Whether `last_run` is now marked `outdated`.
 
 ## 7. Commit
 
@@ -123,6 +124,6 @@ Commit by the `runbooks` policy, and the config by the `setup` policy when step 
 
 ## 8. Close
 
-Give the commit outcome: the short sha, or the paths left uncommitted. Then offer `/runbook:run <id> --steps <unverified steps>` for a quick check, and say that only a full `/runbook:run <id>` refreshes `status` and `last_run`.
+Give the commit outcome: the short sha, or the paths left uncommitted. Then offer `/runbook:run <id> --steps <unverified steps>` for a quick check, and say that only a full `/runbook:run <id>` refreshes `status` and `last_run` and clears `outdated`.
 
 Done when the runbook has an empty `problems` list and the user has seen the table of changed steps before any commit question.

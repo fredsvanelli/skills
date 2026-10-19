@@ -44,7 +44,7 @@ last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2
 | `sources` | spec paths, ticket ids, `diff <base>...<sha>`, `file <path>`, `dir <path>` and `route <entry id>` for code read as the source, `map <sha>` for a placeholder, and test files read as evidence only (tests of the code behind an entry, which cannot run the steps), that the runbook came from |
 | `scripts` | the automated tests that run this runbook's steps, written or adopted by `to-test`. Optional for `ui`; required for `api`, whose runbook runs only through it. In a placeholder, the existing tests `map` fitted to the flow, which may cover it only in part: candidates `to-test` offers to adopt |
 | `status` | `placeholder`, `draft`, `active` or `deprecated` (see Status) |
-| `last_run` | the latest full run: `date`, `commit` (quoted), `result` (`passed`, `failed`, `blocked`), `report` (path relative to `paths.runbooks`) |
+| `last_run` | the latest full run: `date`, `commit` (quoted), `result` (`passed`, `failed`, `blocked`), `report` (path relative to `paths.runbooks`), and `outdated: true` when `update` or `audit-runbook --fix` changed the runbook after that run. The next full run writes `last_run` without it |
 
 The parser reads a YAML subset: `key: value` maps nested by two-space indentation, lists as `[a, b]` or `- item` lines of scalars, inline maps `{ k: v }`, quoted strings, `#` comments after a space. Brackets inside an id stay part of it (`[/deliveries/[id], /x]` is two ids), and a flow list may continue over several lines until its `]`. Quote any value that starts with `[`, `{`, `"` or `'`, or that contains `, ` inside a flow list. Quote commit hashes so digits-only hashes stay strings.
 

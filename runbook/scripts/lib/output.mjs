@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 const LEGACY = ['_runs/output.json', '_runs/output.html']
 
 // last_run is written only by full runs, so its date and result are the last full run.
+// outdated means update or audit-runbook --fix changed the runbook after that run.
 // The time comes from the report name (<YYYY-MM-DD-HHMM>-<id>), since last_run.date has only the day.
 export function outputRows(runbooks) {
   return runbooks.map((rb) => {
@@ -16,6 +17,7 @@ export function outputRows(runbooks) {
       title: rb.title,
       date: date && time?.[1] === date ? `${date} ${time[2]}:${time[3]}` : date,
       result: rb.lastRun?.result ?? null,
+      outdated: rb.lastRun?.outdated === true,
     }
   })
 }

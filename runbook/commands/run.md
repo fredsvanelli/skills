@@ -79,10 +79,10 @@ Per runbook:
 1. Write `<paths.runbooks>/_runs/<run id>.md` from `${CLAUDE_PLUGIN_ROOT}/templates/run-report.md`. `result` is `failed` when any step failed, else `blocked` when any step is `blocked` or `blocked-by-parent`, else `passed`. `partial: true` with `--steps`.
 2. Without `--steps`:
    - new status: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" status --current <status> --states <comma-separated states>`, with the states of every viewport; write it to the runbook's `status`;
-   - `last_run: { date: <YYYY-MM-DD>, commit: "<short sha>", result: <result>, report: _runs/<run id>.md }`.
-3. With `--steps`, leave `status` and `last_run` unchanged.
+   - `last_run: { date: <YYYY-MM-DD>, commit: "<short sha>", result: <result>, report: _runs/<run id>.md }`, replacing the old value, so an `outdated: true` from `update` or `audit-runbook --fix` goes away.
+3. With `--steps`, leave `status` and `last_run` unchanged, `outdated` included.
 
-Then, once for the whole run, with or without `--steps`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" output`. It rewrites `<paths.runbooks>/runs.json` and `runs.html`: every runbook with the date, time and result of its last full run. Keep them ignored by the rules in `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/commits.md`.
+Then, once for the whole run, with or without `--steps`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" output`. It rewrites `<paths.runbooks>/runs.json` and `runs.html`: every runbook with the date, time and result of its last full run, and whether a later edit made it outdated. Keep them ignored by the rules in `${CLAUDE_PLUGIN_ROOT}/skills/runbook/references/commits.md`.
 
 ## 6. Import (prompt mode)
 

@@ -17,7 +17,7 @@ const bullets = (items) => (items.length > 0 ? items.map((item) => `- ${item}`) 
 
 export function lastRunText(lastRun) {
   if (!lastRun || !lastRun.date) return 'never'
-  return [lastRun.date, lastRun.result].filter(Boolean).join(' ')
+  return [lastRun.date, lastRun.result, lastRun.outdated === true && '(outdated)'].filter(Boolean).join(' ')
 }
 
 export function listMarkdown(runbooks, reasons = null) {
@@ -95,6 +95,7 @@ export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLates
       ? `Last full run (last_run): ${lastRunText(lastRun)}, report ${lastRun.report}`
       : 'Last full run (last_run): never')
   }
+  if (lastRun?.outdated === true) lines.push('Outdated: the runbook changed after its last full run')
   return `${lines.join('\n')}\n`
 }
 

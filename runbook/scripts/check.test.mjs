@@ -141,6 +141,16 @@ test('check --full skips newer partial runs and returns the newest full run', ()
   assert.doesNotMatch(stdout, /Last full run \(last_run\)/)
 })
 
+test('check says when update changed the runbook after its last full run', () => {
+  const dir = project({
+    lastRun: `{ date: 2026-10-01, commit: "abc1234", result: failed, report: _runs/${FULL.run}.md, outdated: true }`,
+    reports: [FULL],
+  })
+  assert.equal(JSON.parse(run(['check', 'billing.pay', '--root', dir, '--json']).stdout).lastRun.outdated, true)
+  const { stdout } = run(['check', 'billing.pay', '--root', dir])
+  assert.match(stdout, /^Outdated: the runbook changed after its last full run$/m)
+})
+
 test('check --full also works before the id', () => {
   const dir = project({ reports: [FULL, PARTIAL] })
   const { code, stdout } = run(['check', '--full', 'billing.pay', '--root', dir, '--json'])

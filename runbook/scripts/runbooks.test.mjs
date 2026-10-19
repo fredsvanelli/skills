@@ -107,6 +107,19 @@ test('id, capability, status and depth are checked against the path', () => {
   assert.deepEqual(byId['n.none'].problems, ['missing frontmatter block'])
 })
 
+test('last_run.outdated must be a boolean', () => {
+  const runbook = (flow, outdated) => `---\nid: o.${flow}\ncapability: o\nstatus: active\nlast_run: { date: 2026-10-01, commit: "abc1234", result: passed, report: _runs/x.md, outdated: ${outdated} }\n---\n`
+  const dir = tmpProject({
+    [CONFIG_PATH]: '{ "version": 1 }',
+    'docs/runbooks/o/yes.md': runbook('yes', 'true'),
+    'docs/runbooks/o/maybe.md': runbook('maybe', 'maybe'),
+  })
+  const byId = Object.fromEntries(loadRunbooks(dir, loadConfig(dir)).map((rb) => [rb.id, rb]))
+  assert.equal(byId['o.yes'].lastRun.outdated, true)
+  assert.deepEqual(byId['o.yes'].problems, [])
+  assert.deepEqual(byId['o.maybe'].problems, ['last_run.outdated must be true or false'])
+})
+
 test('surface defaults to ui and must be allowed by the stack', () => {
   const runbook = (surface) => `---\nid: s.${surface}\ncapability: s\nsurface: ${surface}\nstatus: draft\n---\n`
   const files = { 'docs/runbooks/s/ui.md': runbook('ui'), 'docs/runbooks/s/api.md': runbook('api'), 'docs/runbooks/s/cli.md': runbook('cli') }

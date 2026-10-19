@@ -96,6 +96,8 @@ function readRunbook(file, rel, config) {
   runbook.sources = asList(data.sources)
   runbook.scripts = asList(data.scripts)
   runbook.lastRun = data.last_run ?? null
+  const outdated = runbook.lastRun?.outdated
+  if (outdated !== undefined && typeof outdated !== 'boolean') runbook.problems.push('last_run.outdated must be true or false')
   return runbook
 }
 
