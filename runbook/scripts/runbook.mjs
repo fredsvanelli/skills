@@ -12,6 +12,7 @@ import { nextStatus } from './lib/status.mjs'
 import { changedFiles, affectedRunbooks } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
 import { latestReport } from './lib/reports.mjs'
+import { outputRows, writeOutput } from './lib/output.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown } from './lib/format.mjs'
 
 export const USAGE = `Usage: runbook.mjs <command> [options]
@@ -23,13 +24,14 @@ Commands:
   coverage      [--capability x | --feature y | --path glob | --slice name]
   check         <id> [--full]
   status        --current <draft|active|deprecated> --states <s1,s2,...> [--partial]
+  output        writes _runs/output.json and _runs/output.html: every runbook with its last full run
 
 Global options:
   --root <dir>     project root (default: current directory)
   --config <file>  config path relative to the root (default: docs/runbooks/runbook.config.json)
   --json           print JSON instead of Markdown
 
-Read-only: prints to stdout, warnings to stderr. Exit 0 on success, 2 on error.
+Read-only except output: prints to stdout, warnings to stderr. Exit 0 on success, 2 on error.
 `
 
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`
@@ -123,7 +125,13 @@ function commandStatus(options) {
   return options.json ? json({ status }) : `${status}\n`
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check']
+function commandOutput(root, config, warnings) {
+  const runbooks = loadRunbooks(root, config)
+  warnings.push(...runbookWarnings(runbooks))
+  return `${writeOutput(root, config.paths.runbooks, outputRows(runbooks)).join('\n')}\n`
+}
+
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'output']
 
 export function run(argv) {
   const stderr = []
@@ -143,6 +151,7 @@ export function run(argv) {
     if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
+    else if (command === 'output') stdout = commandOutput(root, config, warnings)
     else stdout = commandItems(root, config, options, command, warnings)
     stderr.push(...warnings.map((warning) => `warning: ${warning}`))
     return finish(0, stdout)

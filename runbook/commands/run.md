@@ -69,6 +69,8 @@ Per runbook:
    - `last_run: { date: <YYYY-MM-DD>, commit: "<short sha>", result: <result>, report: _runs/<run id>.md }`.
 3. With `--steps`, leave `status` and `last_run` unchanged.
 
+Then, once for the whole run, with or without `--steps`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbook.mjs" output`. It rewrites `<paths.runbooks>/_runs/output.json` and `output.html`: every runbook with the date and result of its last full run. Both are tracked by Git; when `git check-ignore -q <paths.runbooks>/_runs/output.json` succeeds (a `_runs/.gitignore` from an older setup), append `!output.json` and `!output.html` to `_runs/.gitignore`.
+
 ## 6. Import (prompt mode)
 
 Parse the reply by the Import rules in `run-modes.md`, resolve every question with the user, then do step 5 with `mode: prompt`.
@@ -83,10 +85,12 @@ Print the results in the conversation before any commit question:
 
 ## 8. Commit
 
-Commit the runbook frontmatter changes (`status`, `last_run`) by the `runbooks` policy. Reports are not committed: `_runs/` is ignored by Git, so they stay local. Ask an `ask` question only after the table from step 7 is on screen; the question names the files and the message and does not repeat the table.
+Commit the runbook frontmatter changes (`status`, `last_run`), `_runs/output.json`, `_runs/output.html` and, when step 5 edited it, `_runs/.gitignore` by the `runbooks` policy. Reports are not committed: the rest of `_runs/` is ignored by Git, so they stay local. Ask an `ask` question only after the table from step 7 is on screen; the question names the files and the message and does not repeat the table.
 
 ## 9. Close
 
 Give the commit outcome: the short sha, or the paths left uncommitted. Then offer to investigate the causes of the failures (with `superpowers:systematic-debugging` when available); the fix is separate work.
 
-Done when every selected runbook has a report, every step in it has a state, and the user has seen the results table before any commit question.
+End with a link to the HTML table: `[output.html](file://<absolute path of <paths.runbooks>/_runs/output.html>)`.
+
+Done when every selected runbook has a report, every step in it has a state, `output.json` and `output.html` are rewritten, and the user has seen the results table before any commit question.

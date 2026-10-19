@@ -125,3 +125,16 @@ test('coverage with a missing sibling root reports no false orphans', () => {
   assert.match(stdout, /^Orphan check skipped for entry points, requirements: a source did not run \(see Warnings\)\.$/m)
   assert.match(stdout, /^\| Requirements \| - \| - \| - \| - \| requirement sources did not run \|$/m)
 })
+
+test('output writes the JSON and the HTML with the same rows', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runbook-output-'))
+  fs.cpSync(FIXTURE, root, { recursive: true })
+  const result = run(['output', '--root', root])
+  assert.equal(result.code, 0)
+  assert.equal(result.stdout, 'docs/runbooks/_runs/output.json\ndocs/runbooks/_runs/output.html\n')
+  const rows = JSON.parse(fs.readFileSync(path.join(root, 'docs/runbooks/_runs/output.json'), 'utf8'))
+  assert.deepEqual(rows.find((row) => row.id === 'billing.issue-invoice'), { id: 'billing.issue-invoice', title: 'Issue a partner invoice', date: '2026-10-01', result: 'passed' })
+  assert.deepEqual(rows.find((row) => row.id === 'billing.cancel-invoice'), { id: 'billing.cancel-invoice', title: 'Cancel an invoice', date: null, result: null })
+  const html = fs.readFileSync(path.join(root, 'docs/runbooks/_runs/output.html'), 'utf8')
+  assert.ok(html.includes(`const rows = ${JSON.stringify(rows, null, 2)}`))
+})
