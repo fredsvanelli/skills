@@ -2,7 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const TEMPLATE = fileURLToPath(new URL('../../templates/output.html', import.meta.url))
+// Where older versions wrote the runs summary; removed whenever runs.* is written.
+const LEGACY = ['_runs/output.json', '_runs/output.html']
 
 // last_run is written only by full runs, so its date and result are the last full run.
 export function outputRows(runbooks) {
@@ -14,14 +15,24 @@ export function outputRows(runbooks) {
   }))
 }
 
-// Writes _runs/output.json and _runs/output.html, the HTML with the same rows inlined
-// so it opens from disk (file:// cannot fetch the JSON).
-export function writeOutput(projectRoot, runbooksDir, rows) {
-  const runsDir = path.resolve(projectRoot, runbooksDir, '_runs')
-  fs.mkdirSync(runsDir, { recursive: true })
-  const data = JSON.stringify(rows, null, 2)
-  fs.writeFileSync(path.join(runsDir, 'output.json'), `${data}\n`)
-  const html = fs.readFileSync(TEMPLATE, 'utf8').replace('/*DATA*/[]', () => data.replaceAll('<', '\\u003c'))
-  fs.writeFileSync(path.join(runsDir, 'output.html'), html)
-  return [`${runbooksDir}/_runs/output.json`, `${runbooksDir}/_runs/output.html`]
+// Writes <name>.json and <name>.html in the runbooks folder, the HTML with the same data
+// inlined so it opens from disk (file:// cannot fetch the JSON).
+function writePair(projectRoot, runbooksDir, name, value) {
+  const dir = path.resolve(projectRoot, runbooksDir)
+  fs.mkdirSync(dir, { recursive: true })
+  const data = JSON.stringify(value, null, 2)
+  fs.writeFileSync(path.join(dir, `${name}.json`), `${data}\n`)
+  const template = fileURLToPath(new URL(`../../templates/${name}.html`, import.meta.url))
+  const html = fs.readFileSync(template, 'utf8').replace('/*DATA*/null', () => data.replaceAll('<', '\\u003c'))
+  fs.writeFileSync(path.join(dir, `${name}.html`), html)
+  return [`${runbooksDir}/${name}.json`, `${runbooksDir}/${name}.html`]
+}
+
+export function writeRuns(projectRoot, runbooksDir, rows) {
+  for (const rel of LEGACY) fs.rmSync(path.resolve(projectRoot, runbooksDir, rel), { force: true })
+  return writePair(projectRoot, runbooksDir, 'runs', rows)
+}
+
+export function writeCoverage(projectRoot, runbooksDir, result) {
+  return writePair(projectRoot, runbooksDir, 'coverage', result)
 }

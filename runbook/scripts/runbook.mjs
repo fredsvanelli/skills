@@ -12,7 +12,7 @@ import { nextStatus } from './lib/status.mjs'
 import { changedFiles, affectedRunbooks } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
 import { latestReport } from './lib/reports.mjs'
-import { outputRows, writeOutput } from './lib/output.mjs'
+import { outputRows, writeRuns, writeCoverage } from './lib/output.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown } from './lib/format.mjs'
 
 export const USAGE = `Usage: runbook.mjs <command> [options]
@@ -24,7 +24,8 @@ Commands:
   coverage      [--capability x | --feature y | --path glob | --slice name]
   check         <id> [--full]
   status        --current <draft|active|deprecated> --states <s1,s2,...> [--partial]
-  output        writes _runs/output.json and _runs/output.html: every runbook with its last full run
+  output        [--coverage] writes runs.json and runs.html in the runbooks folder: every runbook
+                with its last full run; with --coverage, also coverage.json and coverage.html (overall)
 
 Global options:
   --root <dir>     project root (default: current directory)
@@ -72,7 +73,7 @@ function commandItems(root, config, options, listName, warnings) {
   return options.json ? json(items) : itemsMarkdown(items)
 }
 
-function commandCoverage(root, config, options, warnings) {
+function coverageResult(root, config, filters, warnings) {
   const runbooks = loadRunbooks(root, config)
   const sourceWarnings = []
   const entriesStatus = {}
@@ -80,7 +81,6 @@ function commandCoverage(root, config, options, warnings) {
   const entries = collect(root, config, 'entries', sourceWarnings, entriesStatus)
   const requirements = collect(root, config, 'requirements', sourceWarnings, requirementsStatus)
   warnings.push(...sourceWarnings, ...runbookWarnings(runbooks))
-  const filters = pick(options, ['capability', 'feature', 'path', 'slice'])
   const result = computeCoverage({
     runbooks,
     entries,
@@ -92,6 +92,12 @@ function commandCoverage(root, config, options, warnings) {
     unavailable: { entries: !entriesStatus.complete, requirements: !requirementsStatus.complete },
   })
   result.warnings = sourceWarnings
+  return result
+}
+
+function commandCoverage(root, config, options, warnings) {
+  const filters = pick(options, ['capability', 'feature', 'path', 'slice'])
+  const result = coverageResult(root, config, filters, warnings)
   const scope = Object.entries(filters).map(([key, value]) => `${key} ${value}`).join(', ') || 'overall'
   return options.json ? json({ scope, ...result }) : coverageMarkdown(result, scope)
 }
@@ -125,10 +131,15 @@ function commandStatus(options) {
   return options.json ? json({ status }) : `${status}\n`
 }
 
-function commandOutput(root, config, warnings) {
+function commandOutput(root, config, options, warnings) {
   const runbooks = loadRunbooks(root, config)
-  warnings.push(...runbookWarnings(runbooks))
-  return `${writeOutput(root, config.paths.runbooks, outputRows(runbooks)).join('\n')}\n`
+  const written = writeRuns(root, config.paths.runbooks, outputRows(runbooks))
+  if (options.coverage) {
+    written.push(...writeCoverage(root, config.paths.runbooks, { scope: 'overall', ...coverageResult(root, config, {}, warnings) }))
+  } else {
+    warnings.push(...runbookWarnings(runbooks))
+  }
+  return `${written.join('\n')}\n`
 }
 
 const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'output']
@@ -151,7 +162,7 @@ export function run(argv) {
     if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
-    else if (command === 'output') stdout = commandOutput(root, config, warnings)
+    else if (command === 'output') stdout = commandOutput(root, config, options, warnings)
     else stdout = commandItems(root, config, options, command, warnings)
     stderr.push(...warnings.map((warning) => `warning: ${warning}`))
     return finish(0, stdout)

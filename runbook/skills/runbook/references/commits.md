@@ -4,10 +4,18 @@ Each command commits its own files by the policy in `commits.<type>` of the conf
 
 | Type | Files |
 |---|---|
-| `runbooks` | runbook files written or edited by `map`, `create`, `update`, `audit-runbook --fix`, `to-test` (with its spec file), and `status`/`last_run` updates from `run`, with `_runs/output.json` and `_runs/output.html` |
+| `runbooks` | runbook files written or edited by `map`, `create`, `update`, `audit-runbook --fix`, `to-test` (with its spec file), and `status`/`last_run` updates from `run` |
 | `setup` | the config, `README.md`, the root `.gitignore` and the two in `_runs/` and `_coverage/`, the agents block, `.mcp.json`, `.claude/settings.json` |
 
-Run reports in `_runs/` and coverage reports in `_coverage/` stay local: each folder holds a `.gitignore` that ignores everything but itself (and, in `_runs/`, the `output.json` and `output.html` summary), so no command commits them.
+Run reports in `_runs/` and coverage reports in `_coverage/` stay local: each folder holds a `.gitignore` that ignores everything but itself, so no command commits them.
+
+The summary files `runs.json`, `runs.html`, `coverage.json` and `coverage.html` in `<paths.runbooks>` stay local too, ignored by two lines in the root `.gitignore`: `/<paths.runbooks>/runs.*` and `/<paths.runbooks>/coverage.*`. A command that writes them first migrates a project set up by an older version:
+
+- when `git check-ignore -q <paths.runbooks>/runs.json` fails, append the two lines to the root `.gitignore`;
+- when `_runs/.gitignore` has `!output.json` or `!output.html`, remove those lines;
+- when `git ls-files <paths.runbooks>/_runs/output.json <paths.runbooks>/_runs/output.html` lists them, stage their deletion (`git rm --cached --quiet --`); the script already deleted them from disk.
+
+Those migration edits go into the command's commit by the `setup` policy; a command that commits nothing (`coverage`) leaves them in the working tree and lists them.
 
 | Policy | Behavior |
 |---|---|
