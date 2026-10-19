@@ -20,8 +20,8 @@ Each command file holds the full procedure. When the user asks for one of these 
 | change the steps of an existing runbook after the behavior changed | `/runbook:update` | `${CLAUDE_PLUGIN_ROOT}/commands/update.md` |
 | execute runbooks, or produce a prompt for the Chrome extension | `/runbook:run` | `${CLAUDE_PLUGIN_ROOT}/commands/run.md` |
 | see the result of a runbook's latest run, or whether it ever ran | `/runbook:check` | `${CLAUDE_PLUGIN_ROOT}/commands/check.md` |
-| turn a runbook into a Playwright spec | `/runbook:to-script` | `${CLAUDE_PLUGIN_ROOT}/commands/to-script.md` |
-| check runbooks still match the code | `/runbook:audit-script` | `${CLAUDE_PLUGIN_ROOT}/commands/audit-script.md` |
+| turn a runbook into a Playwright spec | `/runbook:to-test` | `${CLAUDE_PLUGIN_ROOT}/commands/to-test.md` |
+| check runbooks still match the code | `/runbook:audit-runbook` | `${CLAUDE_PLUGIN_ROOT}/commands/audit-runbook.md` |
 | measure coverage | `/runbook:coverage` | `${CLAUDE_PLUGIN_ROOT}/commands/coverage.md` |
 | update the installed runbook plugin to its latest version | `/runbook:upgrade` | `${CLAUDE_PLUGIN_ROOT}/commands/upgrade.md` |
 

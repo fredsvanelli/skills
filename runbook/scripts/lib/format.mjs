@@ -51,7 +51,7 @@ export function coverageMarkdown(result, scope) {
     ['Entry points', e.covered, e.pending, e.planned, e.total, pct(e.covered, e.total)],
     r ? ['Requirements', r.covered, r.pending, r.planned, r.total, pct(r.covered, r.total)] : ['Requirements', '-', '-', '-', '-', result.requirementsNote ?? 'no requirement source configured'],
   ]), '')
-  lines.push(`Active runbooks: ${result.runbooks.active}. Draft runbooks: ${result.runbooks.draft}. Placeholders: ${result.runbooks.placeholder}. Active runbooks with a to-script spec: ${result.runbooks.automated}.`, '')
+  lines.push(`Active runbooks: ${result.runbooks.active}. Draft runbooks: ${result.runbooks.draft}. Placeholders: ${result.runbooks.placeholder}. Active runbooks with a to-test spec: ${result.runbooks.automated}.`, '')
   lines.push('### By slice', '', table(['Slice', 'Covered', 'Pending (draft)', 'Planned (placeholder)', 'Total', 'Coverage'], result.groups.map((g) => [g.name, g.covered, g.pending, g.planned, g.total, pct(g.covered, g.total)])), '')
   lines.push('### Uncovered entry points', '', ...bullets(e.uncovered.map((i) => `\`${i.id}\`${i.file ? ` (\`${i.file}\`)` : ''}`)), '')
   if (r) lines.push('### Uncovered requirements', '', ...bullets(r.uncovered.map((i) => `\`${i.id}\`${i.title ? `: ${i.title}` : ''}`)), '')

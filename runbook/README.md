@@ -11,8 +11,8 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbook:update` | updates the steps of a runbook after the behavior it records changed |
 | `/runbook:run` | runs runbooks: guided, headless, headed, Claude in Chrome, or as a prompt for the Chrome extension |
 | `/runbook:check` | shows the result of a runbook's latest run, or says it was never run |
-| `/runbook:to-script` | turns a runbook into a Playwright spec |
-| `/runbook:audit-script` | checks runbooks still match the code |
+| `/runbook:to-test` | turns a runbook into a Playwright spec |
+| `/runbook:audit-runbook` | checks runbooks still match the code |
 | `/runbook:coverage` | coverage report, overall or per capability, feature, slice or path |
 | `/runbook:upgrade` | updates the installed plugin to the latest version from its marketplace |
 

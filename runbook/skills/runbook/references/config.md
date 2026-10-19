@@ -8,7 +8,7 @@
 | `language` | `en` | language of runbook and report prose (`pt-BR`, `en`, ...) |
 | `paths.runbooks` | `docs/runbooks` | runbook root |
 | `paths.evidence` | `.runbook/evidence` | screenshots and traces, gitignored |
-| `paths.e2e` | `null` | Playwright test folder for `to-script`; `null` when the project has none |
+| `paths.e2e` | `null` | Playwright test folder for `to-test`; `null` when the project has none |
 | `app.baseUrl` | `""` | the app under test; every browser mode stays inside it |
 | `app.start` | `[]` | commands that start the app, shown when it is down |
 | `accounts.<role>` | `{}` | `{ emailEnv, passwordEnv, loginPath }`: env var names, never values |
