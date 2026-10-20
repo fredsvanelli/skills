@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import http from 'node:http'
+import net from 'node:net'
 import { createUpstreamServer, matchFixture, VERSION } from './upstream-server.mjs'
 
 const fixture = (method, p, response, query) =>
@@ -166,10 +168,165 @@ test('an unknown control route answers 404 JSON', async (t) => {
   assert.equal(typeof (await r.json()).error, 'string')
 })
 
-test('live and record modes answer a 501 placeholder', async (t) => {
+test('record mode answers a 501 placeholder', async (t) => {
+  const s = await start(t, FILES)
+  await s.select({ mode: 'record' })
+  const r = await fetch(`${s.base}/invoices`)
+  assert.equal(r.status, 501)
+  assert.deepEqual(await r.json(), { error: 'mode record is not available' })
+})
+
+// A second http.Server plays the live API.
+async function fakeApi(t, handler) {
+  const seen = []
+  const api = http.createServer((req, res) => {
+    const chunks = []
+    req.on('data', (c) => chunks.push(c))
+    req.on('end', () => {
+      seen.push({ method: req.method, url: req.url, headers: req.headers, body: Buffer.concat(chunks).toString('utf8') })
+      handler(req, res)
+    })
+  })
+  await new Promise((resolve) => api.listen(0, '127.0.0.1', resolve))
+  t.after(() => new Promise((resolve) => { api.closeAllConnections?.(); api.close(resolve) }))
+  return { api, seen, port: api.address().port }
+}
+
+async function until(check) {
+  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 10))
+  assert.ok(check(), 'condition not reached')
+}
+
+test('live mode proxies method, path under a prefix, query, body and rewrites host', async (t) => {
+  const fake = await fakeApi(t, (req, res) => {
+    res.writeHead(201, { 'content-type': 'application/json', 'x-api': 'yes' })
+    res.end('{"id":9}')
+  })
+  const s = await start(t, FILES, { target: `http://127.0.0.1:${fake.port}/v1` })
+  await s.select({ mode: 'live' })
+  const r = await fetch(`${s.base}/v1/invoices?_t=1&page=2`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-custom': 'a' }, body: '{"n":1}',
+  })
+  assert.equal(r.status, 201)
+  assert.equal(r.headers.get('x-api'), 'yes')
+  assert.deepEqual(await r.json(), { id: 9 })
+  assert.equal(fake.seen[0].method, 'POST')
+  assert.equal(fake.seen[0].url, '/v1/invoices?_t=1&page=2')
+  assert.equal(fake.seen[0].body, '{"n":1}')
+  assert.equal(fake.seen[0].headers.host, `127.0.0.1:${fake.port}`)
+  assert.equal(fake.seen[0].headers['x-custom'], 'a')
+  assert.equal(fake.seen[0].headers['x-forwarded-for'], undefined)
+  const state = await s.state()
+  assert.deepEqual(state.requests, [{ method: 'POST', path: '/v1/invoices', query: { _t: '1', page: '2' }, body: { n: 1 }, step: null, status: 201 }])
+  assert.deepEqual(s.logs, ['POST /v1/invoices -> 201'])
+})
+
+test('live mode passes preflights and CORS headers through unchanged', async (t) => {
+  const fake = await fakeApi(t, (req, res) => {
+    if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': 'https://app.example' }); return res.end() }
+    res.writeHead(200); res.end('ok')
+  })
+  const s = await start(t, FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ mode: 'live' })
+  const pre = await fetch(`${s.base}/x`, { method: 'OPTIONS', headers: { origin: 'https://other.example' } })
+  assert.equal(pre.status, 204)
+  assert.equal(pre.headers.get('access-control-allow-origin'), 'https://app.example')
+  assert.equal(fake.seen[0].method, 'OPTIONS')
+  const plain = await fetch(`${s.base}/x`)
+  assert.equal(plain.headers.get('access-control-allow-origin'), null)
+})
+
+test('live mode streams SSE before the upstream response ends', async (t) => {
+  let finish
+  const fake = await fakeApi(t, (req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    res.write('data: one\n\n')
+    finish = () => res.end('data: two\n\n')
+  })
+  const s = await start(t, FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ mode: 'live' })
+  const r = await fetch(`${s.base}/events`)
+  assert.equal(r.status, 200)
+  const reader = r.body.getReader()
+  const first = await reader.read()
+  assert.equal(new TextDecoder().decode(first.value), 'data: one\n\n')
+  finish()
+  const second = await reader.read()
+  assert.equal(new TextDecoder().decode(second.value), 'data: two\n\n')
+})
+
+test('live mode tunnels a WebSocket upgrade both ways', async (t) => {
+  const fake = await fakeApi(t, (req, res) => res.end())
+  let upgradeHead
+  fake.api.on('upgrade', (req, socket) => {
+    upgradeHead = req
+    socket.on('end', () => socket.end())
+    socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n')
+    socket.on('data', (d) => socket.write(`echo:${d.toString()}`))
+  })
+  const s = await start(t, FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ mode: 'live' })
+  const client = net.connect(new URL(s.base).port, '127.0.0.1')
+  t.after(() => client.destroy())
+  let received = ''
+  client.on('data', (d) => { received += d.toString() })
+  client.write('GET /ws?room=1 HTTP/1.1\r\nHost: localhost:4010\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: abc\r\n\r\n')
+  await until(() => received.includes('\r\n\r\n'))
+  assert.match(received, /^HTTP\/1\.1 101/)
+  assert.equal(upgradeHead.url, '/ws?room=1')
+  assert.equal(upgradeHead.headers.host, `127.0.0.1:${fake.port}`)
+  client.write('frame')
+  await until(() => received.includes('echo:frame'))
+  client.destroy()
+})
+
+test('upgrade outside live mode gets 501 and the socket closes', async (t) => {
+  const s = await start(t, FILES)
+  const client = net.connect(new URL(s.base).port, '127.0.0.1')
+  t.after(() => client.destroy())
+  let received = ''
+  client.on('data', (d) => { received += d.toString() })
+  const closed = new Promise((resolve) => client.on('close', resolve))
+  client.write('GET /ws HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n')
+  await closed
+  assert.match(received, /^HTTP\/1\.1 501 Not Implemented/)
+})
+
+test('control routes never upgrade', async (t) => {
+  const fake = await fakeApi(t, (req, res) => res.end())
+  const s = await start(t, FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ mode: 'live' })
+  const client = net.connect(new URL(s.base).port, '127.0.0.1')
+  t.after(() => client.destroy())
+  let received = ''
+  client.on('data', (d) => { received += d.toString() })
+  const closed = new Promise((resolve) => client.on('close', resolve))
+  client.write('GET /__runbooks/state HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n')
+  await closed
+  assert.match(received, /^HTTP\/1\.1 501 Not Implemented/)
+  assert.equal(fake.seen.length, 0)
+})
+
+test('a dead target answers 502 and is logged', async (t) => {
+  const dead = http.createServer()
+  await new Promise((resolve) => dead.listen(0, '127.0.0.1', resolve))
+  const port = dead.address().port
+  await new Promise((resolve) => dead.close(resolve))
+  const target = `http://127.0.0.1:${port}/v1`
+  const s = await start(t, FILES, { target })
+  await s.select({ mode: 'live' })
+  const r = await fetch(`${s.base}/v1/invoices`)
+  assert.equal(r.status, 502)
+  assert.deepEqual(await r.json(), { error: 'upstream unreachable', target })
+  const state = await s.state()
+  assert.equal(state.requests[0].status, 502)
+  assert.deepEqual(s.logs, ['GET /v1/invoices -> 502'])
+})
+
+test('an empty target in live mode answers 502 with an empty target', async (t) => {
   const s = await start(t, FILES)
   await s.select({ mode: 'live' })
   const r = await fetch(`${s.base}/invoices`)
-  assert.equal(r.status, 501)
-  assert.deepEqual(await r.json(), { error: 'mode live is not available' })
+  assert.equal(r.status, 502)
+  assert.deepEqual(await r.json(), { error: 'upstream unreachable', target: '' })
 })

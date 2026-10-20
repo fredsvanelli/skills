@@ -1,5 +1,8 @@
 // runbooks upstream server, runbooks 1.1.0. Copied by /runbooks:setup; do not edit.
 import http from 'node:http'
+import https from 'node:https'
+import net from 'node:net'
+import tls from 'node:tls'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -177,9 +180,65 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     return send(req, res, status, out, JSON.stringify(body))
   }
 
+  // The target's origin, or null when target is empty or not a URL. The target's path prefix is not added:
+  // the app already sends it, and fixtures keep the full path.
+  function targetUrl() {
+    try {
+      return new URL(target)
+    } catch {
+      return null
+    }
+  }
+
+  // Pipes the request to the target and streams the response back. Used by live mode, and by record mode in Task 8.
+  function proxy(req, res, request) {
+    const base = targetUrl()
+    const entry = { ...request, body: null, step: state.step, status: 0 }
+    const chunks = []
+    const finish = (status) => {
+      entry.status = status
+      entry.body = parseBody(Buffer.concat(chunks).toString('utf8'), req.headers['content-type'])
+      requests.push(entry)
+      log(`${request.method} ${request.path} -> ${status}`)
+    }
+    const unreachable = () => {
+      finish(502)
+      sendJson(req, res, 502, { error: 'upstream unreachable', target })
+    }
+    if (!base) return unreachable()
+    const client = base.protocol === 'https:' ? https : http
+    const upstream = client.request({
+      protocol: base.protocol,
+      hostname: base.hostname,
+      port: base.port,
+      method: req.method,
+      path: req.url,
+      headers: { ...req.headers, host: base.host },
+    }, (upRes) => {
+      finish(upRes.statusCode)
+      res.writeHead(upRes.statusCode, upRes.statusMessage, upRes.rawHeaders)
+      upRes.pipe(res)
+      upRes.on('error', () => res.destroy())
+    })
+    upstream.on('error', () => {
+      if (!res.headersSent) unreachable()
+      else res.destroy()
+    })
+    res.on('close', () => {
+      if (!res.writableEnded) upstream.destroy()
+    })
+    req.on('data', (chunk) => chunks.push(chunk))
+    req.pipe(upstream)
+  }
+
   async function handle(req, res) {
     const url = new URL(req.url, 'http://upstream.local')
     if (url.pathname.startsWith(CONTROL)) return control(req, res, url.pathname)
+    if (state.mode === 'live') {
+      const query = {}
+      for (const [key, value] of url.searchParams) if (!(key in query)) query[key] = value
+      return proxy(req, res, { method: req.method.toUpperCase(), path: url.pathname, query })
+    }
     if (req.method === 'OPTIONS') {
       return send(req, res, 204, {
         'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
@@ -192,7 +251,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const query = {}
     for (const [key, value] of url.searchParams) if (!(key in query)) query[key] = value
     const request = { method: req.method.toUpperCase(), path: url.pathname, query }
-    // The mode switch. Task 7 adds live and record.
+    // The mode switch. Live is handled above; Task 8 adds record.
     const answer = state.mode === 'mocked'
       ? mocked(req, res, request)
       : { status: 501, send: () => sendJson(req, res, 501, { error: `mode ${state.mode} is not available` }) }
@@ -201,10 +260,49 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     answer.send()
   }
 
-  return http.createServer((req, res) => {
+  // Opens a raw socket to the target, replays the request head with the host rewritten, and pipes both ways.
+  function tunnel(req, socket, head) {
+    const base = targetUrl()
+    if (!base) return socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n')
+    const secure = base.protocol === 'https:'
+    const port = Number(base.port || (secure ? 443 : 80))
+    const upstream = secure ? tls.connect({ host: base.hostname, port, servername: base.hostname }) : net.connect(port, base.hostname)
+    const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`]
+    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+      const name = req.rawHeaders[i]
+      lines.push(`${name}: ${name.toLowerCase() === 'host' ? base.host : req.rawHeaders[i + 1]}`)
+    }
+    upstream.on(secure ? 'secureConnect' : 'connect', () => {
+      upstream.write(`${lines.join('\r\n')}\r\n\r\n`)
+      if (head?.length) upstream.write(head)
+      socket.pipe(upstream)
+      upstream.pipe(socket)
+    })
+    upstream.on('error', () => {
+      if (socket.writable) socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n')
+      else socket.destroy()
+    })
+    upstream.on('close', () => socket.destroy())
+    // The client socket allows half-open connections, so a client that hangs up must close both sides itself.
+    socket.on('end', () => upstream.end(() => { upstream.destroy(); socket.destroy() }))
+    socket.on('error', () => upstream.destroy())
+    socket.on('close', () => upstream.destroy())
+  }
+
+  const server = http.createServer((req, res) => {
     handle(req, res).catch((err) => {
       if (!res.headersSent) sendJson(req, res, 500, { error: String(err?.message ?? err) })
       else res.end()
     })
   })
+
+  server.on('upgrade', (req, socket, head) => {
+    const pathname = new URL(req.url, 'http://upstream.local').pathname
+    if (pathname.startsWith(CONTROL) || (state.mode !== 'live' && state.mode !== 'record')) {
+      return socket.end('HTTP/1.1 501 Not Implemented\r\nConnection: close\r\n\r\n')
+    }
+    tunnel(req, socket, head)
+  })
+
+  return server
 }
