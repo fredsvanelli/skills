@@ -292,6 +292,28 @@ test('runbooks.mjs upstream exits 2 naming the port when it is in use', async ()
   }
 })
 
+test('runbooks.mjs ui exits 2 naming the port when it is in use', async () => {
+  const holder = net.createServer()
+  await new Promise((resolve) => holder.listen(0, '127.0.0.1', resolve))
+  const { port } = holder.address()
+  try {
+    const dir = upstreamProject({})
+    const result = spawnSync(process.execPath, [SCRIPT, 'ui', '--port', String(port), '--root', dir], { encoding: 'utf8' })
+    assert.equal(result.status, 2)
+    assert.match(result.stderr, /port \d+ is in use/)
+    assert.doesNotMatch(result.stderr, /\n\s+at /)
+  } finally {
+    holder.close()
+  }
+})
+
+test('runbooks.mjs ui exits 2 on a bad --port', () => {
+  const dir = upstreamProject({})
+  const result = spawnSync(process.execPath, [SCRIPT, 'ui', '--port', '70000', '--root', dir], { encoding: 'utf8' })
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /--port/)
+})
+
 test('runbooks.mjs upstream exits 2 without an upstream block or with a bad flag', () => {
   const none = upstreamProject(null)
   const result = spawnSync(process.execPath, [SCRIPT, 'upstream', '--root', none], { encoding: 'utf8' })

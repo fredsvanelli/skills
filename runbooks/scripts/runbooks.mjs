@@ -17,6 +17,7 @@ import { splitFrontmatter } from './lib/yaml.mjs'
 import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
+import { serveUi } from './ui-server.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown } from './lib/format.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
@@ -35,6 +36,8 @@ Commands:
                 upstream.schema set, checks each JSON response against the OpenAPI schema
   upstream      [--port n] [--mode mocked|live|record] [--runbook id] [--step Sxx] starts the upstream
                 server from the config in the foreground and prints its address; stop it with Ctrl+C
+  ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
+                and prints its address; stop it with Ctrl+C
   output        [--coverage] writes runs.json and runs.html in the runbooks folder: every runbook
                 with its last full run; with --coverage, also coverage.json and coverage.html (overall,
                 with each slice's entries, their state and the scripts that test them)
@@ -204,6 +207,20 @@ if (invokedPath && invokedPath === fs.realpathSync(fileURLToPath(import.meta.url
       const root = path.resolve(typeof options.root === 'string' ? options.root : process.cwd())
       const config = loadConfig(root, typeof options.config === 'string' ? options.config : undefined)
       serveUpstream(upstreamOptions(root, config, options))
+    } catch (err) {
+      process.stderr.write(`runbooks: ${err.message}\n`)
+      process.exit(2)
+    }
+  } else if (argv[0] === 'ui' && !argv.includes('--help')) {
+    try {
+      const { options } = parseArgs(argv)
+      const port = options.port === undefined ? 4020 : Number(options.port)
+      if (options.port !== undefined && (typeof options.port !== 'string' || !/^\d+$/.test(options.port) || port > 65535)) {
+        throw new Error('--port must be an integer from 0 to 65535')
+      }
+      const root = path.resolve(typeof options.root === 'string' ? options.root : process.cwd())
+      const configPath = typeof options.config === 'string' ? options.config : undefined
+      serveUi({ root, configPath, port })
     } catch (err) {
       process.stderr.write(`runbooks: ${err.message}\n`)
       process.exit(2)
