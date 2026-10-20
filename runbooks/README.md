@@ -15,6 +15,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:to-test` | writes or adopts the test script of a runbook, in the project's test library |
 | `/runbooks:audit-runbooks` | checks runbooks still match the code |
 | `/runbooks:coverage` | coverage report, overall or per capability, feature, slice or path |
+| `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
 | `/runbooks:upgrade` | updates the installed plugin to the latest version from its marketplace |
 
 A `ui` runbook reaches its upstream API in one of two modes. In `live` mode, it calls the real API with test data. In `mocked` mode, the plugin's upstream server serves fixtures, and the app points at that server through the env var named in `upstream.urlEnv`. The project default is `upstream.mode` in the config, and a runbook can override it with `upstream:`. A mocked runbook proves what the screen shows and sends. It never covers an endpoint. See [upstream mode](skills/runbooks/references/upstream.md).

@@ -24,6 +24,7 @@ Each command file holds the full procedure. When the user asks for one of these 
 | write or adopt the test script of a runbook (Playwright, Cypress, Jest, Vitest, PHPUnit, Pest, ...) | `/runbooks:to-test` | `${CLAUDE_PLUGIN_ROOT}/commands/to-test.md` |
 | check runbooks still match the code | `/runbooks:audit-runbooks` | `${CLAUDE_PLUGIN_ROOT}/commands/audit-runbooks.md` |
 | measure coverage | `/runbooks:coverage` | `${CLAUDE_PLUGIN_ROOT}/commands/coverage.md` |
+| open a local page with capabilities, runbooks, run history and coverage | `/runbooks:ui` | `${CLAUDE_PLUGIN_ROOT}/commands/ui.md` |
 | update the installed runbooks plugin to its latest version | `/runbooks:upgrade` | `${CLAUDE_PLUGIN_ROOT}/commands/upgrade.md` |
 
 Before calling feature work done, run `list --affected` and then `run` on what it returns.

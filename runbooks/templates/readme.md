@@ -36,4 +36,5 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 | `/runbooks:coverage` | coverage report |
 | `/runbooks:setup` | (re)configures this folder |
 | `/runbooks:settings` | changes part of the config, such as the test library, the design reference or the commit policy |
+| `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
 | `/runbooks:upgrade` | updates the installed plugin to its latest version |
