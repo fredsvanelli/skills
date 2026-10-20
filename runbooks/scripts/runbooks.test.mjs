@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { loadConfig, ConfigError } from './lib/config.mjs'
+import { loadConfig, ConfigError, upstreamModeOf } from './lib/config.mjs'
 import { loadRunbooks } from './lib/runbooks.mjs'
 import { filterRunbooks } from './lib/filter.mjs'
 
@@ -219,4 +219,29 @@ test('filterRunbooks', () => {
   const entryFiles = new Map([['/deliveries', 'src/app/[locale]/(dashboard)/deliveries/page.tsx']])
   assert.deepEqual(ids(filterRunbooks(runbooks, { path: 'src/app/[locale]/(dashboard)/deliveries/**' }, entryFiles)), ['deliveries.list-deliveries', 'deliveries.old-list'])
   assert.deepEqual(ids(filterRunbooks(runbooks, {})), ids(runbooks))
+})
+
+test('loadConfig: no upstream block means live', () => {
+  const config = loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1 }' }))
+  assert.equal(config.upstream, null)
+  assert.equal(upstreamModeOf(config), 'live')
+})
+
+test('loadConfig fills upstream defaults', () => {
+  const dir = tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, upstream: { mode: 'mocked', urlEnv: 'NEXT_PUBLIC_API_URL' } }) })
+  const { upstream } = loadConfig(dir)
+  assert.deepEqual(upstream, {
+    mode: 'mocked', baseUrl: '', start: [], root: null, urlEnv: 'NEXT_PUBLIC_API_URL', port: 4010,
+    fixtures: 'docs/runbooks/_fixtures', schema: null, redactHeaders: [], tokenEnv: '', serverFile: null,
+  })
+})
+
+test('loadConfig rejects a bad upstream block', () => {
+  const bad = (upstream, extra = {}) => tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, upstream, ...extra }) })
+  assert.throws(() => loadConfig(bad({ mode: 'fake' })), /upstream.mode must be one of live, mocked/)
+  assert.throws(() => loadConfig(bad({ mode: 'live' }, { stack: 'backend' })), /upstream applies only to ui runbooks, and a backend stack has none/)
+  assert.throws(() => loadConfig(bad({ mode: 'mocked' })), /upstream.urlEnv is required when upstream.mode is mocked/)
+  assert.throws(() => loadConfig(bad({ mode: 'live', port: 70000 })), /upstream.port must be an integer from 1 to 65535/)
+  assert.throws(() => loadConfig(bad({ mode: 'live', schema: 'openapi.yaml' })), /upstream.schema must be a JSON file/)
+  assert.throws(() => loadConfig(bad({ mode: 'live', redactHeaders: 'x-key' })), /upstream.redactHeaders must be a list of header names/)
 })
