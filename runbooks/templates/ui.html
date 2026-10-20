@@ -279,7 +279,7 @@
   async function api(path) {
     let res
     try {
-      res = await fetch(path, { cache: 'no-store' })
+      res = await fetch(path, { cache: 'no-store', headers: { 'x-runbooks': '1' } })
     } catch {
       throw new Error(`The server did not answer ${path}. Is /runbooks:ui still running?`)
     }

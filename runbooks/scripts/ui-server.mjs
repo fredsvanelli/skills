@@ -34,7 +34,7 @@ export function createUiServer({ root, configPath, today = todayLocal, html = ()
   }
   const found = (res, value) => (value === null ? sendJson(res, 404, { error: 'not found' }) : sendJson(res, 200, value))
 
-  function route(res, url) {
+  function route(req, res, url) {
     const segments = url.pathname.split('/').slice(1).map(decode)
     if (segments.includes(null)) return sendJson(res, 404, { error: 'not found' })
     const [first, second, id, third, ...rest] = segments
@@ -44,6 +44,9 @@ export function createUiServer({ root, configPath, today = todayLocal, html = ()
       return res.end(page)
     }
     if (first !== 'api') return sendJson(res, 404, { error: 'not found' })
+    // A page on another site can send a plain GET, which would run the config's command sources. It
+    // cannot add this header without a CORS preflight, and the server approves none.
+    if (req.headers['x-runbooks'] !== '1') return sendJson(res, 403, { error: 'missing x-runbooks header' })
     const config = loadConfig(root, configPath)
     if (second === 'runbooks' && id === undefined) return sendJson(res, 200, runbooksView(root, config, { today: today() }))
     if (second === 'runbook' && id && third === undefined) return found(res, runbookView(root, config, id, { today: today() }))
@@ -60,7 +63,7 @@ export function createUiServer({ root, configPath, today = todayLocal, html = ()
     try {
       if (!localHost(req.headers.host)) return sendJson(res, 403, { error: 'forbidden host' })
       if (req.method !== 'GET') return sendJson(res, 405, { error: 'method not allowed' })
-      route(res, new URL(req.url, 'http://localhost'))
+      route(req, res, new URL(req.url, 'http://localhost'))
     } catch (err) {
       if (!res.headersSent) sendJson(res, 500, { error: String(err?.message ?? err) })
       else res.end()
