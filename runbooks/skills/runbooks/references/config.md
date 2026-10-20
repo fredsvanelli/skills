@@ -28,6 +28,7 @@
 | `mcp.secretsFile` | `.env.local` | dotenv file passed to Playwright MCP `--secrets`; must be gitignored |
 | `viewports.<name>` | `{}` | `{ width, height }` in CSS pixels: a screen size `ui` runbooks cite in their `viewports` (below) |
 | `design` | `null` | the design reference `run` compares `ui` steps with (below); `null` means the project has none. Only in a stack with `ui` |
+| `upstream` | absent | how `ui` runbooks reach their upstream API (below); absent means `live`. Only in a stack with `ui` |
 
 ## Tests
 
@@ -111,6 +112,43 @@ The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design
 | `figma-remote` | Figma's remote MCP server | sign-in with Figma through `/mcp`, once |
 | `figma-desktop` | Figma's desktop MCP server, served by the Figma desktop app | the app open, with its MCP server turned on in Dev Mode |
 | `figma-framelink` | the `figma-developer-mcp` package, pinned to the version `npm view figma-developer-mcp version` prints | a Figma personal access token in the env var `FIGMA_API_KEY` of the shell that starts Claude Code. `.mcp.json` holds only `${FIGMA_API_KEY}`, never the token |
+
+## Upstream
+
+`setup` writes it when the stack has `ui` and the upstream API is not served by the app's own process. A config without it behaves as `live`. The block is a config error in a `backend` stack. The modes, the server and the fixtures: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `mode` | `live` | the project default: `live` or `mocked`. A runbook overrides it with `upstream:` in its frontmatter |
+| `baseUrl` | `""` | the upstream API's URL. `live` and `record` proxy to it, and `run` checks it answers before a live runbook |
+| `start` | `[]` | commands that start the upstream API, shown when `baseUrl` does not answer |
+| `root` | `null` | the folder of the upstream API's repo, relative to the project root (`"../api"`). In a `fullstack` stack whose `tests.api.root` is that repo, it takes the same value |
+| `urlEnv` | `""` | the env var the app reads the API URL from (`NEXT_PUBLIC_API_URL`). The app starts with it set to the upstream server. Required when `mode` is `mocked` |
+| `port` | `4010` | the upstream server's port, an integer from 1 to 65535 |
+| `fixtures` | `<paths.runbooks>/_fixtures` | the folder of the fixtures |
+| `schema` | `null` | a local OpenAPI 3 JSON file (`.json`). `run` and `fixtures` check each fixture against it. YAML files and URLs are not read |
+| `redactHeaders` | `[]` | header names the recorder drops, besides `set-cookie`, `authorization` and `cookie`. Case does not matter |
+| `tokenEnv` | `""` | env var holding a service token, for an upstream API without password login |
+| `serverFile` | `null` | where `setup` copied the upstream server in the project (`<tests.ui.dir>/runbooks-upstream.mjs`) |
+
+```json
+"upstream": {
+  "mode": "mocked",
+  "baseUrl": "https://api.example.com/v1",
+  "urlEnv": "NEXT_PUBLIC_API_URL",
+  "schema": "docs/openapi.json"
+}
+```
+
+Errors the loader raises:
+
+- `upstream must be an object with a "mode"`
+- `upstream applies only to ui runbooks, and a <stack> stack has none`
+- `upstream.mode must be one of live, mocked`
+- `upstream.urlEnv is required when upstream.mode is mocked`
+- `upstream.port must be an integer from 1 to 65535`
+- `upstream.schema must be a JSON file (a local OpenAPI 3 .json path)`
+- `upstream.redactHeaders must be a list of header names`
 
 ## Sources
 

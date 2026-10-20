@@ -21,7 +21,7 @@ Pick one of `<id>`, `--capability` or `--all`; `--fix` goes with any of them.
 
 Examples: `/runbooks:audit-runbooks billing.issue-invoice`, `/runbooks:audit-runbooks --capability billing`, `/runbooks:audit-runbooks --all --fix`.
 
-Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`.
+Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, and for a `ui` runbook `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
@@ -51,6 +51,10 @@ Run `... coverage --json` once and read its `orphans`. Then, for each runbook, c
 | every file in `design` exists, and every frame link opens through the design server when it is loaded in this session | `drift` |
 | every `Viewports:` line names viewports of the runbook, and each step's parents run at every viewport the step runs at | `broken` |
 | every control named in Actions is visible at each viewport the step runs at (responsive classes such as `hidden md:flex`, media queries) | `drift` |
+| no step of a `mocked` runbook has an Expected that checks persistence after a reload or a value the API saved | `drift` |
+| a `live` runbook has no fixtures folder, `<upstream.fixtures>/<capability>/<flow>/` | `drift` |
+
+For the two upstream rows, the mode is the `upstream` field of the list output. A `mocked` runbook with such a step is stale, because a mocked run never reaches what the API saves. Its edit is to check the request instead (method, URL and body) and to list the persistence under "Not covered". A `live` runbook with a fixtures folder is stale, because the fixtures serve no run. Its edit is "delete `<dir>` or set `upstream: mocked` through `/runbooks:update`", with `<dir>` the folder (default `<paths.runbooks>/_fixtures/<capability>/<flow>`). A hand-edited `upstream:` that leaves the content incoherent shows up this way (`references/upstream.md`, Changing a runbook's mode).
 
 `api` runbooks:
 

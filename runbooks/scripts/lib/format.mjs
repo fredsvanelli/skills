@@ -57,7 +57,7 @@ export function coverageMarkdown(result, scope) {
   const sliceRows = result.groups.map((g) => [g.name, ...(bySurface ? [g.surface] : []), g.covered, g.pending, g.planned, g.total, pct(g.covered, g.total)])
   lines.push('### By slice', '', table(sliceHeader, sliceRows), '')
   if (bySurface) lines.push('An API endpoint counts as covered only through an `api` runbook; a `ui` runbook citing it does not.', '')
-  lines.push('### Uncovered entry points', '', ...bullets(e.uncovered.map((i) => `\`${i.id}\`${i.file ? ` (\`${i.file}\`)` : ''}`)), '')
+  lines.push('### Uncovered entry points', '', ...bullets(e.uncovered.map((i) => `\`${i.id}\`${i.file ? ` (\`${i.file}\`)` : ''}${i.citedByMocked ? `, cited, not covered (mocked: ${i.citedByMocked.join(', ')})` : ''}`)), '')
   if (r) lines.push('### Uncovered requirements', '', ...bullets(r.uncovered.map((i) => `\`${i.id}\`${i.title ? `: ${i.title}` : ''}`)), '')
   lines.push('### Orphans', '')
   if (result.orphanChecksSkipped && result.orphanChecksSkipped.length > 0) {
@@ -100,10 +100,14 @@ export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLates
 }
 
 export function junitMarkdown({ id, steps, result, extra, others }) {
-  const missing = steps.filter((s) => s.tests.length === 0).map((s) => s.step)
-  const duplicates = steps.filter((s) => s.tests.length > 1).map((s) => s.step)
+  const withViewport = steps.some((s) => s.viewport)
+  const label = (s) => (s.viewport ? `${s.step} @ ${s.viewport}` : s.step)
+  const missing = steps.filter((s) => s.tests.length === 0).map(label)
+  const duplicates = steps.filter((s) => s.tests.length > 1).map(label)
   const lines = [`Result of ${id}: ${result}`, '']
-  lines.push(table(['Step', 'State', 'Seen', 'Tests'], steps.map((s) => [s.step, s.state, s.seen, s.tests.join('; ')])), '')
+  lines.push(withViewport
+    ? table(['Viewport', 'Step', 'State', 'Seen', 'Tests'], steps.map((s) => [s.viewport, s.step, s.state, s.seen, s.tests.join('; ')]))
+    : table(['Step', 'State', 'Seen', 'Tests'], steps.map((s) => [s.step, s.state, s.seen, s.tests.join('; ')])), '')
   lines.push(`States: ${steps.map((s) => s.state).join(',')}`, '')
   if (missing.length > 0) lines.push(`Steps with no test: ${missing.join(', ')}`)
   if (duplicates.length > 0) lines.push(`Steps with more than one test: ${duplicates.join(', ')}`)
@@ -111,5 +115,19 @@ export function junitMarkdown({ id, steps, result, extra, others }) {
   if (others.length > 0) {
     lines.push('', '### Other tests in the file', '', ...others.map((o) => `- ${o.name}: ${o.outcome}${o.seen ? `, ${o.seen}` : ''}`))
   }
+  return `${lines.join('\n')}\n`
+}
+
+export function fixturesMarkdown({ id, dir, fixtures, sources, problems }) {
+  const lines = [
+    `Fixtures of ${id} in ${dir}: ${fixtures.length}`,
+    `Sources: ${sources.recorded} recorded, ${sources.schema} from the schema, ${sources.handWritten} hand-written`,
+    '',
+  ]
+  if (fixtures.length > 0) {
+    lines.push(table(['File', 'Step', 'Request', 'Status'],
+      fixtures.map((f) => [f.file, f.step ?? 'all', `${f.request.method} ${f.request.path}`, f.response.status])), '')
+  }
+  lines.push('### Problems', '', ...bullets(problems))
   return `${lines.join('\n')}\n`
 }

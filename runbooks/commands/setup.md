@@ -28,6 +28,7 @@ Collect without asking:
 - Framework. For Next.js, every `app/` folder with `page.*` or `route.*` files becomes an `entries` source with the `next-app-router` extractor; pick a glob that skips public marketing pages only when the user says so later. For other backends, a `regex` source over the route files with `"kind": "api-endpoint"` (`config.md`, Tests).
 - Sibling repos the app calls: an API base URL in `.env.example` plus a sibling folder holding that API's code. Offer it as an `entries` source with `root`, limited to the routes this app calls. When the stack has `api`, its tests become `tests.api` with the same `root`.
 - Test libraries already installed, per surface: `@playwright/test` with a `playwright.config.*` (its `testDir`), `cypress` with a `cypress.config.*` (its `specPattern`), `jest`, `vitest`, `supertest`, `phpunit/phpunit` (`phpunit.xml`), `pestphp/pest`. Their folders are candidates for `tests.<surface>.dir`. Keep the result for step 2.
+- Upstream API, when the stack has `ui`: where the app reads its URL, from the keys of `.env.example` that end in `API_URL` or `API_BASE_URL` (for `upstream.urlEnv`); whether the upstream API runs in the app's own process (Next.js route handlers, Laravel with Blade or Inertia), which needs no `upstream` block; and request interception already in the tests (`page.route`, `cy.intercept`, `msw`). An existing config's `upstream`.
 - Existing tests of the `api` surface: two or three, to fill the API scripts checklist in step 3 (isolation, data, auth, requests, fakes).
 - Package manager: from the lockfile (`pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, else npm).
 - UI text: i18n message files (`messages/*.json`, `locales/**`), default locale first.
@@ -66,6 +67,23 @@ Then offer to connect it, in the next round:
 - `dir` and `command` come from detection and `config.md` (Tests, JUnit flags by framework). Ask only when detection leaves them open. Jest needs `jest-junit` for the JUnit report; offer to add it.
 - `tests.api.baseUrl` only when the chosen `api` framework calls a running server (Playwright `request`, `cy.request`, supertest against a URL).
 
+**Upstream mode, right after the `ui` framework, when the stack has `ui`:** ask it only when the upstream API runs outside the app's own process (a sibling repo, a remote URL, a third party). When it runs inside, ask nothing and write no `upstream` block, which means `live`. Options: `live`, `mocked`. Recommend, in this order:
+
+- `mocked` when the project's tests already intercept requests (`page.route`, `cy.intercept`, `msw`);
+- `live` when the sibling repo starts locally;
+- `mocked` when the API is remote or third party only.
+
+With an existing `upstream.mode`, recommend keeping it. The question text explains both modes in one line each (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`, Modes). When the answer is `mocked`, the question text also says that the endpoints of the sibling repo then count as covered only through `live` runbooks, because a mocked runbook covers no endpoint (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`), so endpoint coverage drops on the next `/runbooks:coverage`. When the project has no `tests.ui`, the question text also warns that no automated run checks the fixtures, and that only `runbooks.mjs fixtures` with a schema, or `list --affected`, notices an API change.
+
+Then ask the keys of the block, in the next round:
+
+- `upstream.urlEnv`, recommending the key found in `.env.example`. Required for `mocked`.
+- `upstream.baseUrl`, the upstream API's URL, recommending the value detection found.
+- `upstream.start` and `upstream.root`, when the sibling repo is local. In a `fullstack` stack, `upstream.root` takes `tests.api.root` without a question.
+- `upstream.schema`, a local OpenAPI 3 JSON file, and `upstream.redactHeaders`, only when detection left them open. The user may skip both.
+
+Keys not asked keep their defaults from `config.md`, Upstream.
+
 **Then, only for keys detection could not settle:**
 
 - `language` for runbook prose.
@@ -88,6 +106,12 @@ A `backend` stack skips every browser question.
 
 - Rename from `runbook`: when step 1 found `docs/runbooks/runbook.config.json`, move it with `git mv` to `runbooks.config.json`. In the config, `paths.evidence` `.runbook/evidence` becomes `.runbooks/evidence`, and `mcp.headless`/`mcp.headed` `runbook-playwright`/`runbook-playwright-headed` become `runbooks-playwright`/`runbooks-playwright-headed`. Rename those two servers in `.mcp.json` too, replace `.runbook/` with `.runbooks/` in the root `.gitignore`, replace the `<!-- runbook:start -->` and `<!-- runbook:end -->` markers with the new ones, and replace `runbook@<marketplace>` with `runbooks@<marketplace>` in `enabledPlugins`. Move a local `.runbook/` folder to `.runbooks/`.
 - Config: write `stack` and one `tests.<surface>` block per surface that has a framework. Drop `paths.e2e`; its value moves to `tests.ui.dir` when there is no `tests.ui` yet. Keep the existing `viewports`: `create` writes them. Write `design` from step 2, or keep the existing one when the user kept it.
+- Upstream: when step 2 asked the mode, write the `upstream` block with the answers and leave the other keys out so they keep their defaults (`config.md`, Upstream). Keep the existing block's keys that the user kept. In a `backend` stack the block is a config error, so write none.
+- Upstream server: copy only when `tests.ui` exists and some runbook can be mocked, that is when the default `upstream.mode` is `mocked` or the user says some runbooks will be mocked. Ask that only when the default is `live`. A live-only project gets no copy and `upstream.serverFile` stays null. Then copy `${CLAUDE_PLUGIN_ROOT}/scripts/upstream-server.mjs` to `<tests.ui.dir>/runbooks-upstream.mjs` and write that path to `upstream.serverFile`, so CI runs mocked scripts without the plugin. When the file exists, show its diff first; running `setup` again is how the copy is refreshed. Do not edit the framework config. Show how the framework starts the copy, with the app's `upstream.urlEnv` set to `http://127.0.0.1:<upstream.port>`:
+  - Playwright: a `webServer` entry whose `command` is `node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <upstream.fixtures> --port <upstream.port>`, whose `url` is `http://127.0.0.1:<upstream.port>/__runbooks/state`, and with `reuseExistingServer: !process.env.CI`, because `/runbooks:run` and `/runbooks:to-test` may already have started the server on that port.
+  - Cypress: a child process started in `setupNodeEvents` with the same command.
+  - When `upstream.baseUrl` is set, add `--mode live --target <upstream.baseUrl>` to the command, so tests that never select reach the live API through the server. Add `--redact <upstream.redactHeaders>` when the list is not empty. The server prints `runbooks-upstream listening on http://127.0.0.1:<port>`.
+  - The server holds one state for every client, so every test suite whose app points at it runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. Mocked scripts post `{ runbook, mode: 'mocked', step }` in `beforeEach` and `{ runbook: null, mode: 'live' }` in `afterAll`; live `ui` scripts post nothing (`references/upstream.md`, "Scripts").
 - Agents block: when one of `AGENTS.md` and `CLAUDE.md` is a symlink to the other, write once to the real file. Otherwise prefer `AGENTS.md` when it exists, else `CLAUDE.md`. Replace the text between `<!-- runbooks:start -->` and `<!-- runbooks:end -->` when the markers exist; otherwise append the block at the end of the file.
 - API scripts checklist: when the stack has `api`, replace the `<!-- api-scripts: ... -->` line of the block with `api-practices.md`, every placeholder filled with what this project does, citing the helper and its path, from the tests read in step 1. When the project has no `api` tests yet, fill it with the usual practice of the chosen `tech` and `framework` and say so in the summary. Without `api`, delete the line. Cover how scripts are written only; the project's own conventions for backend code are not this block's business.
 - Test command: when `tests.<surface>.command` is set and the framework is installed, run it once with `{files}` set to one existing test of that surface (or an empty run when there is none) and `{junit}` set to `.runbooks/junit/setup.xml`, and confirm the file appears. Fix the command until it does.
@@ -109,6 +133,8 @@ Print the summary in the conversation before any commit question:
 - the entry count per source and per slice, and the endpoints left without a slice;
 - the stack and, per surface, the tech, framework, dir and command, with the test command check from step 3;
 - the design reference: the system, how it is read (the server name, the files glob, or the Artifact tool) and `design.url`;
+- the upstream mode and the URL env var (`upstream.urlEnv`), or that no `upstream` block was written and the runbooks stay `live`;
+- when the server was copied: its path (`upstream.serverFile`) and how the framework starts it. Say nothing about a copy when none was made;
 - when the stack now has `api` and had not before: endpoint coverage drops on the next `/runbooks:coverage`, and why.
 
 ## 5. Commit

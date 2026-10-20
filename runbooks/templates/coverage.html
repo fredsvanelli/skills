@@ -239,7 +239,7 @@
   }
 
   const uncovered = [
-    ...e.uncovered.map((i) => ({ id: i.id, kind: i.kind ?? 'entry', where: i.file ?? '' })),
+    ...e.uncovered.map((i) => ({ id: i.id, kind: i.kind ?? 'entry', where: [i.file, i.citedByMocked && 'cited, not covered (mocked)'].filter(Boolean).join(' · ') })),
     ...(r ? r.uncovered.map((i) => ({ id: i.id, kind: 'requirement', where: i.title ?? '' })) : []),
   ]
   const body = document.getElementById('uncovered')

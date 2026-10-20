@@ -2,7 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { findFiles } from './glob.mjs'
 import { splitFrontmatter, parseYaml } from './yaml.mjs'
-import { surfacesOf } from './config.mjs'
+import { surfacesOf, upstreamModeOf } from './config.mjs'
+import { fixturesDir } from './fixtures.mjs'
 
 const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
 
@@ -12,6 +13,33 @@ const asList = (value) => {
 }
 
 const SURFACES = ['ui', 'api']
+const UPSTREAM_MODES = ['live', 'mocked']
+
+const hasFixtures = (projectRoot, dir) =>
+  findFiles(path.resolve(projectRoot, dir), '**/*.json').length > 0
+
+// A mocked ui runbook runs against the plugin's upstream server. Missing scripts or fixtures only warn.
+function readUpstream(runbook, data, surface, config, projectRoot) {
+  if (data.upstream !== undefined && data.upstream !== null && surface !== 'ui') {
+    runbook.problems.push('upstream applies only to ui runbooks')
+  }
+  if (surface !== 'ui') {
+    runbook.upstream = null
+    return
+  }
+  runbook.upstream = upstreamModeOf(config)
+  if (data.upstream !== undefined && data.upstream !== null) {
+    if (UPSTREAM_MODES.includes(data.upstream)) runbook.upstream = data.upstream
+    else runbook.problems.push(`upstream "${data.upstream}" must be one of ${UPSTREAM_MODES.join(', ')}`)
+  }
+  if (runbook.upstream !== 'mocked') return
+  if (!config.upstream?.urlEnv) runbook.problems.push('a mocked runbook needs upstream.urlEnv in the config')
+  if (runbook.scripts.length === 0) runbook.warnings.push('mocked runbook without a script: no automated run checks its fixtures')
+  const dir = fixturesDir(config, runbook)
+  if (runbook.status !== 'placeholder' && !hasFixtures(projectRoot, dir)) {
+    runbook.warnings.push(`mocked runbook has no fixtures in ${dir}`)
+  }
+}
 
 // design maps a name to a frame link or a file; "<name>.<viewport>" is the variant used at that viewport.
 function readDesign(runbook, design, surface, system) {
@@ -32,7 +60,7 @@ function readDesign(runbook, design, surface, system) {
   runbook.design = design
 }
 
-function readRunbook(file, rel, config) {
+function readRunbook(file, rel, config, projectRoot) {
   const runbooksDir = config.paths.runbooks
   const stack = config.stack
   const viewports = config.viewports ?? {}
@@ -54,7 +82,9 @@ function readRunbook(file, rel, config) {
     scripts: [],
     status: null,
     lastRun: null,
+    upstream: upstreamModeOf(config),
     problems: [],
+    warnings: [],
   }
   if (segments.length !== 2) runbook.problems.push('runbooks live exactly one folder deep: <capability>/<flow>.md')
 
@@ -98,6 +128,7 @@ function readRunbook(file, rel, config) {
   runbook.lastRun = data.last_run ?? null
   const outdated = runbook.lastRun?.outdated
   if (outdated !== undefined && typeof outdated !== 'boolean') runbook.problems.push('last_run.outdated must be true or false')
+  readUpstream(runbook, data, surface, config, projectRoot)
   return runbook
 }
 
@@ -106,5 +137,5 @@ export function loadRunbooks(projectRoot, config) {
   const dir = path.resolve(projectRoot, runbooksDir)
   return findFiles(dir, '**/*.md')
     .filter((rel) => rel.includes('/') && !rel.split('/').some((segment) => segment.startsWith('_')))
-    .map((rel) => readRunbook(path.join(dir, rel), rel, config))
+    .map((rel) => readRunbook(path.join(dir, rel), rel, config, projectRoot))
 }

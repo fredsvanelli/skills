@@ -1,4 +1,7 @@
 import { test } from 'node:test'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './lib/config.mjs'
@@ -6,21 +9,24 @@ import { loadRunbooks } from './lib/runbooks.mjs'
 import { extractItems } from './lib/extract.mjs'
 import { computeCoverage, sliceOf } from './lib/coverage.mjs'
 import { nextStatus } from './lib/status.mjs'
+import { coverageMarkdown } from './lib/format.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
 
-function fixtureCoverage(filters = {}, withItems = false) {
-  const config = loadConfig(FIXTURE)
+function coverageOf(root, filters = {}, withItems = false) {
+  const config = loadConfig(root)
   return computeCoverage({
-    runbooks: loadRunbooks(FIXTURE, config),
-    entries: extractItems(FIXTURE, config.entries, 'entries').items,
-    requirements: extractItems(FIXTURE, config.requirements, 'requirements').items,
+    runbooks: loadRunbooks(root, config),
+    entries: extractItems(root, config.entries, 'entries').items,
+    requirements: extractItems(root, config.requirements, 'requirements').items,
     requirementsConfigured: config.requirements.length > 0,
     slices: config.slices,
     filters,
     withItems,
   })
 }
+
+const fixtureCoverage = (filters = {}, withItems = false) => coverageOf(FIXTURE, filters, withItems)
 
 const ids = (items) => items.map((i) => i.id).sort()
 
@@ -211,4 +217,62 @@ test('with api runbooks in the stack, an endpoint is covered only through an api
     { name: 'billing', surface: 'api', total: 2, covered: 1, pending: 0, planned: 0 },
     { name: 'billing', surface: 'ui', total: 1, covered: 1, pending: 0, planned: 0 },
   ])
+})
+
+test('a mocked runbook covers its screens but not its endpoints', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-mocked-'))
+  const dir = path.join(tmp, 'project')
+  try {
+    // The config reads endpoints from the sibling ../api, so copy both.
+    fs.cpSync(FIXTURE, dir, { recursive: true })
+    fs.cpSync(path.join(FIXTURE, '../api'), path.join(tmp, 'api'), { recursive: true })
+    const configPath = path.join(dir, 'docs/runbooks/runbooks.config.json')
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    config.upstream = { mode: 'live', urlEnv: 'API_URL' }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
+    const runbookPath = path.join(dir, 'docs/runbooks/billing/issue-invoice.md')
+    fs.writeFileSync(runbookPath, fs.readFileSync(runbookPath, 'utf8').replace('status: active', 'upstream: mocked\nstatus: active'))
+
+    const result = coverageOf(dir)
+    const uncovered = Object.fromEntries(result.entries.uncovered.map((i) => [i.id, i]))
+    assert.deepEqual(uncovered['POST /admin/invoices'].citedByMocked, ['billing.issue-invoice'])
+    assert.equal(result.entries.uncovered.some((i) => i.id === '/financeiro/faturas'), false)
+    assert.match(coverageMarkdown(result, 'overall'), /`POST \/admin\/invoices`.*cited, not covered \(mocked: billing\.issue-invoice\)/)
+    const items = coverageOf(dir, {}, true).groups.find((g) => g.name === 'billing').items
+    assert.deepEqual(items.find((i) => i.id === 'POST /admin/invoices').citedByMocked, ['billing.issue-invoice'])
+    assert.equal('citedByMocked' in items.find((i) => i.id === '/financeiro/faturas'), false)
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+test('in a fullstack stack a mocked ui runbook still covers its ui-route, not its endpoint', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-mocked-full-'))
+  const dir = path.join(tmp, 'project')
+  try {
+    fs.cpSync(FIXTURE, dir, { recursive: true })
+    fs.cpSync(path.join(FIXTURE, '../api'), path.join(tmp, 'api'), { recursive: true })
+    const configPath = path.join(dir, 'docs/runbooks/runbooks.config.json')
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    config.stack = 'fullstack'
+    config.upstream = { mode: 'live', urlEnv: 'API_URL' }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
+    const runbookPath = path.join(dir, 'docs/runbooks/billing/issue-invoice.md')
+    fs.writeFileSync(runbookPath, fs.readFileSync(runbookPath, 'utf8').replace('status: active', 'upstream: mocked\nstatus: active'))
+
+    const loaded = loadConfig(dir)
+    const result = computeCoverage({
+      runbooks: loadRunbooks(dir, loaded),
+      entries: extractItems(dir, loaded.entries, 'entries').items,
+      requirements: extractItems(dir, loaded.requirements, 'requirements').items,
+      requirementsConfigured: loaded.requirements.length > 0,
+      slices: loaded.slices,
+      stack: 'fullstack',
+    })
+    const uncovered = Object.fromEntries(result.entries.uncovered.map((i) => [i.id, i]))
+    assert.equal('/financeiro/faturas' in uncovered, false)
+    assert.deepEqual(uncovered['POST /admin/invoices'].citedByMocked, ['billing.issue-invoice'])
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
 })

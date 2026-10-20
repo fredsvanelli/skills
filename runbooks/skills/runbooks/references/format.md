@@ -39,6 +39,7 @@ last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2
 | `roles` | account roles from the config `accounts` that the steps log in as |
 | `viewports` | `ui` only: names from the config `viewports`, the screen sizes the steps run at, in run order. Missing or empty means the steps run once, at the browser's default size |
 | `design` | `ui` only, and only when the config has `design`: a map from a screen name (kebab-case) to its design reference, a frame link or a file path (`config.md`, Design). `<name>.<viewport>` is the variant used at that viewport; without one, every viewport uses `<name>`. Steps cite the names in their `Design:` line |
+| `upstream` | `ui` only: `live` or `mocked`, how the runbook reaches its upstream API. Written only when it differs from the config `upstream.mode` (`upstream.md`, "Modes"). A mocked runbook needs `upstream.urlEnv` in the config |
 | `covers.entries` | entry ids exactly as `runbooks.mjs entries` prints them |
 | `covers.requirements` | requirement ids exactly as `runbooks.mjs requirements` prints them, or ids from the source when no requirement source is configured |
 | `sources` | spec paths, ticket ids, `diff <base>...<sha>`, `file <path>`, `dir <path>` and `route <entry id>` for code read as the source, `map <sha>` for a placeholder, and test files read as evidence only (tests of the code behind an entry, which cannot run the steps), that the runbook came from |
@@ -83,7 +84,7 @@ Number steps `S01`, `S02`, and keep numbers stable: a removed step leaves a gap.
 
 ### What a step can verify
 
-- `ui`: every expected result is observable in the browser. A behavior the UI does not show goes under "Not covered" with the reason. The design comparison of a `Design:` line is a separate finding: it never changes the step's state.
+- `ui`: every expected result is observable in the browser. A behavior the UI does not show goes under "Not covered" with the reason. In a `mocked` runbook the step verifies what the screen shows and the request it sent (method, URL, body), never persistence. A step that would reload the page to check what the API saved checks that request instead, and persistence goes under "Not covered". The design comparison of a `Design:` line is a separate finding: it never changes the step's state.
 - `api`, in this order of preference:
   1. the response: status, body fields, headers;
   2. persistence, through another call (`GET /invoices/{id}` after the POST), the API's own reload check;
@@ -93,6 +94,10 @@ Number steps `S01`, `S02`, and keep numbers stable: a removed step leaves a gap.
 Items 3 and 4 live only in the script, in the project's isolated test environment. The agent itself still reads no database and writes no SQL.
 
 An `api` runbook covers at least: the main path, invalid input (422 with the fields), a role that must not get in (403), no authentication (401), and a read-back for anything it saves. Its Preconditions say how the script creates each piece of data (factory, seed, a call to another endpoint), and Cleanup names the isolation that undoes it (`RefreshDatabase`, a transaction per test).
+
+### Preconditions and the upstream mode
+
+The Data line of a `mocked` runbook points to its fixtures (`<upstream.fixtures>/<capability>/<flow>/`), which are its data. A `live` runbook states how each piece of data is created, and the data it creates carries the run suffix (`RUNBOOKS_RUN_ID`), so Expected quotes only the fixed part and Cleanup deletes what the run made. The rest: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 
 ### Flow
 

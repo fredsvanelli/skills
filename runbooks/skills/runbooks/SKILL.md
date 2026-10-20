@@ -31,7 +31,7 @@ Before calling feature work done, run `list --affected` and then `run` on what i
 ## Rules for every command
 
 - Read `docs/runbooks/runbooks.config.json` first. When it is missing, run setup.
-- Verify `ui` results in the browser, and only there. Verify `api` results only through the runbook's script, run by the project's test command (`references/format.md`, "What a step can verify"). The agent reads no database, writes no SQL, and confirms no result through a direct HTTP call. A behavior the surface cannot show goes under "Not covered" in the runbook, with the reason.
+- Verify `ui` results in the browser, or by the runbook's script in mode `test` when the script has one test per step. For a mocked runbook, the agent calls only the upstream server's control routes (`references/upstream.md`, "Control routes"), which verify nothing. Verify `api` results only through the runbook's script, run by the project's test command (`references/format.md`, "What a step can verify"). The agent reads no database, writes no SQL, and confirms no result through a direct HTTP call. A behavior the surface cannot show goes under "Not covered" in the runbook, with the reason.
 - Read the config `stack` and each runbook's `surface` before acting: several commands branch on them.
 - Refer to credentials by env var name. The only read of a `.env*` file is `grep -c '^NAME=' <file>`, which checks that a key exists; print no secret value.
 - Write runbook and report prose in the config `language`. Section headings and frontmatter keys stay in English.
@@ -41,6 +41,7 @@ Before calling feature work done, run `list --affected` and then `run` on what i
 ## Reference
 
 - Runbook format, step states, dependency tree, status rules: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`
+- Upstream modes, fixtures and the upstream server: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`
 - Config fields: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`
 - Run modes: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/run-modes.md`
 - Coverage: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/coverage.md`
