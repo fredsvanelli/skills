@@ -11,7 +11,6 @@ import { nextStatus } from './lib/status.mjs'
 import { changedFiles, affectedRunbooks } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
 import { latestReport } from './lib/reports.mjs'
-import { outputRows, writeRuns, writeCoverage } from './lib/output.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
 import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
@@ -38,16 +37,13 @@ Commands:
                 server from the config in the foreground and prints its address; stop it with Ctrl+C
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
                 and prints its address; stop it with Ctrl+C
-  output        [--coverage] writes runs.json and runs.html in the runbooks folder: every runbook
-                with its last full run; with --coverage, also coverage.json and coverage.html (overall,
-                with each slice's entries, their state and the scripts that test them)
 
 Global options:
   --root <dir>     project root (default: current directory)
   --config <file>  config path relative to the root (default: docs/runbooks/runbooks.config.json)
   --json           print JSON instead of Markdown
 
-Read-only except output: prints to stdout, warnings to stderr. Exit 0 on success, 2 on error.
+Read-only: prints to stdout, warnings to stderr. Exit 0 on success, 2 on error.
 `
 
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`
@@ -151,18 +147,7 @@ function commandFixtures(root, config, options, positionals) {
   return options.json ? json(result) : fixturesMarkdown(result)
 }
 
-function commandOutput(root, config, options, warnings) {
-  const runbooks = loadRunbooks(root, config)
-  const written = writeRuns(root, config.paths.runbooks, outputRows(runbooks))
-  if (options.coverage) {
-    written.push(...writeCoverage(root, config.paths.runbooks, { scope: 'overall', ...coverageResult(root, config, {}, warnings, true) }))
-  } else {
-    warnings.push(...runbookWarnings(runbooks))
-  }
-  return `${written.join('\n')}\n`
-}
-
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'output']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures']
 
 export function run(argv) {
   const stderr = []
@@ -184,7 +169,6 @@ export function run(argv) {
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
     else if (command === 'junit') stdout = commandJunit(root, config, options, positionals)
     else if (command === 'fixtures') stdout = commandFixtures(root, config, options, positionals)
-    else if (command === 'output') stdout = commandOutput(root, config, options, warnings)
     else stdout = commandItems(root, config, options, command, warnings)
     if (command === 'list' || command === 'coverage') {
       const copied = copiedServerWarning(root, config, VERSION)

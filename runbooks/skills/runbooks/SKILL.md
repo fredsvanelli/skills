@@ -5,7 +5,7 @@ description: Runbooks are the project's UAT knowledge base in docs/runbooks/, ve
 
 # Runbooks
 
-A runbook is a versioned UAT script for one flow: preconditions, ordered steps, and the exact result expected after each step. Its `surface` says where that result is verified: `ui` in the browser, `api` through the runbook's test script, which the plugin writes or adopts and then runs with the project's test command. Runbooks are the project's official record of how the product behaves. Each execution produces a separate report in `_runs/`, kept local and ignored by Git, and rewrites `runs.json` and `runs.html`, the local table of every runbook's last full run; the runbook itself changes only when the expected behavior changes.
+A runbook is a versioned UAT script for one flow: preconditions, ordered steps, and the exact result expected after each step. Its `surface` says where that result is verified: `ui` in the browser, `api` through the runbook's test script, which the plugin writes or adopts and then runs with the project's test command. Runbooks are the project's official record of how the product behaves. Each execution produces a separate report in `_runs/`, kept local and ignored by Git. The runbook itself changes only when the expected behavior changes.
 
 ## Commands
 

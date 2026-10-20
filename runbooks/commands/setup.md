@@ -100,7 +100,7 @@ A `backend` stack skips every browser question.
 | `docs/runbooks/README.md` | `${CLAUDE_PLUGIN_ROOT}/templates/readme.md` |
 | `docs/runbooks/_runs/.gitignore` | two lines, `*` and `!.gitignore`: the folder is tracked, the reports in it stay local |
 | `docs/runbooks/_coverage/.gitignore` | two lines, `*` and `!.gitignore`: the folder is tracked, the reports in it stay local |
-| `.gitignore` | add `.runbooks/`, `/<paths.runbooks>/runs.*` and `/<paths.runbooks>/coverage.*` when missing: the summary files stay local |
+| `.gitignore` | add `.runbooks/` when missing |
 | agents block | `${CLAUDE_PLUGIN_ROOT}/templates/agents-block.md`, with `${CLAUDE_PLUGIN_ROOT}/templates/api-practices.md` filled in when the stack has `api` |
 | `.mcp.json` (when approved and the stack has `ui`) | `${CLAUDE_PLUGIN_ROOT}/templates/mcp-servers.json`, plus the design server from step 2 (`${CLAUDE_PLUGIN_ROOT}/templates/design-servers.json` for Figma) |
 
@@ -118,6 +118,7 @@ A `backend` stack skips every browser question.
 - Design server: write the chosen template to `mcpServers` under the name `figma`, or the other tool's server under its name, and set `design.mcp` to that name. For Framelink, replace `<version>` with what `npm view figma-developer-mcp version` prints. A token stays in the user's environment: `.mcp.json` holds only `${NAME}`.
 - `.mcp.json`: merge the two servers into `mcpServers`, keeping every existing server. Replace `<mcp.secretsFile>` and `<paths.evidence>`. Confirm the secrets file is ignored with `git check-ignore -q <file>`; when it is not, stop and tell the user, because the MCP server would read a tracked file.
 - Report folders: when `git ls-files <paths.runbooks>/_runs <paths.runbooks>/_coverage` lists anything besides the two `.gitignore` files (reports, `.gitkeep` or `_runs/output.*` from an older setup), show the list and offer `git rm -r --cached --quiet -- <files>`. The files stay on disk; the removal goes into the setup commit.
+- Summary files: when `<paths.runbooks>/runs.json`, `runs.html`, `coverage.json` or `coverage.html` exist, delete them from disk, and remove the lines `/<paths.runbooks>/runs.*` and `/<paths.runbooks>/coverage.*` from the root `.gitignore`. Git ignores the files, so nothing is staged for them; the `.gitignore` change goes into the setup commit.
 - Plugin registration: when `${CLAUDE_PLUGIN_ROOT}` is inside this project, the plugin is in local development. Print `claude --plugin-dir <path relative to the project>` and leave `.claude/settings.json` alone. When it is outside (installed from a marketplace), add the marketplace to `extraKnownMarketplaces` and `"runbooks@<marketplace>": true` to `enabledPlugins` in `.claude/settings.json`, keeping existing keys.
 
 Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" entries` and `... requirements`. Fix the config until both exit 0 and every warning is understood.

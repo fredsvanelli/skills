@@ -90,8 +90,6 @@ Per runbook:
    - `last_run: { date: <YYYY-MM-DD>, commit: "<short sha>", result: <result>, report: _runs/<run id>.md }`, replacing the old value, so an `outdated: true` from `update` or `audit-runbooks --fix` goes away.
 3. With `--steps`, leave `status` and `last_run` unchanged, `outdated` included.
 
-Then, once for the whole run, with or without `--steps`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" output`. It rewrites `<paths.runbooks>/runs.json` and `runs.html`: every runbook with the date, time and result of its last full run, and whether a later edit made it outdated. Keep them ignored by the rules in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
-
 ## 6. Import (prompt mode)
 
 Parse the reply by the Import rules in `run-modes.md`, resolve every question with the user, then do step 5 with `mode: prompt`. Before step 5, when the upstream server still runs, read `GET /__runbooks/state`. An empty `requests` list means the app points elsewhere: show the `<urlEnv>=http://127.0.0.1:<port> <app.start>` hint and stop. Unmatched entries carry no step in this mode: list them in Notes, turn the steps the reply reports `failed` into `blocked` with the unmatched requests as the reason, and offer `/runbooks:update <id>`. Then, when the prompt run named runbooks still waiting, select the next one and print its prompts as "prompt" in `run-modes.md` says, and keep the server running. After the import of the last runbook, stop the server. When it no longer runs (another session, a restart), take the states from the reply alone and say in Notes that `unmatched` was not checked.
@@ -108,12 +106,12 @@ Print the results in the conversation before any commit question:
 
 ## 8. Commit
 
-Commit the runbook frontmatter changes (`status`, `last_run`, and `scripts` when `to-test` ran) by the `runbooks` policy, together with the script files `to-test` wrote or edited during this run, and with the migration files from `commits.md` when step 5 touched them. Reports and `runs.*` are not committed: Git ignores them, so they stay local. Ask an `ask` question only after the table from step 7 is on screen; the question names the files and the message and does not repeat the table.
+Commit the runbook frontmatter changes (`status`, `last_run`, and `scripts` when `to-test` ran) by the `runbooks` policy, together with the script files `to-test` wrote or edited during this run, and with the migration files from `commits.md` when step 5 touched them. Reports are not committed: Git ignores them, so they stay local. Ask an `ask` question only after the table from step 7 is on screen; the question names the files and the message and does not repeat the table.
 
 ## 9. Close
 
 Give the commit outcome: the short sha, or the paths left uncommitted. Then offer to investigate the causes of the failures (with `superpowers:systematic-debugging` when available), and to fix the `major` design differences; the fix is separate work.
 
-End with a link to the HTML table: `[runs.html](file://<absolute path of <paths.runbooks>/runs.html>)`.
+End with a line that offers `/runbooks:ui` to see the results by capability.
 
-Done when every selected runbook has a report, every step in it has a state, `runs.json` and `runs.html` are rewritten, and the user has seen the results table before any commit question.
+Done when every selected runbook has a report, every step in it has a state, and the user has seen the results table before any commit question.

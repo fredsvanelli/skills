@@ -141,38 +141,11 @@ test('coverage with a missing sibling root reports no false orphans', () => {
   assert.match(stdout, /^\| Requirements \| - \| - \| - \| - \| requirement sources did not run \|$/m)
 })
 
-test('output writes runs.json and runs.html with the same rows and removes the old _runs/output.*', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-output-'))
-  fs.cpSync(FIXTURE, root, { recursive: true })
-  fs.mkdirSync(path.join(root, 'docs/runbooks/_runs'), { recursive: true })
-  fs.writeFileSync(path.join(root, 'docs/runbooks/_runs/output.json'), '[]\n')
-  fs.writeFileSync(path.join(root, 'docs/runbooks/_runs/output.html'), '')
-  const result = run(['output', '--root', root])
-  assert.equal(result.code, 0)
-  assert.equal(result.stdout, 'docs/runbooks/runs.json\ndocs/runbooks/runs.html\n')
-  assert.ok(!fs.existsSync(path.join(root, 'docs/runbooks/_runs/output.json')))
-  assert.ok(!fs.existsSync(path.join(root, 'docs/runbooks/_runs/output.html')))
-  assert.ok(!fs.existsSync(path.join(root, 'docs/runbooks/coverage.json')))
-  const rows = JSON.parse(fs.readFileSync(path.join(root, 'docs/runbooks/runs.json'), 'utf8'))
-  assert.deepEqual(rows.find((row) => row.id === 'billing.issue-invoice'), { id: 'billing.issue-invoice', title: 'Issue a partner invoice', date: '2026-10-01 09:00', result: 'passed', outdated: false })
-  assert.deepEqual(rows.find((row) => row.id === 'deliveries.list-deliveries'), { id: 'deliveries.list-deliveries', title: 'List deliveries', date: '2026-09-20 10:00', result: 'failed', outdated: true })
-  assert.deepEqual(rows.find((row) => row.id === 'billing.cancel-invoice'), { id: 'billing.cancel-invoice', title: 'Cancel an invoice', date: null, result: null, outdated: false })
-  const html = fs.readFileSync(path.join(root, 'docs/runbooks/runs.html'), 'utf8')
-  assert.ok(html.includes(`const rows = ${JSON.stringify(rows, null, 2)}`))
-})
-
-test('output --coverage also writes coverage.json and coverage.html with the overall numbers and each slice\'s entries', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-output-'))
-  fs.cpSync(FIXTURE, root, { recursive: true })
-  const result = run(['output', '--coverage', '--root', root])
-  assert.equal(result.code, 0)
-  assert.equal(result.stdout, 'docs/runbooks/runs.json\ndocs/runbooks/runs.html\ndocs/runbooks/coverage.json\ndocs/runbooks/coverage.html\n')
-  const coverage = JSON.parse(fs.readFileSync(path.join(root, 'docs/runbooks/coverage.json'), 'utf8'))
-  const groups = coverage.groups.map(({ items, ...group }) => group)
-  assert.ok(coverage.groups.every((g) => g.items.length === g.total))
-  assert.deepEqual({ ...coverage, groups }, { scope: 'overall', ...JSON.parse(run(['coverage', '--json', '--root', root]).stdout) })
-  const html = fs.readFileSync(path.join(root, 'docs/runbooks/coverage.html'), 'utf8')
-  assert.ok(html.includes(`const data = ${JSON.stringify(coverage, null, 2)}`))
+test('output is no longer a command', () => {
+  const result = run(['output', '--root', FIXTURE])
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /^runbooks: unknown command "output"$/m)
+  assert.doesNotMatch(result.stdout, /output/)
 })
 
 test('list warns about a mocked runbook without a script', () => {

@@ -9,13 +9,7 @@ Each command commits its own files by the policy in `commits.<type>` of the conf
 
 Run reports in `_runs/` and coverage reports in `_coverage/` stay local: each folder holds a `.gitignore` that ignores everything but itself, so no command commits them.
 
-The summary files `runs.json`, `runs.html`, `coverage.json` and `coverage.html` in `<paths.runbooks>` stay local too, ignored by two lines in the root `.gitignore`: `/<paths.runbooks>/runs.*` and `/<paths.runbooks>/coverage.*`. A command that writes them first migrates a project set up by an older version:
-
-- when `git check-ignore -q <paths.runbooks>/runs.json` fails, append the two lines to the root `.gitignore`;
-- when `_runs/.gitignore` has `!output.json` or `!output.html`, remove those lines;
-- when `git ls-files <paths.runbooks>/_runs/output.json <paths.runbooks>/_runs/output.html` lists them, stage their deletion (`git rm --cached --quiet --`); the script already deleted them from disk.
-
-Those migration edits go into the command's commit by the `setup` policy; a command that commits nothing (`coverage`) leaves them in the working tree and lists them.
+Older versions wrote `runs.json`, `runs.html`, `coverage.json` and `coverage.html` in `<paths.runbooks>` and ignored them with `/<paths.runbooks>/runs.*` and `/<paths.runbooks>/coverage.*` in the root `.gitignore`. `setup` deletes the four files and the two lines.
 
 | Policy | Behavior |
 |---|---|

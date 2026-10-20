@@ -1,6 +1,6 @@
 # Mocked ui runbooks never cover endpoints
 
-ADR 0002 lets a `ui` runbook in a `frontend` stack cover the endpoints it cites. A `mocked` runbook never reaches its upstream API: it proves what the screen shows and the request the screen sends, not what the API does with that request. So a `mocked` runbook covers only its `ui-route` entries, whatever the stack. It still lists the endpoints its screens call in `covers.entries`, so `list --affected` finds it when one of them changes and its fixtures may be out of date. `coverage.html` shows an endpoint that only `mocked` runbooks cite as "cited, not covered (mocked)", so the gap has its reason next to it.
+ADR 0002 lets a `ui` runbook in a `frontend` stack cover the endpoints it cites. A `mocked` runbook never reaches its upstream API: it proves what the screen shows and the request the screen sends, not what the API does with that request. So a `mocked` runbook covers only its `ui-route` entries, whatever the stack. It still lists the endpoints its screens call in `covers.entries`, so `list --affected` finds it when one of them changes and its fixtures may be out of date. `/runbooks:ui` shows an endpoint that only `mocked` runbooks cite as "cited, not covered (mocked)", so the gap has its reason next to it.
 
 ## Considered Options
 
