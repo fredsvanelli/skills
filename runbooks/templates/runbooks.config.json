@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "language": "en",
+  "stack": "frontend",
+  "tests": {},
+  "paths": { "runbooks": "docs/runbooks", "evidence": ".runbooks/evidence" },
+  "app": { "baseUrl": "http://localhost:3000", "start": [] },
+  "accounts": {},
+  "uiText": [],
+  "data": { "seedHint": "" },
+  "entries": [],
+  "requirements": [],
+  "slices": {},
+  "tickets": { "fetch": "" },
+  "git": { "base": "main", "protected": ["main"], "messageFormat": "docs(runbooks): {summary}" },
+  "commits": { "runbooks": "ask", "setup": "ask" },
+  "mcp": { "headless": "runbooks-playwright", "headed": "runbooks-playwright-headed", "secretsFile": ".env.local" },
+  "viewports": {},
+  "design": null
+}

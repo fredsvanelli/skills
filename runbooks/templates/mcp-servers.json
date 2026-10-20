@@ -1,0 +1,10 @@
+{
+  "runbooks-playwright": {
+    "command": "npx",
+    "args": ["@playwright/mcp@0.0.83", "--headless", "--isolated", "--secrets", "<mcp.secretsFile>", "--output-dir", "<paths.evidence>"]
+  },
+  "runbooks-playwright-headed": {
+    "command": "npx",
+    "args": ["@playwright/mcp@0.0.83", "--isolated", "--secrets", "<mcp.secretsFile>", "--output-dir", "<paths.evidence>"]
+  }
+}

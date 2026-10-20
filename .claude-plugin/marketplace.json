@@ -4,8 +4,8 @@
   "owner": { "name": "Fred Vanelli" },
   "plugins": [
     {
-      "name": "runbook",
-      "source": "./runbook",
+      "name": "runbooks",
+      "source": "./runbooks",
       "description": "UAT runbooks kept as a project's verified knowledge base."
     },
     {
