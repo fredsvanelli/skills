@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { validateSchema } from './schema.mjs'
+import { validateSchema, resolveRef } from './schema.mjs'
 
 // Fixtures of runbook <capability>.<flow> live in <fixtures>/<capability>/<flow>, relative to the project root.
 export function fixturesDir(config, runbook) {
@@ -78,6 +78,11 @@ function serverPrefix(doc) {
   }
 }
 
+// A path item or a response may be a local $ref into components.
+function deref(node, doc) {
+  return typeof node?.$ref === 'string' ? resolveRef(node.$ref, doc) : node
+}
+
 function isJson(response) {
   const header = Object.entries(response.headers ?? {}).find(([name]) => name.toLowerCase() === 'content-type')
   if (header) return String(header[1]).toLowerCase().includes('json')
@@ -96,14 +101,14 @@ export function checkFixtures(fixtures, doc) {
     if (!template && prefix && requestPath.startsWith(`${prefix}/`)) {
       template = findTemplate(templates, requestPath.slice(prefix.length))
     }
-    const operation = template ? doc.paths[template][String(method).toLowerCase()] : undefined
+    const operation = template ? deref(doc.paths[template], doc)?.[String(method).toLowerCase()] : undefined
     if (!operation) {
       problems.push(`${fixture.file}: no operation for ${String(method).toUpperCase()} ${requestPath} in the schema`)
       continue
     }
     const { response } = fixture
     const responses = operation.responses ?? {}
-    const declared = responses[String(response.status)] ?? responses.default
+    const declared = deref(responses[String(response.status)] ?? responses.default, doc)
     if (!declared) {
       problems.push(`${fixture.file}: no response ${response.status} for ${String(method).toUpperCase()} ${requestPath} in the schema`)
       continue

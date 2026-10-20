@@ -97,3 +97,19 @@ test('runbooks.mjs fixtures reports problems and exits 2 on unusable input', () 
   fs.rmSync(path.join(root, 'openapi.json'))
   assert.equal(run(['fixtures', 'billing.issue', '--root', root]).code, 2)
 })
+
+test('checkFixtures resolves $ref on responses and path items', () => {
+  const doc = {
+    paths: {
+      '/a': { get: { responses: { 404: { $ref: '#/components/responses/NotFound' } } } },
+      '/b': { $ref: '#/components/pathItems/B' },
+    },
+    components: {
+      responses: { NotFound: { content: { 'application/json': { schema: { type: 'object', properties: { code: { type: 'integer' } } } } } } },
+      pathItems: { B: { get: { responses: { 404: { $ref: '#/components/responses/NotFound' } } } } },
+    },
+  }
+  const fx = (file, p) => ({ file, request: { method: 'GET', path: p }, response: { status: 404, body: { code: 'x' } } })
+  assert.deepEqual(checkFixtures([fx('a', '/a'), fx('b', '/b')], doc),
+    ['a: body.code: expected integer, got string', 'b: body.code: expected integer, got string'])
+})

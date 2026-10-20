@@ -6,7 +6,7 @@ function typeName(value) {
   return typeof value
 }
 
-function resolveRef(ref, doc) {
+export function resolveRef(ref, doc) {
   if (!ref.startsWith('#/')) return null
   let node = doc
   for (const part of ref.slice(2).split('/')) {
