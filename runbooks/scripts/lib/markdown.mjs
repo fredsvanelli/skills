@@ -22,13 +22,13 @@ function renderInline(text) {
 
 // Formats text that is already escaped. Code spans and links go into a stash first, so
 // bold markers inside code or inside an href are left alone.
-function formatEscaped(escaped) {
-  const stash = []
+function formatEscaped(escaped, stash = []) {
   const keep = (html) => `\u0000${stash.push(html) - 1}\u0000`
   let out = escaped.replace(/`([^`]+)`/g, (_, code) => keep(`<code>${code}</code>`))
   out = out.replace(/\[([^\]]*)\]\(((?:[^()\s]|\([^()\s]*\))*)\)/g, (_, label, href) => {
-    if (!safeHref(href)) return formatEscaped(label)
-    return keep(`<a href="${href}" target="_blank" rel="noreferrer">${formatEscaped(label)}</a>`)
+    // A marker in the href means a code span sits inside the target, so it is not a usable link.
+    if (href.includes('\u0000') || !safeHref(href)) return formatEscaped(label, stash)
+    return keep(`<a href="${href}" target="_blank" rel="noreferrer">${formatEscaped(label, stash)}</a>`)
   })
   out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
   return out.replace(/\u0000(\d+)\u0000/g, (_, index) => stash[Number(index)])

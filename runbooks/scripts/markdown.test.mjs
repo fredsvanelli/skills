@@ -42,3 +42,12 @@ test('renders the blocks the templates write', () => {
   assert.equal(renderMarkdown('a\n\n---\n\nb'), '<p>a</p><hr><p>b</p>')
   assert.equal(renderMarkdown(''), '')
 })
+test('formats code and bold inside a link label', () => {
+  assert.equal(renderMarkdown('[`code`](http://x)'), '<p><a href="http://x" target="_blank" rel="noreferrer"><code>code</code></a></p>')
+  assert.equal(renderMarkdown('[**b** `c`](http://x)'), '<p><a href="http://x" target="_blank" rel="noreferrer"><strong>b</strong> <code>c</code></a></p>')
+})
+test('drops a link whose target holds a code span', () => {
+  assert.equal(renderMarkdown('[x](http://x/`y`)'), '<p>x</p>')
+  assert.equal(renderMarkdown('[x](`javascript:alert(1)`)'), '<p>x</p>')
+  assert.equal(renderMarkdown('[`a`](http://x/`y`)'), '<p><code>a</code></p>')
+})
