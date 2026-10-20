@@ -55,7 +55,9 @@ With `file`, `dir` and `route`, the code is the new behavior: compare what it do
 
 Write the changes as a list: what the user sees or does now that differs from the runbook, each with the source's id when it has one. Add the last report's findings that the change explains.
 
-A change of upstream mode is also a change. It comes from the source (`text "make it mocked"`), from an `upstream:` the user edited by hand, or from a new config `upstream.mode` that differs from the runbook's effective mode. Write the target mode on the list. Only a `ui` runbook has a mode.
+A change of upstream mode is also a change. It comes from the source (`text "make it mocked"`), from an `upstream:` the user edited by hand, or from a changed config default. The `upstream` field of the list output is already the effective mode, so after a config change it names the new mode while the content still follows the old one. Tell the old mode from the content. A fixtures folder, request-check steps and persistence under "Not covered" mean the runbook was written `mocked`. Persistence steps and Preconditions with the run suffix mean it was written `live`. When that differs from the effective mode, the content is the side to change. Write the target mode on the list.
+
+A change to `mocked` needs `upstream.urlEnv` in the config, or the loader reports a problem. When the config has none, leave the mode unchanged, offer `/runbooks:settings` to set it (the `upstream` group), or `/runbooks:setup` when the config has no `upstream` block, and continue only after the config has `urlEnv`. When the user declines, say that the mode stays as it is and why. Only a `ui` runbook has a mode.
 
 Done when every behavior change the source promises, or the code of a `file`, `dir` or `route` source shows, is on the list.
 
