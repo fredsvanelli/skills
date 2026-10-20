@@ -42,11 +42,13 @@ const sumGroups = (groups, name) => {
   return { covered: rows.reduce((n, g) => n + g.covered, 0), total: rows.reduce((n, g) => n + g.total, 0) }
 }
 
-// Entry points only: the Runbooks page never runs a requirement source.
+// Entry points only: the Runbooks page never runs a requirement source. The warnings are the
+// entry sources' own; runbook problems already show on each row.
 function entryCoverage(root, config, runbooks) {
   const status = {}
-  const entries = collect(root, config, 'entries', [], status)
-  return computeCoverage({
+  const warnings = []
+  const entries = collect(root, config, 'entries', warnings, status)
+  const result = computeCoverage({
     runbooks,
     entries,
     requirements: [],
@@ -55,12 +57,13 @@ function entryCoverage(root, config, runbooks) {
     stack: config.stack,
     unavailable: { entries: !status.complete, requirements: false },
   })
+  return { result, warnings }
 }
 
 export function runbooksView(root, config, { today }) {
   const staleDays = config.staleDays
   const runbooks = loadRunbooks(root, config)
-  const result = entryCoverage(root, config, runbooks)
+  const { result, warnings } = entryCoverage(root, config, runbooks)
   const names = new Set([...runbooks.map((rb) => rb.capability), ...result.groups.map((group) => group.name)])
   const capabilities = [...names].map((name) => {
     const runbooksOf = runbooks.filter((rb) => rb.capability === name).sort(byId)
@@ -73,7 +76,7 @@ export function runbooksView(root, config, { today }) {
     return { name, problems: stale + uncovered.length, stale, uncovered, coverage: sumGroups(result.groups, name), runbooks: rows }
   })
   capabilities.sort((a, b) => (a.name === NO_SLICE) - (b.name === NO_SLICE) || a.name.localeCompare(b.name))
-  return { staleDays, today, capabilities }
+  return { staleDays, today, warnings, capabilities }
 }
 
 const reportFileName = (lastRun) => (typeof lastRun?.report === 'string' ? path.basename(lastRun.report) : null)

@@ -119,6 +119,13 @@ test('runbooksView runs no requirement source', () => withProject(({ root, confi
   assert.equal(fs.existsSync(path.join(root, 'ran.txt')), false)
 }, (raw) => { raw.requirements = [{ extractor: 'command', command: 'echo ran > ran.txt; echo "[]"' }] }))
 
+test('runbooksView returns the entry-source warnings and leaves runbook problems out', () => withProject(({ root, config }) => {
+  const view = runbooksView(root, config, TODAY)
+  assert.equal(view.warnings.length, 1)
+  assert.match(view.warnings[0], /root "\.\.\/gone" does not exist/)
+  assert.deepEqual(runbooksView(root, { ...config, entries: config.entries.slice(0, 1) }, TODAY).warnings, [])
+}, (raw) => { raw.entries.push({ extractor: 'next-app-router', root: '../gone', glob: '**/page.tsx' }) }))
+
 test('a partial report newer than last_run leaves the row unchanged and shows in the history', () => withProject(({ root, config }) => {
   const name = '2026-10-15-1200-billing.issue-invoice.md'
   fs.writeFileSync(path.join(root, RUNS, name), REPORT('partial: true\n', TABLE))

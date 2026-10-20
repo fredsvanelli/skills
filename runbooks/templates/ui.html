@@ -60,6 +60,9 @@
   .error { padding: 18px 22px; border: 1px solid color-mix(in srgb, var(--failed) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--failed) 8%, transparent); }
   .error b { display: block; margin-bottom: 4px; color: var(--failed); font: 600 14px var(--mono); }
   .error p { margin: 0; font: 14px var(--mono); overflow-wrap: anywhere; }
+  .warn { margin-bottom: 28px; padding: 14px 20px; border: 1px solid color-mix(in srgb, var(--blocked) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--blocked) 8%, transparent); }
+  .warn b { display: block; margin-bottom: 4px; color: var(--blocked); font: 600 14px var(--mono); }
+  .warn ul { margin: 0; padding-left: 20px; font: 13px var(--mono); overflow-wrap: anywhere; }
 
   .counters { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 32px; }
   .counter { min-width: 150px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--muted); font-size: 13px; }
@@ -291,6 +294,11 @@
     target.replaceChildren(el('div', 'error', el('b', null, title), el('p', null, String(error?.message ?? error))))
   }
   const showMessage = (text) => view.replaceChildren(el('p', 'message', text))
+  // A source that did not run leaves its items out, so the counts below it are short. Spread into replaceChildren.
+  const warningBox = (warnings) => (warnings?.length > 0
+    ? [el('div', 'warn', el('b', null, 'Some sources did not run; the numbers below leave out their items'),
+      el('ul', null, ...warnings.map((warning) => el('li', null, warning))))]
+    : [])
 
   function setMenu(page) {
     document.getElementById('menu-runbooks').className = page === 'runbooks' ? 'on' : ''
@@ -389,12 +397,12 @@
     if (stale()) return
     capabilitiesSide(data, name)
     if (name === null) {
-      view.replaceChildren(counters(data.capabilities, data.staleDays), ...data.capabilities.map((cap) => capabilitySection(cap, true)))
+      view.replaceChildren(...warningBox(data.warnings), counters(data.capabilities, data.staleDays), ...data.capabilities.map((cap) => capabilitySection(cap, true)))
       return
     }
     const cap = data.capabilities.find((c) => c.name === name)
     if (!cap) return showMessage(`No capability named "${name}".`)
-    view.replaceChildren(counters([cap], data.staleDays), capabilitySection(cap, false))
+    view.replaceChildren(...warningBox(data.warnings), counters([cap], data.staleDays), capabilitySection(cap, false))
   }
 
   // Runbook detail
@@ -661,6 +669,7 @@
     const uncoveredHeading = el('h4', null, 'Uncovered')
     if (uncovered.length > 0) uncoveredHeading.append(el('span', 'c', String(uncovered.length)))
     view.replaceChildren(
+      ...warningBox(result.warnings),
       el('h3', null, 'overall'),
       el('div', 'sub', sub.join(' · ')),
       el('div', 'stats',
@@ -680,7 +689,8 @@
 
   function sliceView(data, name, capabilities) {
     const groups = data.result.groups
-    if (groups.length === 0) return showMessage(`No entry point falls in the slice "${shownName(name)}".`)
+    const warnings = warningBox(data.result.warnings)
+    if (groups.length === 0) return view.replaceChildren(...warnings, el('p', 'message', `No entry point falls in the slice "${shownName(name)}".`))
     const items = groups.flatMap((g) => (g.items ?? []).map((item) => ({ ...item, surface: g.surface ?? null })))
       .sort((a, b) => a.id.localeCompare(b.id))
     const count = (state) => items.filter((item) => item.state === state).length
@@ -708,7 +718,7 @@
       if (item.state === 'uncovered') tr.className = 'unc'
       return tr
     })
-    view.replaceChildren(el('h3', null, shownName(name)), sub, table(['Entry point', 'State', 'Runbooks', 'Scripts'], rows))
+    view.replaceChildren(...warnings, el('h3', null, shownName(name)), sub, table(['Entry point', 'State', 'Runbooks', 'Scripts'], rows))
   }
 
   async function coveragePage(name, stale) {
