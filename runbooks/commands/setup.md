@@ -87,7 +87,7 @@ Keys not asked keep their defaults from `config.md`, Upstream.
 **Then, only for keys detection could not settle:**
 
 - `language` for runbook prose.
-- The `commits` policy for `runbooks` and `setup`; suggest `ask` for both.
+- The `commits` policy for `runbooks` and `setup`, one question each, with three options: Ask before committing (`ask`, recommended), Commit automatically (`auto`) and Never commit (`never`: the command neither commits nor asks).
 - When the stack has `ui`: `app.baseUrl` and `app.start`; `accounts` (role names and the env var names holding each email and password; ask for names only); `mcp.secretsFile`, when it is not `.env.local`; whether to add the two Playwright MCP servers to `.mcp.json`.
 
 A `backend` stack skips every browser question.

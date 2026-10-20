@@ -19,7 +19,7 @@ Those migration edits go into the command's commit by the `setup` policy; a comm
 
 | Policy | Behavior |
 |---|---|
-| `never` | leave the files in the working tree and list their paths at the end |
+| `never` | leave the files in the working tree without asking and list their paths at the end |
 | `ask` | list the files and the proposed message, then ask with `AskUserQuestion`: Commit or Leave uncommitted |
 | `auto` | commit without asking |
 
