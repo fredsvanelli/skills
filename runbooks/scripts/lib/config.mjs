@@ -36,6 +36,7 @@ const DEFAULTS = {
   viewports: {},
   design: null,
   upstream: null,
+  staleDays: 30,
 }
 
 const DESIGN_SYSTEMS = ['figma', 'claude-design', 'adobe-xd', 'files', 'other']
@@ -152,6 +153,7 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
     }
   }
   validateUpstream(config.upstream, config.stack)
+  if (!Number.isInteger(config.staleDays) || config.staleDays < 1) throw new ConfigError('staleDays must be a positive integer')
   for (const [type, policy] of Object.entries(config.commits)) {
     if (!COMMIT_POLICIES.includes(policy)) {
       throw new ConfigError(`commits.${type} must be one of ${COMMIT_POLICIES.join(', ')}`)

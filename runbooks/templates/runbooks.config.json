@@ -16,5 +16,6 @@
   "commits": { "runbooks": "ask", "setup": "ask" },
   "mcp": { "headless": "runbooks-playwright", "headed": "runbooks-playwright-headed", "secretsFile": ".env.local" },
   "viewports": {},
-  "design": null
+  "design": null,
+  "staleDays": 30
 }

@@ -50,6 +50,7 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `git` | `git.base`, `git.protected`, `git.messageFormat` |
 | `commits` | `commits.runbooks`, `commits.setup` |
 | `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `root`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `tokenEnv`, `serverFile`. Only with `ui` |
+| `ui` | `staleDays` |
 | `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in `.mcp.json`. Only with `ui` |
 
 `paths.runbooks` is not in any group: the config lives at `docs/runbooks/runbooks.config.json` whatever it says, and moving the runbooks means moving their reports and ignore rules too. When the user asks for it, say so and stop.
