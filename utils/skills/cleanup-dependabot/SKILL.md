@@ -11,7 +11,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-# /utils:cleanup-dependabot
+# Clean up the Dependabot queue
 
 Empties the Dependabot PR queue **without breaking the project's flow**: everything reaches `main`
 through `develop`, nobody merges red CI, and a major only goes in with someone watching.

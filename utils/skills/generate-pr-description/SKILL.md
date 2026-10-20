@@ -9,7 +9,7 @@ allowed-tools:
   - Grep
 ---
 
-# /utils:generate-pr-description
+# Write a PR description
 
 Reads the branch's real diff and writes the PR description **for the reviewer**, not for the
 author. The bar: the reviewer understands what changed, where to look first, and can test it

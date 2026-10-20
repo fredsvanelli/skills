@@ -3,7 +3,7 @@ name: cleanup-branches
 description: "Delete stale git branches whose code was already merged into the production branch (main/master) or develop. Use when the user asks to clean up, prune, or delete old/merged branches — locally (default) or on the remote with --origin."
 ---
 
-# /utils:cleanup-branches
+# Clean up merged branches
 
 Find and delete branches that hold nothing but already-merged code, then report what was
 removed and what is left.
