@@ -167,13 +167,22 @@ export function coverageView(root, config, slice) {
   const names = new Set([...Object.keys(config.slices), ...result.groups.map((group) => group.name)])
   const slices = [...names].map((name) => ({ name, ...(sumGroups(result.groups, name) ?? { covered: 0, total: 0 }) })).sort(byName)
   if (slice === undefined) return { slices, scope: 'overall', result }
+  // The counts come from the slice's own groups, so they agree with its uncovered list.
+  const groups = result.groups.filter((group) => group.name === slice)
+  const count = (field) => groups.reduce((n, group) => n + group[field], 0)
   return {
     slices,
     scope: slice,
     result: {
       ...result,
-      groups: result.groups.filter((group) => group.name === slice),
-      entries: { ...result.entries, uncovered: result.entries.uncovered.filter((entry) => (entry.slice ?? NO_SLICE) === slice) },
+      groups,
+      entries: {
+        total: count('total'),
+        covered: count('covered'),
+        pending: count('pending'),
+        planned: count('planned'),
+        uncovered: result.entries.uncovered.filter((entry) => (entry.slice ?? NO_SLICE) === slice),
+      },
     },
   }
 }

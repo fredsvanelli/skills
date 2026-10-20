@@ -201,3 +201,12 @@ test('coverageView sums surfaces per slice and filters by slice', () => withProj
   assert.deepEqual(billing.result.groups.map((g) => g.name), ['billing'])
   assert.deepEqual(ids(coverageView(root, config, '(no slice)').result.entries.uncovered).sort(), ['/', '/settings'])
 }))
+
+test('coverageView with a slice counts only that slice in result.entries', () => withProject(({ root, config }) => {
+  const { entries } = coverageView(root, config, 'billing').result
+  assert.deepEqual({ ...entries, uncovered: ids(entries.uncovered) }, { total: 5, covered: 2, pending: 2, planned: 0, uncovered: ['GET /admin/invoices'] })
+  const none = coverageView(root, config, '(no slice)').result.entries
+  assert.deepEqual([none.total, none.covered, none.pending, none.planned, none.uncovered.length], [2, 0, 0, 0, 2])
+  const nothing = coverageView(root, config, 'nope').result.entries
+  assert.deepEqual(nothing, { total: 0, covered: 0, pending: 0, planned: 0, uncovered: [] })
+}))

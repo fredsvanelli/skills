@@ -319,7 +319,8 @@
   }
 
   function slicesSide(data, selected) {
-    const entries = data.result.entries
+    // On a slice page result.entries holds that slice only; every entry point sits in exactly one slice.
+    const sum = (field) => data.slices.reduce((n, slice) => n + slice[field], 0)
     const item = (href, name, covered, total, on) => {
       const value = roundPct(covered, total)
       const shown = el('span', `pct${value !== null && value < 50 ? ' low' : ''}`, value === null ? '-' : `${value}%`)
@@ -328,7 +329,7 @@
     }
     side.replaceChildren(
       el('div', 'label', 'Slices'),
-      item('#/coverage', 'overall', entries.covered, entries.total, selected === null),
+      item('#/coverage', 'overall', sum('covered'), sum('total'), selected === null),
       el('hr'),
       ...data.slices.map((slice) => item(`#/coverage/${routeName(slice.name)}`, shownName(slice.name), slice.covered, slice.total, selected === slice.name)),
     )
