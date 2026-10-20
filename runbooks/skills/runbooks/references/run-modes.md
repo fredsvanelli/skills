@@ -87,7 +87,8 @@ Needs Node 20.12+ (`process.loadEnvFile`). Write `.runbooks/tmp/<run id>.mjs` us
 - `process.loadEnvFile('<mcp.secretsFile>')` for the account variables; the script reads them, the agent never prints them;
 - `chromium.launch({ headless: <true for headless, false for headed> })`;
 - with viewports, one browser context per viewport, sized as in "Viewports", running every block of that pass;
-- one block per step in run order, each wrapped in try/catch, saving a screenshot to `<paths.evidence>/<run id>/<step>.png` (`<run id>/<viewport>/<step>.png` with viewports) and printing one JSON line `{ "step", "viewport", "seen", "ok" }`, with `viewport` null when the runbook has none;
+- one block per step in run order, each wrapped in try/catch, saving a screenshot to `<paths.evidence>/<run id>/<step>.png` (`<run id>/<viewport>/<step>.png` with viewports) and printing one JSON line `{ "step", "viewport", "seen", "ok", "unmatched" }`, with `viewport` null when the runbook has none;
+- when the upstream server runs, before each step's block a `POST` of `{ step }` to `<RUNBOOKS_UPSTREAM_URL>/__runbooks/select` (the script posts `{ runbook, mode }` once before the first step, with the runbook's `upstream` mode), and after the block the `unmatched` list of `GET /__runbooks/state` in that step's JSON line (`[]` when none). The agent applies the unmatched rule of `run.md`, step 4, to that list: a step with an entry is `blocked`, naming the request;
 - skip a step whose parent did not pass at the same viewport and print it as `blocked-by-parent`.
 
 Run it with `node .runbooks/tmp/<run id>.mjs`, read the JSON lines, and set the states from them. Delete the script after the report is written.
@@ -118,6 +119,7 @@ Load the browser skill for Claude in Chrome when one is listed, then use the `mc
 
 1. Fill `${CLAUDE_PLUGIN_ROOT}/templates/prompt.md` with the runbook's role, `app.baseUrl`, preconditions and steps in run order. Never put a credential in it. With viewports, write one prompt per viewport, holding only the steps that run at it.
 2. Save it to `.runbooks/prompts/<run id>.md` (`<run id>-<viewport>.md` with viewports), print it, and tell the user to sign in as the role, set the browser to the viewport's size when there is one, paste the prompt into the Claude in Chrome extension, and bring back the reply with `/runbooks:run <id> --import <file or pasted text>`. The replies of several viewports can come back in one import.
+3. When the upstream server runs: if the prompt sends the steps one at a time, the agent posts `{ step }` to `/__runbooks/select` before sending each. If one prompt covers the whole runbook, the agent selects only the runbook, says in the report's Notes that step folders of fixtures are not served in this run, and reads `unmatched` once after the user's reply. The steps it names are `blocked`, with the request as the reason.
 
 ### Import
 
