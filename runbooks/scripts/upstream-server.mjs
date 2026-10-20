@@ -5,12 +5,15 @@ import net from 'node:net'
 import tls from 'node:tls'
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 
 export const VERSION = '1.1.0'
 
 const MODES = ['mocked', 'live', 'record']
 const STEP_DIR = /^S\d+$/
 const CONTROL = '/__runbooks/'
+const NEVER_RECORDED = ['set-cookie', 'authorization', 'cookie', 'content-length', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive']
 
 // Reads the .json files of a runbook folder (step null) and of its S<nn> subfolders. Invalid files are skipped.
 function readFixtures(dir) {
@@ -190,8 +193,41 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     }
   }
 
-  // Pipes the request to the target and streams the response back. Used by live mode, and by record mode in Task 8.
-  function proxy(req, res, request) {
+  const fixtureFile = ({ method, path: requestPath, query }) => {
+    const base = `${method.toLowerCase()}-${requestPath.toLowerCase().replace(/[^a-z0-9]/g, '-')}`
+    const hash = Object.keys(query).length ? `-${crypto.createHash('sha1').update(new URLSearchParams(query).toString()).digest('hex').slice(0, 8)}` : ''
+    return `${base}${hash}.json`
+  }
+
+  // Saves the response as a fixture of the selected runbook. Writes nothing when the runbook already has an
+  // equal one, and puts a differing response in the current step's folder.
+  function saveFixture(request, upRes, raw) {
+    const dir = state.runbook ? fixtureDir() : null
+    if (!dir) return
+    const skip = new Set([...NEVER_RECORDED, ...redactHeaders.map((name) => String(name).toLowerCase())])
+    const headers = {}
+    for (const [name, value] of Object.entries(upRes.headers)) if (!skip.has(name)) headers[name] = value
+    const body = parseBody(raw, upRes.headers['content-type'])
+    const response = { status: upRes.statusCode, ...(Object.keys(headers).length ? { headers } : {}), ...(body === null ? {} : { body }) }
+    const existing = matchFixture(readFixtures(dir), request, state.step)
+    let folder = dir
+    if (existing) {
+      const stored = existing.response
+      if (stored.status === response.status && isDeepStrictEqual(stored.body ?? null, body)) return
+      if (state.step) folder = path.join(dir, state.step)
+    }
+    const saved = {
+      request: { method: request.method, path: request.path, ...(Object.keys(request.query).length ? { query: request.query } : {}) },
+      response,
+      source: `recorded ${new Date().toISOString().slice(0, 10)} from ${targetUrl().origin}`,
+    }
+    fs.mkdirSync(folder, { recursive: true })
+    fs.writeFileSync(path.join(folder, fixtureFile(request)), `${JSON.stringify(saved, null, 2)}\n`)
+  }
+
+  // Pipes the request to the target and streams the response back. In record mode (record true) it asks for an
+  // uncompressed response and buffers it so it can be saved as a fixture, except for event streams.
+  function proxy(req, res, request, record = false) {
     const base = targetUrl()
     const entry = { ...request, body: null, step: state.step, status: 0 }
     const chunks = []
@@ -213,12 +249,19 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
       port: base.port,
       method: req.method,
       path: req.url,
-      headers: { ...req.headers, host: base.host },
+      headers: { ...req.headers, host: base.host, ...(record ? { 'accept-encoding': 'identity' } : {}) },
     }, (upRes) => {
       finish(upRes.statusCode)
       res.writeHead(upRes.statusCode, upRes.statusMessage, upRes.rawHeaders)
-      upRes.pipe(res)
       upRes.on('error', () => res.destroy())
+      if (!record || String(upRes.headers['content-type'] ?? '').includes('text/event-stream')) return upRes.pipe(res)
+      const parts = []
+      upRes.on('data', (chunk) => parts.push(chunk))
+      upRes.on('end', () => {
+        const raw = Buffer.concat(parts)
+        saveFixture(request, upRes, raw.toString('utf8'))
+        res.end(raw)
+      })
     })
     upstream.on('error', () => {
       if (!res.headersSent) unreachable()
@@ -234,10 +277,10 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   async function handle(req, res) {
     const url = new URL(req.url, 'http://upstream.local')
     if (url.pathname.startsWith(CONTROL)) return control(req, res, url.pathname)
-    if (state.mode === 'live') {
+    if (state.mode === 'live' || state.mode === 'record') {
       const query = {}
       for (const [key, value] of url.searchParams) if (!(key in query)) query[key] = value
-      return proxy(req, res, { method: req.method.toUpperCase(), path: url.pathname, query })
+      return proxy(req, res, { method: req.method.toUpperCase(), path: url.pathname, query }, state.mode === 'record')
     }
     if (req.method === 'OPTIONS') {
       return send(req, res, 204, {
@@ -251,10 +294,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const query = {}
     for (const [key, value] of url.searchParams) if (!(key in query)) query[key] = value
     const request = { method: req.method.toUpperCase(), path: url.pathname, query }
-    // The mode switch. Live is handled above; Task 8 adds record.
-    const answer = state.mode === 'mocked'
-      ? mocked(req, res, request)
-      : { status: 501, send: () => sendJson(req, res, 501, { error: `mode ${state.mode} is not available` }) }
+    const answer = mocked(req, res, request)
     requests.push({ ...request, body: parseBody(raw, req.headers['content-type']), step: state.step, status: answer.status })
     log(`${request.method} ${request.path} -> ${answer.status}`)
     answer.send()

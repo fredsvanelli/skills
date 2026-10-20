@@ -168,14 +168,6 @@ test('an unknown control route answers 404 JSON', async (t) => {
   assert.equal(typeof (await r.json()).error, 'string')
 })
 
-test('record mode answers a 501 placeholder', async (t) => {
-  const s = await start(t, FILES)
-  await s.select({ mode: 'record' })
-  const r = await fetch(`${s.base}/invoices`)
-  assert.equal(r.status, 501)
-  assert.deepEqual(await r.json(), { error: 'mode record is not available' })
-})
-
 // A second http.Server plays the live API.
 async function fakeApi(t, handler) {
   const seen = []
@@ -341,4 +333,94 @@ test('an empty target in live mode answers 502 with an empty target', async (t) 
   const r = await fetch(`${s.base}/invoices`)
   assert.equal(r.status, 502)
   assert.deepEqual(await r.json(), { error: 'upstream unreachable', target: '' })
+})
+
+const RECORD_FILES = { 'billing/list/.keep': '' }
+
+function recordApi(t, handler) {
+  return fakeApi(t, handler ?? ((req, res) => {
+    res.writeHead(200, {
+      'content-type': 'application/json', 'set-cookie': 'sid=1', authorization: 'Bearer x', 'x-api-key': 'k', 'x-keep': 'yes',
+    })
+    res.end('{"items":[1]}')
+  }))
+}
+
+const readJson = (root, rel) => JSON.parse(fs.readFileSync(path.join(root, 'billing/list', rel), 'utf8'))
+const exists = (root, rel) => fs.existsSync(path.join(root, 'billing/list', rel))
+
+test('record mode saves a first response at runbook level without secret headers', async (t) => {
+  const fake = await recordApi(t)
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}/v1`, redactHeaders: ['X-Api-Key'] })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  const r = await fetch(`${s.base}/v1/invoices`, { headers: { 'accept-encoding': 'gzip' } })
+  assert.equal(r.status, 200)
+  assert.deepEqual(await r.json(), { items: [1] })
+  assert.equal(fake.seen[0].headers['accept-encoding'], 'identity')
+  const saved = readJson(s.fixturesRoot, 'get--v1-invoices.json')
+  assert.deepEqual(saved.request, { method: 'GET', path: '/v1/invoices' })
+  assert.equal(saved.response.status, 200)
+  assert.deepEqual(saved.response.body, { items: [1] })
+  assert.deepEqual(Object.keys(saved.response.headers).sort(), ['content-type', 'date', 'x-keep'])
+  assert.equal(saved.source, `recorded ${new Date().toISOString().slice(0, 10)} from http://127.0.0.1:${fake.port}`)
+  const state = await s.state()
+  assert.equal(state.requests[0].status, 200)
+  assert.deepEqual(s.logs, ['GET /v1/invoices -> 200'])
+})
+
+test('record mode writes nothing for an identical response and a step file for a different one', async (t) => {
+  let body = '{"items":[1]}'
+  const fake = await recordApi(t, (req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(body) })
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await fetch(`${s.base}/invoices`)
+  await fetch(`${s.base}/invoices`)
+  assert.deepEqual(fs.readdirSync(path.join(s.fixturesRoot, 'billing/list')).sort(), ['.keep', 'get--invoices.json'])
+  await s.select({ step: 'S03' })
+  await fetch(`${s.base}/invoices`)
+  assert.ok(!exists(s.fixturesRoot, 'S03/get--invoices.json'))
+  body = '{"items":[2]}'
+  await fetch(`${s.base}/invoices`)
+  assert.deepEqual(readJson(s.fixturesRoot, 'S03/get--invoices.json').response.body, { items: [2] })
+  assert.deepEqual(readJson(s.fixturesRoot, 'get--invoices.json').response.body, { items: [1] })
+})
+
+test('record mode names query files by hash and keeps the query as first values', async (t) => {
+  const fake = await recordApi(t)
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await fetch(`${s.base}/Invoices?page=1&page=2`)
+  const name = fs.readdirSync(path.join(s.fixturesRoot, 'billing/list')).find((n) => n.startsWith('get--invoices-'))
+  assert.match(name, /^get--invoices-[0-9a-f]{8}\.json$/)
+  assert.deepEqual(readJson(s.fixturesRoot, name).request, { method: 'GET', path: '/Invoices', query: { page: '1' } })
+})
+
+test('record mode stores text bodies as strings and omits the body of a 204', async (t) => {
+  const fake = await recordApi(t, (req, res) => {
+    if (req.url === '/gone') { res.writeHead(204); return res.end() }
+    if (req.url === '/bad') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{ nope') }
+    res.writeHead(200, { 'content-type': 'text/csv' }); res.end('a,b\n1,2\n')
+  })
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await fetch(`${s.base}/export`)
+  await fetch(`${s.base}/gone`, { method: 'DELETE' })
+  await fetch(`${s.base}/bad`)
+  assert.equal(readJson(s.fixturesRoot, 'get--export.json').response.body, 'a,b\n1,2\n')
+  assert.ok(!('body' in readJson(s.fixturesRoot, 'delete--gone.json').response))
+  assert.equal(readJson(s.fixturesRoot, 'get--bad.json').response.body, '{ nope')
+})
+
+test('record mode with no runbook proxies and writes nothing; event streams are not recorded', async (t) => {
+  const fake = await recordApi(t, (req, res) => {
+    if (req.url === '/events') { res.writeHead(200, { 'content-type': 'text/event-stream' }); return res.end('data: 1\n\n') }
+    res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}')
+  })
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ mode: 'record' })
+  assert.equal((await fetch(`${s.base}/invoices`)).status, 200)
+  assert.deepEqual(fs.readdirSync(s.fixturesRoot), ['billing'])
+  await s.select({ runbook: 'billing.list' })
+  assert.equal(await (await fetch(`${s.base}/events`)).text(), 'data: 1\n\n')
+  assert.deepEqual(fs.readdirSync(path.join(s.fixturesRoot, 'billing/list')), ['.keep'])
 })
