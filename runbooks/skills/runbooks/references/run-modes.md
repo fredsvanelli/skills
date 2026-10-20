@@ -1,6 +1,6 @@
 # Run modes
 
-Modes apply to `ui` runbooks. An `api` runbook always runs in mode `test`, through its script (see "test" below), and `--mode` does not change that.
+Modes apply to `ui` runbooks. An `api` runbook always runs in mode `test`, through its script (see "test" below), and `--mode` does not change that. Every mode works with both upstream modes, `live` and `mocked` (`upstream.md`). While the upstream server runs, the agent steers it through its control routes, and never reads a result from them except the requests a step checks.
 
 | Mode | Who acts | Who sets the state | Login |
 |---|---|---|---|
@@ -10,7 +10,7 @@ Modes apply to `ui` runbooks. An `api` runbook always runs in mode `test`, throu
 | `chrome` | the agent, Claude in Chrome | the agent | the user, beforehand |
 | `prompt` | the Claude in Chrome extension | the user, by pasting the reply | the user, beforehand |
 | `script` | a temporary Playwright script (fallback) | the agent, from the script output | env vars read by the script |
-| `test` | `api` runbooks only: the project's test command on the runbook's `scripts` | `runbooks.mjs junit`, from the JUnit report | the script's own helpers |
+| `test` | `api` runbooks, and `ui` runbooks whose script has one test per step: the project's test command on the runbook's `scripts` | `runbooks.mjs junit`, from the JUnit report | the script's own helpers |
 
 ## Choosing the mode
 
@@ -25,6 +25,7 @@ A mode is available when:
 | `headed` | `.mcp.json` has the `mcp.headed` server and its tools are loaded in this session |
 | `chrome` | the `mcp__claude-in-chrome__*` tools, or a tool that enables them, are in this session |
 | `prompt` | always |
+| `test` | for a `ui` runbook: its `scripts` hold a script with one test per step (the mocked shape, `upstream.md`, "Scripts"). A live script has one test with a `test.step` per step, so the question says `test` is not offered for it |
 
 Offer only the available modes, in the table's order, each with a one-line description from the first table. Mark `headless` "(Recommended)" and list it first when it is available; otherwise recommend `guided`. `AskUserQuestion` takes four options at most: when five are available, leave `prompt` out of the options and name it in the question text as an answer the user can type under "Other". Name the unavailable modes in the question text with the reason, for example "headed: `.mcp.json` has no `runbooks-playwright-headed` server".
 
@@ -67,7 +68,7 @@ A reference that cannot be read (the server is not loaded, its sign-in expired, 
 
 ## guided
 
-Before each viewport's pass, show the viewport with its size and ask with `AskUserQuestion` whether the browser is set to it. For each step, show the viewport, Parents, Page (full URL), Actions and Expected. Ask with `AskUserQuestion`, options `Passed`, `Failed`, `Blocked`, `Waive`; the question asks the user to describe in the notes what they saw on Failed and what is missing on Blocked. Record the user's words. When a failure has no description, record "reason to collect" and ask all of those in one question at the end of the run.
+Before each viewport's pass, show the viewport with its size and ask with `AskUserQuestion` whether the browser is set to it. When the upstream server runs, select the step on it (`POST /__runbooks/select` with `{ step }`) before showing the step. For each step, show the viewport, Parents, Page (full URL), Actions and Expected. Ask with `AskUserQuestion`, options `Passed`, `Failed`, `Blocked`, `Waive`; the question asks the user to describe in the notes what they saw on Failed and what is missing on Blocked. Record the user's words. When a failure has no description, record "reason to collect" and ask all of those in one question at the end of the run.
 
 ## headless and headed
 
@@ -95,15 +96,15 @@ Run it with `node .runbooks/tmp/<run id>.mjs`, read the JSON lines, and set the 
 
 ## test
 
-For `api` runbooks. Needs `tests.api` in the config.
+For `api` runbooks, with `tests.api`. For a `ui` runbook, the same flow with `tests.ui` in its place, as the list below says.
 
-1. **Preconditions.** `tests.api.command` is set, and `tests.api.root` exists when given. When `tests.api.baseUrl` is set, it answers (`curl -s -o /dev/null -w '%{http_code}' <baseUrl>`); otherwise the app is not checked, because the scripts boot it themselves.
+1. **Preconditions.** `tests.<surface>.command` is set, and `tests.<surface>.root` exists when given. When `tests.<surface>.baseUrl` is set, it answers (`curl -s -o /dev/null -w '%{http_code}' <baseUrl>`); otherwise the app is not checked, because the scripts boot it themselves. For `ui`, `run` checks the upstream server and the app's reach to it before this item (`commands/run.md`, step 2).
 2. **Sync.** Every step has exactly one test whose name starts with its id in `scripts`, and no test there names a step the runbook does not have. Read the test names in the script files. When `scripts` is empty, or a step has no test, or a test names a missing step, follow `${CLAUDE_PLUGIN_ROOT}/commands/to-test.md` for the runbook first, skipping its "Run once" item: this run is that run. Content (whether each assertion matches its Expected) is not checked here; that is `audit-runbooks`'s job.
-3. **Execute.** Run `tests.api.command` in `tests.api.root` (default the project root), with `{files}` replaced by the `scripts` paths relative to that folder and `{junit}` by `.runbooks/junit/<run id>.xml` (absolute path). Create the folder first.
-4. **Read.** `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" junit <id> --file .runbooks/junit/<run id>.xml --json`, with `--waive <steps>` when the user asked before the run to skip steps. It gives one state per step with parents resolved, the run `result`, and the tests outside the runbook. A missing report means the command did not write `{junit}`: show its output and stop.
+3. **Execute.** Run `tests.<surface>.command` in `tests.<surface>.root` (default the project root), with `{files}` replaced by the `scripts` paths relative to that folder and `{junit}` by `.runbooks/junit/<run id>.xml` (absolute path). Create the folder first. For `ui`, put `RUNBOOKS_UPSTREAM_URL` (the server origin, `http://127.0.0.1:<upstream.port>`) and `RUNBOOKS_RUN_ID` (the run suffix) in the command's environment, so the script selects its runbook and step in `beforeEach` and creates live data with the run suffix. The agent selects nothing in this mode.
+4. **Read.** `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" junit <id> --file .runbooks/junit/<run id>.xml --json`, with `--waive <steps>` when the user asked before the run to skip steps. A `ui` runbook with `viewports` has one test per step and viewport, named `S01 <title> @ <viewport>`, and `junit` gives one state per step and viewport. It gives one state per step with parents resolved, the run `result`, and the tests outside the runbook. A missing report means the command did not write `{junit}`: show its output and stop.
 5. **Script mistakes.** A failure caused by the script itself (an import, a helper, a fixture, a typo in a route) may be fixed and the run repeated; say in the report's Notes what was fixed. Never loosen or remove an assertion so the app passes: a step whose Expected the app does not meet is a `failed` finding.
 
-The report's `mode` is `test` and its `executor` is "the project's test command". Evidence is the JUnit report path. Tests outside the runbook go in the report's "Other tests in the file" section and do not change its `result`.
+The report's `mode` is `test` and its `executor` is "the project's test command". Evidence is the JUnit report path, plus the fixtures folder for a `mocked` runbook. A `ui` script takes no screenshots for design, so the report has no "Design differences" and its Notes say the design was not compared in this mode. Tests outside the runbook go in the report's "Other tests in the file" section and do not change its `result`.
 
 ## chrome
 

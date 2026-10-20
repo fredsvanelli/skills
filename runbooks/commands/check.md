@@ -25,7 +25,7 @@ By default the latest run is the newest report of the id, partial runs (`--steps
    - Exit code 2 means the script could not run. Show its message: an unknown id gets the ids from `... list` that look closest; a missing config gets an offer of `/runbooks:setup`.
 2. When `latest` is `null`, say that the runbook has never been run, or, with `--full`, that it has never had a full run. When `lastRun.report` is set anyway, add that `last_run` cites a report that does not exist. Then offer `/runbooks:run <id>`. Stop.
 3. Otherwise read the report at `latest.path` and show:
-   - the result, the date, the commit, the branch and the mode, and whether the run was partial (`--steps`);
+   - the result, the date, the commit, the branch, the mode and the `upstream` mode (`live` or `mocked`), and whether the run was partial (`--steps`);
    - the count of steps per state, from `latest.counts`;
    - the report's step table as it is written;
    - each failure with Expected and Seen, and each blocked step with what was missing, copied from the report's sections;
