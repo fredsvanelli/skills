@@ -109,7 +109,7 @@ Matching in `mocked` mode:
 
 ### The copy in the project
 
-When `tests.ui` exists, `setup` copies the server to `<tests.ui.dir>/runbooks-upstream.mjs` and writes the path in `upstream.serverFile`, so CI runs mocked scripts without the plugin. The copy carries the plugin version in its header comment and in `export const VERSION`. `list` and `coverage` warn when the copy is missing or from another version, and `upgrade` replaces it. The copy takes its options from flags, which all take a value:
+When `tests.ui` exists, `setup` copies the server to `<tests.ui.dir>/runbooks-upstream.mjs` and writes the path in `upstream.serverFile`, so CI runs mocked scripts without the plugin. The copy carries the plugin version in its header comment and in `export const VERSION`. `list` and `coverage` warn when the copy is missing or from another version, `/runbooks:setup` refreshes the copy, and `/runbooks:upgrade` offers to run it. The copy takes its options from flags, which all take a value:
 
 ```
 node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--runbook id] [--step Sxx]

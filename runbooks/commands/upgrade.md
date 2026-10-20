@@ -39,7 +39,7 @@ Run `claude plugin list --json` again and read the new `version` of each install
 - the installs left alone in step 1 (other projects), with their `projectPath` and version;
 - that the new version loads after restarting Claude Code.
 
-When a version changed, offer `/runbooks:setup` after the restart: running it again is safe, and it brings the project's config and folders in line with what the new version expects.
+When a version changed, offer `/runbooks:setup` after the restart: running it again is safe, and it brings the project's config and folders in line with what the new version expects. When the config has `upstream.serverFile`, say that `/runbooks:setup` also refreshes the copied upstream server at that path, which `list` and `coverage` warn about when its version differs from the plugin's. `upgrade` itself still copies nothing.
 
 When the project's config has no `stack` (written before stacks existed), say that `setup` now asks for it, along with a test library per surface, and migrates `paths.e2e` to `tests.ui.dir`. Choosing `backend` or `fullstack` adds `api` runbooks, and from then on endpoints count as covered only through `api` runbooks, so endpoint coverage drops on the next `/runbooks:coverage` (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/coverage.md`, By surface).
 

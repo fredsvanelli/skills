@@ -25,7 +25,7 @@ Run `git status --porcelain` now and keep the list: a file that is already dirty
 ## 1. Read the current settings
 
 1. Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop; when `docs/runbooks/runbook.config.json` exists instead, say that setup migrates it from the old plugin name. When it has no `stack` or still has `paths.e2e`, say that `/runbooks:setup` migrates it, offer it, and stop.
-2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep, per runbook, its `surface`, `roles`, `viewports`, `design` and `problems`. Step 3 uses them to find runbooks a change breaks.
+2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep, per runbook, its `surface`, `roles`, `viewports`, `design`, `upstream` and `problems`. Step 3 uses them to find runbooks a change breaks.
 3. Read the `mcpServers` of `.mcp.json`, when it exists.
 
 Done when you hold the config, the runbook list and the MCP servers.
@@ -49,6 +49,7 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `tickets` | `tickets.fetch` |
 | `git` | `git.base`, `git.protected`, `git.messageFormat` |
 | `commits` | `commits.runbooks`, `commits.setup` |
+| `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `root`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `tokenEnv`, `serverFile`. Only with `ui` |
 | `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in `.mcp.json`. Only with `ui` |
 
 `paths.runbooks` is not in any group: the config lives at `docs/runbooks/runbooks.config.json` whatever it says, and moving the runbooks means moving their reports and ignore rules too. When the user asks for it, say so and stop.
@@ -75,6 +76,8 @@ Some changes reach past their own key. Work out each one from the table below, a
 | an account role renamed or removed | list the runbooks that cite it in `roles` or `As:`; offer to apply the rename to them in the same write |
 | `mcp.secretsFile` or `paths.evidence` | rewrite the arguments of the two Playwright servers in `.mcp.json`; confirm the secrets file is ignored with `git check-ignore -q <file>`, and stop when it is not. A new `paths.evidence` must be ignored too |
 | `mcp.headless` or `mcp.headed` | rename the server in `.mcp.json` |
+| `upstream.mode` | list the `ui` runbooks whose effective mode changes: those with no `upstream:` in their frontmatter, whose `upstream` in the list differs from the new default. Offer `/runbooks:update <id>` for each, because `update` records or deletes the fixtures and rewrites the steps (`references/upstream.md`, Changing a runbook's mode). When the new default is `mocked`, say that endpoints then count only through `live` runbooks. When it is `live`, say that the fixtures stay on disk until `update` deletes them |
+| `upstream.serverFile` or `tests.ui.dir` | copy `${CLAUDE_PLUGIN_ROOT}/scripts/upstream-server.mjs` to the new path as `setup.md` step 3 does, and show the framework start command again |
 | `git.base` or `git.protected` | confirm each branch exists with `git rev-parse --verify` |
 
 A runbook rename goes into the `runbooks` commit, not the `setup` one.
