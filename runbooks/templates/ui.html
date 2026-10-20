@@ -322,8 +322,9 @@
     const entries = data.result.entries
     const item = (href, name, covered, total, on) => {
       const value = roundPct(covered, total)
-      return link(href, `item${on ? ' on' : ''}`, el('span', null, name),
-        el('span', `pct${value !== null && value < 50 ? ' low' : ''}`, value === null ? 'n/a' : `${value}%`))
+      const shown = el('span', `pct${value !== null && value < 50 ? ' low' : ''}`, value === null ? '-' : `${value}%`)
+      if (value === null) shown.title = 'no entry points'
+      return link(href, `item${on ? ' on' : ''}`, el('span', null, name), shown)
     }
     side.replaceChildren(
       el('div', 'label', 'Slices'),

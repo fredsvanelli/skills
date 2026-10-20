@@ -80,6 +80,21 @@ test('a slice without runbooks gets its own item', () => withProject(({ root, co
   assert.equal(view.capabilities.reduce((n, c) => n + (c.coverage?.total ?? 0), 0), 9)
 }, (raw) => { raw.slices.settings = ['src/app/[locale]/(dashboard)/settings/**'] }))
 
+test('a config slice with no entry points shows in both lists with zero coverage', () => withProject(({ root, config }) => {
+  const view = runbooksView(root, config, TODAY)
+  assert.deepEqual(names(view), ['billing', 'broken', 'deliveries', 'empty', '(no slice)'])
+  assert.deepEqual(capability(view, 'empty'), {
+    name: 'empty', problems: 0, stale: 0, uncovered: [], coverage: { covered: 0, total: 0 }, runbooks: [],
+  })
+  assert.equal(capability(view, 'broken').coverage, null)
+  assert.deepEqual(coverageView(root, config).slices, [
+    { name: 'billing', covered: 2, total: 5 },
+    { name: 'deliveries', covered: 1, total: 2 },
+    { name: 'empty', covered: 0, total: 0 },
+    { name: '(no slice)', covered: 0, total: 2 },
+  ])
+}, (raw) => { raw.slices.empty = ['src/nothing/**'] }))
+
 test('billing counts stale runbooks and uncovered entries', () => withProject(({ root, config }) => {
   const billing = capability(runbooksView(root, config, TODAY), 'billing')
   assert.equal(billing.problems, 2)

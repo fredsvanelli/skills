@@ -12,6 +12,7 @@ import { splitFrontmatter, parseYaml } from './yaml.mjs'
 const NO_SLICE = '(no slice)'
 
 const byId = (a, b) => a.id.localeCompare(b.id)
+const byName = (a, b) => (a.name === NO_SLICE) - (b.name === NO_SLICE) || a.name.localeCompare(b.name)
 
 // The time comes from the report name (<YYYY-MM-DD-HHMM>-<id>), since last_run.date has only the day.
 function rowOf(rb, reportCount, { today, staleDays }) {
@@ -64,7 +65,8 @@ export function runbooksView(root, config, { today }) {
   const staleDays = config.staleDays
   const runbooks = loadRunbooks(root, config)
   const { result, warnings } = entryCoverage(root, config, runbooks)
-  const names = new Set([...runbooks.map((rb) => rb.capability), ...result.groups.map((group) => group.name)])
+  const sliceNames = Object.keys(config.slices)
+  const names = new Set([...runbooks.map((rb) => rb.capability), ...sliceNames, ...result.groups.map((group) => group.name)])
   const capabilities = [...names].map((name) => {
     const runbooksOf = runbooks.filter((rb) => rb.capability === name).sort(byId)
     const rows = runbooksOf.map((rb) => rowOf(rb, listReports(root, config.paths.runbooks, rb.id).length, { today, staleDays }))
@@ -73,9 +75,11 @@ export function runbooksView(root, config, { today }) {
       .map(({ id, kind, file }) => ({ id, kind, file }))
       .sort(byId)
     const stale = rows.filter((row) => row.stale).length
-    return { name, problems: stale + uncovered.length, stale, uncovered, coverage: sumGroups(result.groups, name), runbooks: rows }
+    // A config slice whose globs match no entry point still has a coverage, of nothing.
+    const coverage = sumGroups(result.groups, name) ?? (sliceNames.includes(name) ? { covered: 0, total: 0 } : null)
+    return { name, problems: stale + uncovered.length, stale, uncovered, coverage, runbooks: rows }
   })
-  capabilities.sort((a, b) => (a.name === NO_SLICE) - (b.name === NO_SLICE) || a.name.localeCompare(b.name))
+  capabilities.sort(byName)
   return { staleDays, today, warnings, capabilities }
 }
 
@@ -160,10 +164,8 @@ export function reportView(root, config, name) {
 
 export function coverageView(root, config, slice) {
   const result = coverageResult(root, config, {}, [], true)
-  const slices = []
-  for (const group of result.groups) {
-    if (!slices.some((s) => s.name === group.name)) slices.push({ name: group.name, ...sumGroups(result.groups, group.name) })
-  }
+  const names = new Set([...Object.keys(config.slices), ...result.groups.map((group) => group.name)])
+  const slices = [...names].map((name) => ({ name, ...(sumGroups(result.groups, name) ?? { covered: 0, total: 0 }) })).sort(byName)
   if (slice === undefined) return { slices, scope: 'overall', result }
   return {
     slices,
