@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseSteps, parseJunit, stepOfTest, stepStates } from './lib/junit.mjs'
+import { parseSteps, parseJunit, stepOfTest, stepStates, viewportOfTest } from './lib/junit.mjs'
+import { junitMarkdown } from './lib/format.mjs'
 import { run } from './runbooks.mjs'
 
 const BODY = `# Create an invoice
@@ -127,4 +128,87 @@ test('runbooks.mjs junit reads the runbook and the report', () => {
   const missing = run(['junit', 'billing.create-invoice', '--file', 'nope.xml', '--root', dir])
   assert.equal(missing.code, 2)
   assert.match(missing.stderr, /the test command wrote no JUnit report/)
+})
+
+const BODY_VP = `### S01. Open the list
+
+Parents: none
+
+### S02. Filter the list
+
+Parents: S01
+
+### S03. Desktop-only export
+
+Parents: none
+Viewports: desktop
+`
+
+const CASES_VP = [
+  ['S01 a @ desktop', 'passed'], ['S01 a @ mobile', 'failed'],
+  ['S02 b @ desktop', 'passed'], ['S02 b @ mobile', 'passed'],
+  ['S03 c @ desktop', 'passed'], ['S03 c @ tablet', 'passed'],
+].map(([name, outcome]) => ({ name, classname: 'ui', outcome, seen: outcome === 'failed' ? 'boom' : '' }))
+
+test('parseSteps reads the Viewports line and viewportOfTest the trailing viewport', () => {
+  assert.deepEqual(parseSteps(BODY_VP).map((s) => s.viewports), [[], [], ['desktop']])
+  assert.deepEqual(parseSteps('### S01. a\nViewports: none\n').map((s) => s.viewports), [[]])
+  assert.equal(viewportOfTest({ name: 'S01 a @ mobile' }), 'mobile')
+  assert.equal(viewportOfTest({ name: 'S01 a @mobile ' }), 'mobile')
+  assert.equal(viewportOfTest({ name: 'S01 a' }), null)
+})
+
+test('stepStates gives one state per step and viewport', () => {
+  const { steps, result, extra } = stepStates(parseSteps(BODY_VP), CASES_VP, { viewports: ['desktop', 'mobile'] })
+  assert.deepEqual(steps.map((s) => `${s.viewport} ${s.step} ${s.state}`), [
+    'desktop S01 passed', 'desktop S02 passed', 'desktop S03 passed',
+    'mobile S01 failed', 'mobile S02 blocked-by-parent',
+  ])
+  assert.equal(result, 'failed')
+  assert.deepEqual(extra, [{ step: 'S03', viewport: 'tablet', test: 'S03 c @ tablet' }])
+  assert.deepEqual(steps[3], { step: 'S01', viewport: 'mobile', title: 'Open the list', state: 'failed', seen: 'boom', tests: ['S01 a @ mobile'] })
+})
+
+test('per viewport: a step that does not run there sends its test to extra, a missing test blocks, a waiver spans viewports', () => {
+  const cases = [
+    { name: 'S03 c @ mobile', outcome: 'passed', seen: '' },
+    { name: 'S09 z', outcome: 'passed', seen: '' },
+    { name: 'plain', outcome: 'passed', seen: '' },
+  ]
+  const { steps, extra, others } = stepStates(parseSteps(BODY_VP), cases, { viewports: ['desktop', 'mobile'], waived: ['S01'] })
+  assert.deepEqual(steps.map((s) => `${s.viewport} ${s.step} ${s.state}`), [
+    'desktop S01 waived', 'desktop S02 blocked', 'desktop S03 blocked',
+    'mobile S01 waived', 'mobile S02 blocked',
+  ])
+  assert.deepEqual(extra, [
+    { step: 'S03', viewport: 'mobile', test: 'S03 c @ mobile' },
+    { step: 'S09', viewport: null, test: 'S09 z' },
+  ])
+  assert.equal(others.length, 1)
+})
+
+test('junitMarkdown shows the Viewport column only when rows carry a viewport', () => {
+  const vp = stepStates(parseSteps(BODY_VP), CASES_VP, { viewports: ['desktop', 'mobile'] })
+  const md = junitMarkdown({ id: 'x.y', ...vp })
+  assert.match(md, /\| Viewport \|/)
+  assert.match(md, /^States: passed,passed,passed,failed,blocked-by-parent$/m)
+  assert.match(md, /S03 \(tablet\)|S03 \(S03 c @ tablet\)/)
+  assert.doesNotMatch(junitMarkdown({ id: 'x.y', ...stepStates(parseSteps(BODY), parseJunit(XML)) }), /Viewport/)
+})
+
+test('runbooks.mjs junit passes the runbook viewports through', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-junit-vp-'))
+  const write = (rel, content) => {
+    fs.mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true })
+    fs.writeFileSync(path.join(dir, rel), content)
+  }
+  write('docs/runbooks/runbooks.config.json', '{ "version": 1, "stack": "frontend", "viewports": { "desktop": { "width": 1280, "height": 800 }, "mobile": { "width": 390, "height": 844 } } }')
+  write('docs/runbooks/billing/list.md', `---\nid: billing.list\ncapability: billing\nsurface: ui\nstatus: draft\nviewports: [desktop, mobile]\n---\n${BODY_VP}`)
+  const xml = `<testsuite>${CASES_VP.map((c) => `<testcase name="${c.name}">${c.outcome === 'failed' ? '<failure message="boom"/>' : ''}</testcase>`).join('')}</testsuite>`
+  write('.runbooks/junit/run.xml', xml)
+  const out = run(['junit', 'billing.list', '--file', '.runbooks/junit/run.xml', '--root', dir, '--json'])
+  assert.equal(out.code, 0, out.stderr)
+  const parsed = JSON.parse(out.stdout)
+  assert.equal(parsed.result, 'failed')
+  assert.equal(parsed.steps.length, 5)
 })

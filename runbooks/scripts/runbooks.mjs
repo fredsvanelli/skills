@@ -27,7 +27,8 @@ Commands:
   check         <id> [--full]
   status        --current <draft|active|deprecated> --states <s1,s2,...> [--partial]
   junit         <id> --file <junit.xml> [--waive S03,S04] maps the JUnit report of an api runbook's
-                script onto its steps: one state per step, parents resolved
+                script onto its steps: one state per step, parents resolved; a ui runbook with
+                viewports gets one state per step and viewport (tests named "S01 title @ mobile")
   output        [--coverage] writes runs.json and runs.html in the runbooks folder: every runbook
                 with its last full run; with --coverage, also coverage.json and coverage.html (overall,
                 with each slice's entries, their state and the scripts that test them)
@@ -149,7 +150,7 @@ function commandJunit(root, config, options, positionals) {
   const steps = parseSteps(parts ? parts.body : '')
   if (steps.length === 0) throw new Error(`${runbook.path} has no steps`)
   const waived = typeof options.waive === 'string' ? options.waive.split(',').map((s) => s.trim()) : []
-  const result = { id, ...stepStates(steps, parseJunit(fs.readFileSync(file, 'utf8')), { waived }) }
+  const result = { id, ...stepStates(steps, parseJunit(fs.readFileSync(file, 'utf8')), { waived, viewports: runbook.viewports }) }
   return options.json ? json(result) : junitMarkdown(result)
 }
 
