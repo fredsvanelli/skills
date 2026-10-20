@@ -78,3 +78,15 @@ test('every command is listed in the skill table and in both READMEs', () => {
     }
   }
 })
+
+test('the upstream server version equals the plugin version', async () => {
+  const { VERSION } = await import('./upstream-server.mjs')
+  const plugin = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin/plugin.json'), 'utf8'))
+  assert.equal(VERSION, plugin.version)
+})
+
+test('the upstream reference has the sections the commands link to', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/references/upstream.md'), 'utf8')
+  const headings = [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1])
+  assert.deepEqual(headings, ['Modes', 'Fixtures', 'Server', 'Control routes', 'Recording', 'Scripts'])
+})

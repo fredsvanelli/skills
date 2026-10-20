@@ -7,6 +7,7 @@ feature: <feature>
 tags: []
 roles: [<role>]
 viewports: [<viewport>]
+# upstream: mocked  # only when the runbook differs from the config upstream.mode: live or mocked
 design: {}  # with a design system in the config, one line per screen, indented: <screen>: "<frame link or file path>"
 covers:
   entries: []

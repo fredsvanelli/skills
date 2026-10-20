@@ -7,6 +7,7 @@ branch: <branch>
 mode: <guided | headless | headed | chrome | prompt | script | test>
 executor: <the user | the agent | Claude in Chrome extension, result reported by the user | the project's test command>
 partial: false
+upstream: <live | mocked>
 viewports: [<name widthxheight, in run order; [] when the runbook has none>]
 result: <passed | failed | blocked>
 ---
@@ -49,4 +50,5 @@ Seen: <exact text or state observed>
 
 ## Notes
 
+<fixtures not recorded from the live API, with their count (schema, hand-written), in a mocked run>
 <base URL or test command, accounts used by role, data used, script mistakes fixed during the run, design references not compared and why, anything unusual about this run>
