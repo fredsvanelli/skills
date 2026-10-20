@@ -292,6 +292,18 @@ test('upgrade outside live mode gets 501 and the socket closes', async (t) => {
   assert.match(received, /^HTTP\/1\.1 501 Not Implemented/)
 })
 
+test('a reset upgrade socket does not kill the server', async (t) => {
+  const s = await start(t, FILES)
+  const client = net.connect(new URL(s.base).port, '127.0.0.1')
+  client.on('error', () => {})
+  await new Promise((resolve) => client.on('connect', resolve))
+  client.write('GET /ws HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n')
+  client.resetAndDestroy()
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  const r = await fetch(`${s.base}/__runbooks/state`)
+  assert.equal(r.status, 200)
+})
+
 test('control routes never upgrade', async (t) => {
   const fake = await fakeApi(t, (req, res) => res.end())
   const s = await start(t, FILES, { target: `http://127.0.0.1:${fake.port}` })

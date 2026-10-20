@@ -297,6 +297,8 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   })
 
   server.on('upgrade', (req, socket, head) => {
+    // Node removes its own error listener once it emits upgrade; a client reset would otherwise crash the process.
+    socket.on('error', () => socket.destroy())
     const pathname = new URL(req.url, 'http://upstream.local').pathname
     if (pathname.startsWith(CONTROL) || (state.mode !== 'live' && state.mode !== 'record')) {
       return socket.end('HTTP/1.1 501 Not Implemented\r\nConnection: close\r\n\r\n')
