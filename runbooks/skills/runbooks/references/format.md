@@ -56,13 +56,34 @@ Section headings stay in English so commands find them; text under them follows 
 ```markdown
 # <title>
 
+---
+
 ## Goal
+
+---
+
 ## Preconditions
+
+---
+
 ## Steps
+
 ### S01. <what this step proves>
+
+---
+
+### S02. <what this step proves>
+
+---
+
 ## Not covered
+
+---
+
 ## Cleanup
 ```
+
+A `---` line goes before every `##` heading and before every step heading except the first, which follows `## Steps` directly. Keep a blank line above and below each `---`: right under a line of text, Markdown reads it as a heading underline.
 
 Each step:
 

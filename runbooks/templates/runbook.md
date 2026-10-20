@@ -20,15 +20,21 @@ last_run: null
 
 # <title>
 
+---
+
 ## Goal
 
 <One or two sentences: the user outcome this runbook proves.>
+
+---
 
 ## Preconditions
 
 - Services: <app.start commands; migrations or config the flow needs>
 - Accounts: <role> (`<emailEnv>` / `<passwordEnv>`)
 - Data: <each piece of data, and the setup step or seed command that creates it>
+
+---
 
 ## Steps
 
@@ -46,9 +52,13 @@ Actions:
 
 Expected: <exact UI text and state; after a reload when the step checks persistence>
 
+---
+
 ## Not covered
 
 - <behavior>: <why the browser cannot show it here>
+
+---
 
 ## Cleanup
 
