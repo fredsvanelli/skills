@@ -79,7 +79,9 @@ test('loadRunbooks maps frontmatter fields', () => {
     scripts: ['e2e/billing/issue-invoice.runbook.spec.ts'],
     status: 'active',
     lastRun: { date: '2026-10-01', commit: 'abc1234', result: 'passed', report: '_runs/2026-10-01-0900-billing.issue-invoice.md' },
+    upstream: 'live',
     problems: [],
+    warnings: [],
   })
 })
 
@@ -207,6 +209,56 @@ test('design references need a system, a ui surface and known viewports', () => 
   assert.deepEqual(byId['d.api'].problems, ['design applies only to ui runbooks'])
   assert.deepEqual(byId['d.list'].problems, ['design must map each name to a reference'])
   assert.deepEqual(load(null)['d.ok'].problems, ['design references need a design system in the config'])
+})
+
+function upstreamProject(config) {
+  const runbook = (id, extra = '') => `---\nid: billing.${id}\ncapability: billing\nstatus: active\n${extra}---\n`
+  return tmpProject({
+    [CONFIG_PATH]: JSON.stringify({ version: 1, stack: 'frontend', ...config }),
+    'docs/runbooks/billing/issue.md': runbook('issue'),
+    'docs/runbooks/billing/errors.md': runbook('errors', 'upstream: mocked\n'),
+  })
+}
+
+test('a ui runbook takes the project mode unless it overrides it', () => {
+  const dir = upstreamProject({ upstream: { mode: 'live', urlEnv: 'API_URL' } })
+  const byId = Object.fromEntries(loadRunbooks(dir, loadConfig(dir)).map((rb) => [rb.id, rb]))
+  assert.equal(byId['billing.issue'].upstream, 'live')
+  assert.equal(byId['billing.errors'].upstream, 'mocked')
+  assert.deepEqual(byId['billing.errors'].warnings, [
+    'mocked runbook without a script: no automated run checks its fixtures',
+    'mocked runbook has no fixtures in docs/runbooks/_fixtures/billing/errors',
+  ])
+  assert.deepEqual(byId['billing.errors'].problems, [])
+  assert.deepEqual(byId['billing.issue'].warnings, [])
+})
+
+test('a mocked runbook with fixtures and a script has no warnings', () => {
+  const dir = upstreamProject({ upstream: { mode: 'mocked', urlEnv: 'API_URL' } })
+  fs.mkdirSync(path.join(dir, 'docs/runbooks/_fixtures/billing/issue/S01'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/_fixtures/billing/issue/S01/get.json'), '{}')
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/billing/issue.md'), '---\nid: billing.issue\ncapability: billing\nstatus: active\nscripts: [e2e/issue.spec.ts]\n---\n')
+  const issue = loadRunbooks(dir, loadConfig(dir)).find((rb) => rb.id === 'billing.issue')
+  assert.equal(issue.upstream, 'mocked')
+  assert.deepEqual(issue.warnings, [])
+})
+
+test('upstream problems', () => {
+  const runbook = (id, extra) => `---\nid: u.${id}\ncapability: u\nstatus: active\n${extra}\n---\n`
+  const load = (config, files) => {
+    const dir = tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, ...config }), ...files })
+    return Object.fromEntries(loadRunbooks(dir, loadConfig(dir)).map((rb) => [rb.id, rb]))
+  }
+  const withUrl = load({ stack: 'fullstack', upstream: { mode: 'live', urlEnv: 'API_URL' } }, {
+    'docs/runbooks/u/fake.md': runbook('fake', 'upstream: fake'),
+    'docs/runbooks/u/api.md': runbook('api', 'surface: api\nupstream: mocked'),
+  })
+  assert.deepEqual(withUrl['u.fake'].problems, ['upstream "fake" must be one of live, mocked'])
+  assert.equal(withUrl['u.fake'].upstream, 'live')
+  assert.deepEqual(withUrl['u.api'].problems, ['upstream applies only to ui runbooks'])
+  assert.equal(withUrl['u.api'].upstream, null)
+  const noUrl = load({ stack: 'frontend' }, { 'docs/runbooks/u/m.md': runbook('m', 'upstream: mocked') })
+  assert.deepEqual(noUrl['u.m'].problems, ['a mocked runbook needs upstream.urlEnv in the config'])
 })
 
 test('filterRunbooks', () => {

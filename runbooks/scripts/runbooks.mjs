@@ -53,7 +53,7 @@ function collect(root, config, listName, warnings, status = {}) {
 }
 
 function runbookWarnings(runbooks) {
-  return runbooks.flatMap((rb) => rb.problems.map((problem) => `${rb.path}: ${problem}`))
+  return runbooks.flatMap((rb) => [...rb.problems, ...rb.warnings].map((problem) => `${rb.path}: ${problem}`))
 }
 
 function commandList(root, config, options, warnings) {

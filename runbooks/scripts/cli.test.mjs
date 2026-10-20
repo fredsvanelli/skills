@@ -169,3 +169,13 @@ test('output --coverage also writes coverage.json and coverage.html with the ove
   const html = fs.readFileSync(path.join(root, 'docs/runbooks/coverage.html'), 'utf8')
   assert.ok(html.includes(`const data = ${JSON.stringify(coverage, null, 2)}`))
 })
+
+test('list warns about a mocked runbook without a script', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-cli-'))
+  fs.mkdirSync(path.join(dir, 'docs/runbooks/billing'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/runbooks.config.json'), JSON.stringify({ version: 1, stack: 'frontend', upstream: { mode: 'live', urlEnv: 'API_URL' } }))
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/billing/errors.md'), '---\nid: billing.errors\ncapability: billing\nstatus: active\nupstream: mocked\n---\n')
+  const { code, stderr } = run(['list', '--root', dir])
+  assert.equal(code, 0)
+  assert.match(stderr, /warning: docs\/runbooks\/billing\/errors\.md: mocked runbook without a script/)
+})
