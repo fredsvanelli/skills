@@ -48,6 +48,49 @@ const isNumbered = (line) => /^\s*\d+[.)]\s+/.test(line)
 const isHeading = (line) => /^#{1,4}\s+/.test(line)
 const isRule = (line) => /^\s*---+\s*$/.test(line)
 const isFence = (line) => /^\s*```/.test(line)
+const indentOf = (line) => /^\s*/.exec(line)[0].length
+const startsBlock = (lines, i) =>
+  isFence(lines[i]) || isHeading(lines[i]) || isRule(lines[i]) || isBullet(lines[i]) || isNumbered(lines[i]) || isTableStart(lines, i)
+
+// Renders the lines folded under a list item (a sub-list, a later paragraph) as Markdown of their own.
+function renderNested(lines) {
+  if (lines.every((line) => line.trim() === '')) return ''
+  const indent = Math.min(...lines.filter((line) => line.trim() !== '').map(indentOf))
+  return renderMarkdown(lines.map((line) => line.slice(indent)).join('\n'))
+}
+
+// Reads one list from lines[i]. A line indented past the list's markers belongs to the item above
+// it: plain text continues the item, anything after a nested block starts goes into that block.
+// A blank line keeps the list open when the next line is another item or indented content.
+function readList(lines, i) {
+  const ordered = isNumbered(lines[i])
+  const base = indentOf(lines[i])
+  const isItem = (line) => (ordered ? isNumbered(line) : isBullet(line)) && indentOf(line) <= base
+  const strip = ordered ? /^\s*\d+[.)]\s+/ : /^\s*[-*]\s+/
+  const start = ordered ? /^\s*(\d+)/.exec(lines[i])[1].replace(/^0+(?=\d)/, '') : '1'
+  const items = []
+  while (i < lines.length) {
+    const line = lines[i]
+    const item = items[items.length - 1]
+    if (line.trim() === '') {
+      const next = lines[i + 1]
+      if (next === undefined || next.trim() === '' || !(isItem(next) || indentOf(next) > base)) break
+      if (!isItem(next)) item.nested.push('')
+    } else if (isItem(line)) {
+      items.push({ text: [line.replace(strip, '')], nested: [] })
+    } else if (indentOf(line) > base || !startsBlock(lines, i)) {
+      const nestedStarts = item.nested.length === 0 && indentOf(line) > base && startsBlock(lines, i)
+      if (item.nested.length > 0 || nestedStarts) item.nested.push(line)
+      else item.text.push(line.trim())
+    } else {
+      break
+    }
+    i++
+  }
+  const tag = ordered ? 'ol' : 'ul'
+  const html = items.map(({ text, nested }) => `<li>${renderInline(text.join(' '))}${renderNested(nested)}</li>`).join('')
+  return { html: `<${tag}${start === '1' ? '' : ` start="${start}"`}>${html}</${tag}>`, next: i }
+}
 
 export function renderMarkdown(text) {
   const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n')
@@ -77,12 +120,9 @@ export function renderMarkdown(text) {
       const cells = (tag, row) => row.map((cell) => `<${tag}>${renderInline(cell)}</${tag}>`).join('')
       html.push(`<table><thead><tr>${cells('th', head)}</tr></thead><tbody>${body.map((row) => `<tr>${cells('td', row)}</tr>`).join('')}</tbody></table>`)
     } else if (isBullet(line) || isNumbered(line)) {
-      const ordered = isNumbered(line)
-      const test = ordered ? isNumbered : isBullet
-      const strip = ordered ? /^\s*\d+[.)]\s+/ : /^\s*[-*]\s+/
-      const items = []
-      while (i < lines.length && test(lines[i])) items.push(`<li>${renderInline(lines[i++].replace(strip, ''))}</li>`)
-      html.push(`<${ordered ? 'ol' : 'ul'}>${items.join('')}</${ordered ? 'ol' : 'ul'}>`)
+      const list = readList(lines, i)
+      html.push(list.html)
+      i = list.next
     } else {
       const para = []
       while (i < lines.length && lines[i].trim() !== '' && !isFence(lines[i]) && !isHeading(lines[i]) && !isRule(lines[i]) && !isBullet(lines[i]) && !isNumbered(lines[i]) && !isTableStart(lines, i)) {

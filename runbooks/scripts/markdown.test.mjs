@@ -51,3 +51,18 @@ test('drops a link whose target holds a code span', () => {
   assert.equal(renderMarkdown('[x](`javascript:alert(1)`)'), '<p>x</p>')
   assert.equal(renderMarkdown('[`a`](http://x/`y`)'), '<p><code>a</code></p>')
 })
+test('folds indented lines into the list item above them', () => {
+  assert.equal(renderMarkdown('1. open\n   - pick a\n2. save'), '<ol><li>open<ul><li>pick a</li></ul></li><li>save</li></ol>')
+  assert.equal(renderMarkdown('1. open the page and\n   click save\n2. done'), '<ol><li>open the page and click save</li><li>done</li></ol>')
+  assert.equal(renderMarkdown('- a\n  continued\n- b'), '<ul><li>a continued</li><li>b</li></ul>')
+  assert.equal(renderMarkdown('1. a\n\n2. b'), '<ol><li>a</li><li>b</li></ol>')
+  assert.equal(renderMarkdown('- a\n  1. x\n  2. y\n- b'), '<ul><li>a<ol><li>x</li><li>y</li></ol></li><li>b</li></ul>')
+})
+test('an ordered list that resumes after an interruption keeps its number', () => {
+  assert.equal(renderMarkdown('1. a\n\nText\n\n3. c\n4. d'), '<ol><li>a</li></ol><p>Text</p><ol start="3"><li>c</li><li>d</li></ol>')
+  assert.equal(renderMarkdown('07. a'), '<ol start="7"><li>a</li></ol>')
+})
+test('escapes HTML in folded list lines', () => {
+  assert.equal(renderMarkdown('1. a\n   - <img src=x onerror=y>\n   <b>more</b>'), '<ol><li>a<ul><li>&lt;img src=x onerror=y&gt; &lt;b&gt;more&lt;/b&gt;</li></ul></li></ol>')
+  assert.equal(renderMarkdown('- a\n  "<script>"'), '<ul><li>a &quot;&lt;script&gt;&quot;</li></ul>')
+})
