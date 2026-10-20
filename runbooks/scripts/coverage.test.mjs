@@ -73,6 +73,17 @@ test('withItems lists each slice entry with its state and the scripts of the run
   assert.equal(billing.items.length, billing.total)
 })
 
+test('withItems gives each slice entry its kind and the runbooks that cite it', () => {
+  const billing = fixtureCoverage({}, true).groups.find((g) => g.name === 'billing')
+  assert.deepEqual(billing.items.map(({ id, kind, runbooks }) => ({ id, kind, runbooks })), [
+    { id: '/billing/invoices', kind: 'ui-route', runbooks: ['billing.issue-invoice'] },
+    { id: '/billing/invoices/[id]', kind: 'ui-route', runbooks: ['billing.cancel-invoice'] },
+    { id: 'DELETE /admin/invoices/[id]', kind: 'api-endpoint', runbooks: ['billing.cancel-invoice'] },
+    { id: 'GET /admin/invoices', kind: 'api-endpoint', runbooks: [] },
+    { id: 'POST /admin/invoices', kind: 'api-endpoint', runbooks: ['billing.issue-invoice'] },
+  ])
+})
+
 test('an id that does not exist exactly is an orphan, not silent', () => {
   assert.deepEqual(fixtureCoverage().orphans, [
     { runbook: 'deliveries.list-deliveries', kind: 'entry', ref: '/deliveries/[deliveryId]' },
@@ -241,6 +252,9 @@ test('a mocked runbook covers its screens but not its endpoints', () => {
     const items = coverageOf(dir, {}, true).groups.find((g) => g.name === 'billing').items
     assert.deepEqual(items.find((i) => i.id === 'POST /admin/invoices').citedByMocked, ['billing.issue-invoice'])
     assert.equal('citedByMocked' in items.find((i) => i.id === '/billing/invoices'), false)
+    // A mocked runbook stays in citedByMocked: it does not cite the endpoint under the coverage rule.
+    assert.deepEqual(items.find((i) => i.id === 'POST /admin/invoices').runbooks, [])
+    assert.deepEqual(items.find((i) => i.id === '/billing/invoices').runbooks, ['billing.issue-invoice'])
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }

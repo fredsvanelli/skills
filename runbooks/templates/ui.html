@@ -90,6 +90,7 @@
   .date small { display: block; font-size: 12px; font-weight: 400; }
   .mono { font: 14px var(--mono); overflow-wrap: anywhere; }
   .kind { display: block; color: var(--muted); font: 12px var(--mono); overflow-wrap: anywhere; }
+  .kind.file { opacity: .75; }
   .rbid { color: var(--prompt); font: 13px var(--mono); }
   .lines-list div + div { margin-top: 4px; }
   .nowrap { white-space: nowrap; }
@@ -702,8 +703,8 @@
       const tests = item.tests.length === 0
         ? td('muted', '-')
         : td('muted small', el('div', 'lines-list', ...item.tests.map((t) => el('div', null, t))))
-      const where = [item.surface, item.file].filter(Boolean).join(' · ')
-      const tr = row(td('mono', item.id, where ? el('span', 'kind', where) : null), td(null, badge(item.state, item.state)), runbooks, tests)
+      const entry = td('mono', item.id, el('span', 'kind', item.kind ?? item.surface ?? 'entry'), item.file ? el('span', 'kind file', item.file) : null)
+      const tr = row(entry, td(null, badge(item.state, item.state)), runbooks, tests)
       if (item.state === 'uncovered') tr.className = 'unc'
       return tr
     })

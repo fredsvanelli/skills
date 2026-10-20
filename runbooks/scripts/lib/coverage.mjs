@@ -27,9 +27,22 @@ function scriptsByRef(runbooks, field) {
   return scripts
 }
 
+// For each ref, the sorted ids of the runbooks that cite it.
+function runbooksByRef(runbooks, field) {
+  const ids = new Map()
+  for (const rb of runbooks) {
+    for (const ref of rb.covers[field]) ids.set(ref, [...(ids.get(ref) ?? []), rb.id])
+  }
+  for (const list of ids.values()) list.sort()
+  return ids
+}
+
 function refsByStatus(runbooks, field) {
   const pick = (status) => new Set(runbooks.filter((rb) => rb.status === status).flatMap((rb) => rb.covers[field]))
-  return { active: pick('active'), draft: pick('draft'), placeholder: pick('placeholder'), scripts: scriptsByRef(runbooks, field) }
+  return {
+    active: pick('active'), draft: pick('draft'), placeholder: pick('placeholder'),
+    scripts: scriptsByRef(runbooks, field), runbooks: runbooksByRef(runbooks, field),
+  }
 }
 
 export const surfaceOfEntry = (entry) => (entry.kind === 'api-endpoint' ? 'api' : 'ui')
@@ -128,7 +141,13 @@ export function computeCoverage({
     if (entry.state === 'covered') group.covered++
     if (entry.state === 'pending') group.pending++
     if (entry.state === 'planned') group.planned++
-    group.items?.push({ id: entry.id, file: entry.file, state: entry.state, ...(entry.citedByMocked && { citedByMocked: entry.citedByMocked }), tests: entryRefsFor(entry).scripts.get(entry.id) ?? [] })
+    const refs = entryRefsFor(entry)
+    group.items?.push({
+      id: entry.id, kind: entry.kind, file: entry.file, state: entry.state,
+      runbooks: refs.runbooks.get(entry.id) ?? [],
+      ...(entry.citedByMocked && { citedByMocked: entry.citedByMocked }),
+      tests: refs.scripts.get(entry.id) ?? [],
+    })
     groupMap.set(key, group)
   }
   for (const group of groupMap.values()) group.items?.sort((a, b) => a.id.localeCompare(b.id))
