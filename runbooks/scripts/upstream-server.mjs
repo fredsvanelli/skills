@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { fileURLToPath } from 'node:url'
 
 export const VERSION = '1.1.0'
 
@@ -97,8 +98,8 @@ function parseBody(raw, contentType) {
   return raw
 }
 
-export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders = [], log = () => {} }) {
-  const state = { runbook: null, mode: 'mocked', step: null }
+export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders = [], log = () => {}, mode = 'mocked', runbook = null, step = null }) {
+  const state = { runbook, mode, step }
   let requests = []
   let unmatched = []
 
@@ -351,4 +352,55 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   })
 
   return server
+}
+
+// Listens on 127.0.0.1, prints the listening line and closes on SIGINT or SIGTERM. Exits 2 when the port is taken.
+export function serveUpstream({ port, ...options }) {
+  const server = createUpstreamServer({ ...options, log: (line) => process.stdout.write(`${line}\n`) })
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      process.stderr.write(`runbooks: port ${port} is in use; stop what holds it or change upstream.port\n`)
+    } else {
+      process.stderr.write(`runbooks: ${err.message}\n`)
+    }
+    process.exit(2)
+  })
+  server.listen(port, '127.0.0.1', () => {
+    process.stdout.write(`runbooks-upstream listening on http://127.0.0.1:${server.address().port}\n`)
+  })
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)))
+  return server
+}
+
+function cliOptions(argv) {
+  const flags = {}
+  for (let i = 0; i < argv.length; i += 2) {
+    if (argv[i].startsWith('--') && argv[i + 1] !== undefined) flags[argv[i].slice(2)] = argv[i + 1]
+  }
+  const port = flags.port === undefined ? 4010 : Number(flags.port)
+  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('--port must be an integer from 0 to 65535')
+  const mode = flags.mode ?? 'mocked'
+  if (!MODES.includes(mode)) throw new Error(`--mode must be one of ${MODES.join(', ')}`)
+  if (!flags.fixtures) throw new Error('--fixtures <dir> is required')
+  return {
+    fixturesRoot: path.resolve(flags.fixtures),
+    target: flags.target ?? '',
+    redactHeaders: flags.redact ? flags.redact.split(',').map((name) => name.trim()).filter(Boolean) : [],
+    port,
+    mode,
+    runbook: flags.runbook ?? null,
+    step: flags.step ?? null,
+  }
+}
+
+const invokedPath = process.argv[1] ? fs.realpathSync(process.argv[1]) : null
+if (invokedPath && invokedPath === fs.realpathSync(fileURLToPath(import.meta.url))) {
+  let options
+  try {
+    options = cliOptions(process.argv.slice(2))
+  } catch (err) {
+    process.stderr.write(`runbooks: ${err.message}\n`)
+    process.exit(2)
+  }
+  serveUpstream(options)
 }

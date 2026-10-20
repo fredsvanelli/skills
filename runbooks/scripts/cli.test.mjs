@@ -5,8 +5,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spawn, spawnSync } from 'node:child_process'
+import net from 'node:net'
 import { run } from './runbooks.mjs'
+import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
+import { VERSION } from './upstream-server.mjs'
 import { parseArgs } from './lib/args.mjs'
+import { loadConfig } from './lib/config.mjs'
 import { pct } from './lib/format.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
@@ -178,4 +183,143 @@ test('list warns about a mocked runbook without a script', () => {
   const { code, stderr } = run(['list', '--root', dir])
   assert.equal(code, 0)
   assert.match(stderr, /warning: docs\/runbooks\/billing\/errors\.md: mocked runbook without a script/)
+})
+
+function upstreamProject(upstream, extra = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-upstream-'))
+  fs.mkdirSync(path.join(dir, 'docs/runbooks'), { recursive: true })
+  fs.writeFileSync(
+    path.join(dir, 'docs/runbooks/runbooks.config.json'),
+    JSON.stringify({ version: 1, stack: 'frontend', upstream: upstream && { mode: 'mocked', urlEnv: 'API_URL', ...upstream }, ...extra }),
+  )
+  return dir
+}
+
+const configOf = (dir) => loadConfig(dir)
+
+test('upstreamOptions resolves the config and the flags', () => {
+  const dir = upstreamProject({ baseUrl: 'https://api.example.com/v1', port: 4321, redactHeaders: ['x-key'] })
+  const config = configOf(dir)
+  assert.deepEqual(upstreamOptions(dir, config, {}), {
+    fixturesRoot: path.join(dir, 'docs/runbooks/_fixtures'),
+    target: 'https://api.example.com/v1',
+    redactHeaders: ['x-key'],
+    port: 4321,
+    mode: 'mocked',
+    runbook: null,
+    step: null,
+  })
+  const flags = upstreamOptions(dir, config, { port: '0', mode: 'record', runbook: 'billing.issue', step: 'S02' })
+  assert.deepEqual([flags.port, flags.mode, flags.runbook, flags.step], [0, 'record', 'billing.issue', 'S02'])
+})
+
+test('upstreamOptions rejects bad flags and a missing upstream block', () => {
+  const dir = upstreamProject({})
+  const config = configOf(dir)
+  assert.throws(() => upstreamOptions(dir, config, { port: '70000' }), /--port/)
+  assert.throws(() => upstreamOptions(dir, config, { port: 'abc' }), /--port/)
+  assert.throws(() => upstreamOptions(dir, config, { mode: 'fake' }), /--mode/)
+  const none = upstreamProject(null)
+  assert.throws(() => upstreamOptions(none, configOf(none), {}), /the config has no upstream block\. Run \/runbooks:setup/)
+})
+
+test('copiedServerWarning reports a missing copy and a version mismatch', () => {
+  const dir = upstreamProject({ serverFile: 'tools/upstream-server.mjs' })
+  const config = configOf(dir)
+  assert.equal(
+    copiedServerWarning(dir, config, VERSION),
+    'upstream.serverFile tools/upstream-server.mjs is missing: run /runbooks:setup to copy it',
+  )
+  fs.mkdirSync(path.join(dir, 'tools'))
+  fs.writeFileSync(path.join(dir, 'tools/upstream-server.mjs'), "export const VERSION = '0.9.0'\n")
+  assert.equal(
+    copiedServerWarning(dir, config, VERSION),
+    `upstream.serverFile tools/upstream-server.mjs is from runbooks 0.9.0, the plugin is ${VERSION}: run /runbooks:setup to refresh it`,
+  )
+  fs.writeFileSync(path.join(dir, 'tools/upstream-server.mjs'), '// no version\n')
+  assert.match(copiedServerWarning(dir, config, VERSION), /is from runbooks unknown,/)
+  fs.writeFileSync(path.join(dir, 'tools/upstream-server.mjs'), `export const VERSION = '${VERSION}'\n`)
+  assert.equal(copiedServerWarning(dir, config, VERSION), null)
+  const unset = upstreamProject({})
+  assert.equal(copiedServerWarning(unset, configOf(unset), VERSION), null)
+  const none = upstreamProject(null)
+  assert.equal(copiedServerWarning(none, configOf(none), VERSION), null)
+})
+
+test('list and coverage warn about the copied server', () => {
+  const dir = upstreamProject({ serverFile: 'tools/upstream-server.mjs' })
+  for (const command of ['list', 'coverage']) {
+    assert.match(run([command, '--root', dir]).stderr, /^warning: upstream\.serverFile tools\/upstream-server\.mjs is missing/m)
+  }
+})
+
+// Starts a script, resolves with its first stdout line, and kills the child.
+function firstLine(args, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, { cwd })
+    let out = ''
+    child.stdout.on('data', (chunk) => {
+      out += chunk
+      if (out.includes('\n')) {
+        child.kill('SIGTERM')
+        resolve(out.split('\n')[0])
+      }
+    })
+    child.on('error', reject)
+    child.on('exit', () => { if (!out.includes('\n')) reject(new Error(`exited early: ${out}`)) })
+  })
+}
+
+test('runbooks.mjs upstream prints the listening line with the bound port', async () => {
+  const dir = upstreamProject({})
+  const line = await firstLine([SCRIPT, 'upstream', '--root', dir, '--port', '0'])
+  assert.match(line, /^runbooks-upstream listening on http:\/\/127\.0\.0\.1:\d+$/)
+  assert.doesNotMatch(line, /:0$/)
+})
+
+test('runbooks.mjs upstream exits 2 naming the port when it is in use', async () => {
+  const holder = net.createServer()
+  await new Promise((resolve) => holder.listen(0, '127.0.0.1', resolve))
+  const { port } = holder.address()
+  try {
+    const dir = upstreamProject({})
+    const result = spawnSync(process.execPath, [SCRIPT, 'upstream', '--root', dir, '--port', String(port)], { encoding: 'utf8' })
+    assert.equal(result.status, 2)
+    assert.equal(result.stderr, `runbooks: port ${port} is in use; stop what holds it or change upstream.port\n`)
+    assert.doesNotMatch(result.stderr, /\n\s+at /)
+  } finally {
+    holder.close()
+  }
+})
+
+test('runbooks.mjs upstream exits 2 without an upstream block or with a bad flag', () => {
+  const none = upstreamProject(null)
+  const result = spawnSync(process.execPath, [SCRIPT, 'upstream', '--root', none], { encoding: 'utf8' })
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /^runbooks: the config has no upstream block\. Run \/runbooks:setup$/m)
+  const dir = upstreamProject({})
+  const bad = spawnSync(process.execPath, [SCRIPT, 'upstream', '--root', dir, '--mode', 'fake'], { encoding: 'utf8' })
+  assert.equal(bad.status, 2)
+  assert.match(bad.stderr, /--mode/)
+})
+
+const SERVER = fileURLToPath(new URL('./upstream-server.mjs', import.meta.url))
+
+test('the copied server file starts from its own flags', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-copy-'))
+  const line = await firstLine([SERVER, '--fixtures', 'fx', '--port', '0', '--redact', 'a,b', '--mode', 'mocked'], dir)
+  assert.match(line, /^runbooks-upstream listening on http:\/\/127\.0\.0\.1:\d+$/)
+})
+
+test('the copied server file exits 2 when the port is in use', async () => {
+  const holder = net.createServer()
+  await new Promise((resolve) => holder.listen(0, '127.0.0.1', resolve))
+  const { port } = holder.address()
+  try {
+    const result = spawnSync(process.execPath, [SERVER, '--fixtures', 'fx', '--port', String(port)], { encoding: 'utf8' })
+    assert.equal(result.status, 2)
+    assert.equal(result.stderr, `runbooks: port ${port} is in use; stop what holds it or change upstream.port\n`)
+  } finally {
+    holder.close()
+  }
 })
