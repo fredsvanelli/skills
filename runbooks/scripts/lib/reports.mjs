@@ -3,13 +3,31 @@ import path from 'node:path'
 import { splitFrontmatter, parseYaml } from './yaml.mjs'
 
 // Report files are named <YYYY-MM-DD-HHMM>-<runbook id>.md, so a name sort is a date sort.
+export const RUN_NAME = /^\d{4}-\d{2}-\d{2}-\d{4}-[\w-]+\.[\w-]+\.md$/
 const RUN_PREFIX = /^\d{4}-\d{2}-\d{2}-\d{4}-/
 
+function cells(line) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim())
+}
+
+// Reads the first table whose header starts with Step. Column positions come from the header row.
 function readSteps(body) {
   const steps = []
+  let columns = null
   for (const line of body.split('\n')) {
-    const match = line.match(/^\|\s*(S\d+)\s*\|\s*([a-z-]+)\s*\|/)
-    if (match) steps.push({ step: match[1], state: match[2] })
+    if (!line.startsWith('|')) {
+      if (columns) break
+      continue
+    }
+    const row = cells(line)
+    if (!columns) {
+      if (row[0] === 'Step') columns = { step: 0, state: row.indexOf('State'), viewport: row.indexOf('Viewport') }
+      continue
+    }
+    if (!/^S\d+$/.test(row[columns.step]) || columns.state < 0) continue
+    const entry = { step: row[columns.step], state: row[columns.state] }
+    if (columns.viewport >= 0) entry.viewport = row[columns.viewport] ?? ''
+    steps.push(entry)
   }
   return steps
 }
@@ -18,16 +36,21 @@ function readReport(runsDir, runbooksDir, name) {
   const text = fs.readFileSync(path.join(runsDir, name), 'utf8')
   const parts = splitFrontmatter(text)
   const data = parts ? parseYaml(parts.yaml) : {}
-  const steps = readSteps(parts ? parts.body : text)
+  const body = parts ? parts.body : text
+  const steps = readSteps(body)
   const counts = {}
   for (const { state } of steps) counts[state] = (counts[state] ?? 0) + 1
   return {
+    name,
+    body,
     path: `${runbooksDir}/_runs/${name}`,
     run: data.run ?? name.replace(/\.md$/, ''),
     date: data.date === undefined || data.date === null ? null : String(data.date),
     commit: data.commit === undefined || data.commit === null ? null : String(data.commit),
     branch: data.branch ?? null,
     mode: data.mode ?? null,
+    upstream: data.upstream ?? null,
+    viewports: Array.isArray(data.viewports) ? data.viewports.map(String) : [],
     result: data.result ?? null,
     partial: data.partial === true,
     counts,
@@ -35,17 +58,36 @@ function readReport(runsDir, runbooksDir, name) {
   }
 }
 
-// With full, partial runs (--steps) are skipped, as last_run skips them.
-export function latestReport(projectRoot, runbooksDir, id, { full = false } = {}) {
-  const runsDir = path.resolve(projectRoot, runbooksDir, '_runs')
-  if (!fs.existsSync(runsDir)) return null
-  const names = fs.readdirSync(runsDir)
+function runsDirOf(projectRoot, runbooksDir) {
+  return path.resolve(projectRoot, runbooksDir, '_runs')
+}
+
+function withoutBody({ body, ...report }) {
+  return report
+}
+
+// Every report of one runbook, newest first, partial runs included.
+export function listReports(projectRoot, runbooksDir, id) {
+  const runsDir = runsDirOf(projectRoot, runbooksDir)
+  if (!fs.existsSync(runsDir)) return []
+  return fs.readdirSync(runsDir)
     .filter((name) => RUN_PREFIX.test(name) && name.replace(RUN_PREFIX, '') === `${id}.md`)
     .sort()
     .reverse()
-  for (const name of names) {
-    const report = readReport(runsDir, runbooksDir, name)
-    if (!full || !report.partial) return report
-  }
-  return null
+    .map((name) => withoutBody(readReport(runsDir, runbooksDir, name)))
+}
+
+// The name comes from a URL, so it is matched against the directory listing and never joined blindly.
+export function reportByName(projectRoot, runbooksDir, name) {
+  if (typeof name !== 'string' || !RUN_NAME.test(name)) return null
+  const runsDir = runsDirOf(projectRoot, runbooksDir)
+  if (!fs.existsSync(runsDir) || !fs.readdirSync(runsDir).includes(name)) return null
+  const report = readReport(runsDir, runbooksDir, name)
+  return { ...report, runbook: name.replace(RUN_PREFIX, '').replace(/\.md$/, '') }
+}
+
+// With full, partial runs (--steps) are skipped, as last_run skips them.
+export function latestReport(projectRoot, runbooksDir, id, { full = false } = {}) {
+  const reports = listReports(projectRoot, runbooksDir, id)
+  return reports.find((report) => !full || !report.partial) ?? null
 }
