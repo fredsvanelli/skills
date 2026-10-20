@@ -7,9 +7,8 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 ## Layout
 
 - `<capability>/<flow>.md`: one runbook. Its id is `<capability>.<flow>`.
-- `_runs/`: one report per execution. Local only: Git ignores its contents.
+- `_runs/`: one report per execution; `/runbooks:ui` shows them. Local only: Git ignores its contents.
 - `_coverage/`: the latest coverage report, overall and per slice. Local only: Git ignores its contents.
-- `/runbooks:ui` shows the runs and the coverage.
 - `runbooks.config.json`: project settings for the commands.
 
 ## Lifecycle
