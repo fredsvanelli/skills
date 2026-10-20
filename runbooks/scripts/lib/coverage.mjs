@@ -84,13 +84,13 @@ export function computeCoverage({
   const featureRequirements = filters.feature ? new Set(scoped.flatMap((rb) => rb.covers.requirements)) : null
 
   // A mocked runbook never reaches its upstream API, so it covers no endpoint; see docs/adr/0004.
-  const live = valid.filter((rb) => rb.upstream !== 'mocked')
+  const notMocked = valid.filter((rb) => rb.upstream !== 'mocked')
   const bySurface = surfacesOf(stack).includes('api')
   const entryRefs = bySurface
-    ? Object.fromEntries(['ui', 'api'].map((surface) => [surface, refsByStatus(live.filter((rb) => rb.surface === surface), 'entries')]))
+    ? Object.fromEntries(['ui', 'api'].map((surface) => [surface, refsByStatus((surface === 'api' ? notMocked : valid).filter((rb) => rb.surface === surface), 'entries')]))
     : null
   const allEntryRefs = refsByStatus(valid, 'entries')
-  const endpointRefs = refsByStatus(live, 'entries')
+  const endpointRefs = refsByStatus(notMocked, 'entries')
   const entryRefsFor = (entry) => (bySurface ? entryRefs[surfaceOfEntry(entry)] : entry.kind === 'api-endpoint' ? endpointRefs : allEntryRefs)
   const mockedBy = new Map()
   for (const rb of valid.filter((r) => r.upstream === 'mocked')) {
