@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>runbooks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Terminal palette from fredvanelli.dev: warm black, Claude orange, prompt green. Dark only, by design. */
+  :root {
+    color-scheme: dark;
+    --bg: #0e0d0b; --panel: #161512; --line: #2a2823; --fg: #ebe8e1; --muted: #9a968c;
+    --accent: #e07a55; --prompt: #8fbf6a; --failed: #e5655c; --blocked: #d9a441;
+    --sans: 'Geist', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  ::selection { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font: 0.92em var(--mono); }
+
+  header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 40px; height: 60px; padding: 0 28px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); font: 600 15px var(--mono); }
+  header .logo { color: var(--fg); }
+  header .logo:hover { text-decoration: none; }
+  header .logo span { color: var(--accent); }
+  header nav { display: flex; gap: 6px; align-self: stretch; }
+  header nav a { display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-weight: 500; font-size: 14px; border-bottom: 2px solid transparent; }
+  header nav a:hover { color: var(--fg); text-decoration: none; }
+  header nav a.on { color: var(--fg); border-bottom-color: var(--accent); }
+
+  .layout { display: flex; min-height: calc(100vh - 60px); }
+  .side { width: 220px; flex-shrink: 0; border-right: 1px solid var(--line); padding: 24px 14px; }
+  .side-inner { position: sticky; top: 84px; }
+  .side .label { padding: 0 12px 12px; color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  .side .item { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px; padding: 10px 12px; border-radius: 8px; color: color-mix(in srgb, var(--fg) 85%, transparent); font: 14px var(--mono); overflow-wrap: anywhere; }
+  .side .item:hover { background: color-mix(in srgb, var(--panel) 70%, transparent); text-decoration: none; }
+  .side .item.on { background: var(--panel); color: var(--prompt); }
+  .side .n { min-width: 22px; padding: 1px 7px; border-radius: 999px; text-align: center; font-size: 12px; color: var(--failed); background: color-mix(in srgb, var(--failed) 14%, transparent); }
+  .side .n.ok { color: var(--muted); background: transparent; }
+  .side .pct { font-size: 12px; color: var(--muted); }
+  .side .pct.low { color: var(--failed); }
+  .side hr { margin: 10px 12px; border: 0; border-top: 1px solid var(--line); }
+
+  main { flex: 1; min-width: 0; padding: 32px 36px 64px; }
+  .container { max-width: 960px; margin: 0 auto; }
+
+  h3 { margin: 0 0 4px; color: var(--prompt); font: 600 20px var(--mono); overflow-wrap: anywhere; }
+  h3 a { color: inherit; }
+  h4 { display: flex; align-items: baseline; gap: 10px; margin: 32px 0 12px; color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  h4 .c { color: var(--failed); }
+  .sub { margin-bottom: 20px; color: var(--muted); font-size: 14px; }
+  .section + .section { margin-top: 56px; padding-top: 40px; border-top: 1px solid var(--line); }
+  .muted { color: var(--muted); }
+  .small { font: 13px var(--mono); }
+  .none { margin: 0; padding: 28px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); text-align: center; color: var(--muted); font: 14px var(--mono); }
+  .message { color: var(--muted); font: 14px var(--mono); }
+  .error { padding: 18px 22px; border: 1px solid color-mix(in srgb, var(--failed) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--failed) 8%, transparent); }
+  .error b { display: block; margin-bottom: 4px; color: var(--failed); font: 600 14px var(--mono); }
+  .error p { margin: 0; font: 14px var(--mono); overflow-wrap: anywhere; }
+
+  .counters { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 32px; }
+  .counter { min-width: 150px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--muted); font-size: 13px; }
+  .counter b { display: block; margin-bottom: 2px; color: var(--fg); font: 600 24px var(--mono); font-variant-numeric: tabular-nums; }
+  .counter.bad b { color: var(--failed); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 8px; }
+  .stat { padding: 14px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .stat .l { color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  .stat .v { margin: 4px 0; font: 600 26px var(--mono); font-variant-numeric: tabular-nums; }
+  .stat .d { color: var(--muted); font-size: 13px; }
+
+  .table { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 14px 20px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  td { padding: 18px 20px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr.link { cursor: pointer; }
+  tbody tr.link:hover td, tbody tr.sel td { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+  tbody tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  tr.stale td, tr.unc td { background: color-mix(in srgb, var(--failed) 10%, transparent); }
+  tr.stale td:first-child, tr.unc td:first-child { box-shadow: inset 3px 0 0 var(--failed); }
+  tr.stale.link:hover td { background: color-mix(in srgb, var(--failed) 14%, transparent); }
+  .flow { color: var(--prompt); font: 14px var(--mono); }
+  .title { display: block; color: var(--muted); font-size: 13px; }
+  .problems { display: block; margin-top: 4px; color: var(--failed); font: 13px var(--mono); }
+  .date { color: var(--muted); font: 14px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .date.stale { color: var(--failed); font-weight: 600; }
+  .date small { display: block; font-size: 12px; font-weight: 400; }
+  .mono { font: 14px var(--mono); overflow-wrap: anywhere; }
+  .kind { display: block; color: var(--muted); font: 12px var(--mono); overflow-wrap: anywhere; }
+  .rbid { color: var(--prompt); font: 13px var(--mono); }
+  .lines-list div + div { margin-top: 4px; }
+  .nowrap { white-space: nowrap; }
+
+  .badge { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; font: 500 12px var(--mono); --c: var(--muted); color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
+  .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge + .badge { margin-left: 6px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; }
+  .badges .badge + .badge { margin-left: 0; }
+  .passed, .covered, .active { --c: var(--prompt); }
+  .failed, .uncovered, .invalid, .stale-badge { --c: var(--failed); }
+  .blocked, .pending, .draft { --c: var(--blocked); }
+  .critical { --c: var(--accent); }
+  .partial { margin-left: 8px; color: var(--muted); font: 12px var(--mono); }
+
+  .uncov ul { margin: 0; padding: 0; list-style: none; border: 1px dashed color-mix(in srgb, var(--failed) 45%, transparent); border-radius: 10px; }
+  .uncov li { display: flex; justify-content: space-between; gap: 20px; padding: 14px 20px; border-bottom: 1px dashed color-mix(in srgb, var(--line) 80%, transparent); font: 14px var(--mono); }
+  .uncov li:last-child { border-bottom: 0; }
+  .uncov li code { color: var(--failed); }
+  .uncov li span { color: var(--muted); font-size: 13px; text-align: right; overflow-wrap: anywhere; }
+
+  .crumbs { margin-bottom: 10px; color: var(--muted); font: 13px var(--mono); }
+  .crumbs a { color: var(--muted); }
+  .crumbs b { color: var(--fg); font-weight: 500; }
+  .detail-id { font-size: 22px; }
+  .detail-title { margin: 2px 0 14px; font-size: 17px; }
+  .tabs { display: flex; gap: 4px; margin: 20px 0 24px; border-bottom: 1px solid var(--line); }
+  .tabs a { margin-bottom: -1px; padding: 10px 14px; border-bottom: 2px solid transparent; color: var(--muted); font: 500 14px var(--mono); }
+  .tabs a:hover { color: var(--fg); text-decoration: none; }
+  .tabs a.on { color: var(--fg); border-bottom-color: var(--accent); }
+  .panel { padding: 20px 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  dl { display: grid; grid-template-columns: 130px 1fr; gap: 10px 16px; margin: 0; }
+  dt { padding-top: 2px; color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  dd { margin: 0; font: 14px var(--mono); overflow-wrap: anywhere; }
+  .problem-box { margin-top: 16px; }
+  .problem-box ul { margin: 0; padding-left: 20px; }
+
+  .prose { color: color-mix(in srgb, var(--fg) 90%, transparent); font-size: 15px; overflow-wrap: anywhere; }
+  .prose > :first-child { margin-top: 0; }
+  .prose > :last-child { margin-bottom: 0; }
+  .prose ul, .prose ol { padding-left: 22px; }
+  .prose h1, .prose h2, .prose h3, .prose h4 { margin: 28px 0 10px; color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  .prose h3, .prose h4 { color: var(--fg); font: 600 14px var(--mono); text-transform: none; letter-spacing: 0; }
+  .prose table { margin: 8px 0; border: 1px solid var(--line); font: 13px var(--mono); }
+  .prose th, .prose td { padding: 8px 12px; }
+  .prose pre { overflow-x: auto; padding: 12px 14px; border-radius: 8px; background: color-mix(in srgb, var(--fg) 4%, transparent); font: 13px var(--mono); }
+  .prose hr { border: 0; border-top: 1px solid var(--line); }
+
+  .step { margin-bottom: 12px; padding: 18px 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .step.has-failed { border-color: color-mix(in srgb, var(--failed) 55%, transparent); }
+  .step .h { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .step .h b { font: 600 15px var(--mono); }
+  .step .h b span { margin-right: 8px; color: var(--accent); }
+  .step .h .badges { flex-shrink: 0; justify-content: flex-end; }
+  .step .lines { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 8px 0 12px; color: var(--muted); font: 13px var(--mono); }
+  .step .lines i { color: var(--fg); font-style: normal; }
+  .step .block { margin-bottom: 10px; font-size: 14px; }
+  .step .block-label { color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  .step .exp { padding: 10px 14px; border-radius: 8px; background: color-mix(in srgb, var(--fg) 4%, transparent); font-size: 14px; }
+  .step .exp .block-label { display: block; margin-bottom: 2px; }
+
+  .split { display: flex; gap: 24px; align-items: flex-start; }
+  .split > .runs { flex: 1; min-width: 0; }
+  .split td { padding: 14px 16px; font: 14px var(--mono); white-space: nowrap; }
+  .split td .muted { font-size: 13px; }
+  .drawer { width: 52%; flex-shrink: 0; padding: 22px 22px 28px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .drawer .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .drawer .close { color: var(--muted); font: 16px var(--mono); }
+  .drawer .close:hover { color: var(--fg); text-decoration: none; }
+  .report-sections { overflow-x: auto; }
+  .drawer td, .drawer th { padding: 10px 12px; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin: 14px 0 20px; color: var(--muted); font: 13px var(--mono); }
+  .meta b { color: var(--fg); font-weight: 500; }
+
+  .meter { display: flex; align-items: center; gap: 12px; }
+  .bar { display: flex; width: 160px; height: 8px; overflow: hidden; border-radius: 4px; background: var(--line); }
+  .bar span { display: block; height: 100%; }
+  .bar .covered { background: var(--prompt); } .bar .pending { background: var(--blocked); } .bar .planned { background: var(--muted); }
+  .num { font: 14px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  input[type=search] { display: block; width: 100%; max-width: 340px; margin-bottom: 12px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); font: 14px var(--mono); outline: none; }
+  input[type=search]::placeholder { color: var(--muted); }
+  input[type=search]:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="#/runbooks"><span>❯</span> runbooks</a>
+  <nav>
+    <a id="menu-runbooks" href="#/runbooks">Runbooks</a>
+    <a id="menu-coverage" href="#/coverage">Coverage</a>
+  </nav>
+</header>
+<div class="layout">
+  <aside class="side"><div class="side-inner" id="side"></div></aside>
+  <main><div class="container" id="view"></div></main>
+</div>
+<script>
+  // Every value from the server goes through textContent, except the fields that renderMarkdown
+  // already escaped on the server: html, actions, request, expected and sectionsHtml (see setHtml).
+  const NO_SLICE = '(no slice)'
+  const NO_SLICE_ROUTE = '~none'
+  const side = document.getElementById('side')
+  const view = document.getElementById('view')
+
+  const enc = encodeURIComponent
+  const routeName = (name) => (name === NO_SLICE ? NO_SLICE_ROUTE : enc(name))
+  const dataName = (segment) => (segment === NO_SLICE_ROUTE ? NO_SLICE : segment)
+  const shownName = (name) => (name === NO_SLICE ? 'no slice' : name)
+  const runbookHash = (id, tab) => `#/runbook/${enc(id)}${tab ? `/${tab}` : ''}`
+  const reportHash = (id, name) => `#/runbook/${enc(id)}/history/${enc(name)}`
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+  const pct = (part, total) => (total === 0 ? 'n/a' : `${Math.round((part / total) * 1000) / 10}%`)
+  const roundPct = (part, total) => (total === 0 ? null : Math.round((part / total) * 100))
+  const ageText = (age) => (age === null || age === undefined ? 'never run' : age === 0 ? 'today' : `${plural(age, 'day')} ago`)
+  const capabilityOf = (id) => (id.includes('.') ? id.slice(0, id.indexOf('.')) : id)
+  // A report name starts with <YYYY-MM-DD-HHMM>; that prefix is the run's date and time.
+  const runStamp = (name) => {
+    const match = /^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})-/.exec(name)
+    return match ? { run: `${match[1]}-${match[2]}${match[3]}`, shown: `${match[1]} ${match[2]}:${match[3]}` } : { run: name, shown: name }
+  }
+  const stateClass = (state) => {
+    const value = String(state ?? '')
+    if (value === 'passed' || value === 'failed') return value
+    return value.startsWith('blocked') ? 'blocked' : ''
+  }
+
+  function el(tag, className, ...children) {
+    const node = document.createElement(tag)
+    if (className) node.className = className
+    for (const child of children) {
+      if (child === null || child === undefined || child === false) continue
+      node.append(typeof child === 'string' ? document.createTextNode(child) : child)
+    }
+    return node
+  }
+  function link(href, className, ...children) {
+    const node = el('a', className, ...children)
+    node.href = href
+    return node
+  }
+  // External links only for http and https; anything else stays text.
+  function externalLink(ref, text) {
+    let url = null
+    try { url = new URL(ref) } catch {}
+    if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) return null
+    const node = link(url.href, null, text)
+    node.target = '_blank'
+    node.rel = 'noreferrer'
+    return node
+  }
+  // The only innerHTML in this page. Callers pass html, actions, request, expected or sectionsHtml.
+  function setHtml(node, markup) {
+    node.innerHTML = markup
+    return node
+  }
+  const badge = (text, className, title) => {
+    const node = el('span', `badge ${className ?? ''}`.trim(), text)
+    if (title) node.title = title
+    return node
+  }
+  const joined = (nodes, separator = ' · ') => {
+    const out = []
+    nodes.forEach((node, index) => {
+      if (index > 0) out.push(document.createTextNode(separator))
+      out.push(typeof node === 'string' ? document.createTextNode(node) : node)
+    })
+    return out
+  }
+  function table(header, rows) {
+    const t = el('table')
+    const head = t.appendChild(el('thead')).appendChild(el('tr'))
+    for (const name of header) head.append(el('th', null, name))
+    t.appendChild(el('tbody')).append(...rows)
+    return el('div', 'table', t)
+  }
+  const row = (...cells) => {
+    const tr = el('tr')
+    for (const cell of cells) tr.append(cell)
+    return tr
+  }
+  const td = (className, ...children) => el('td', className, ...children)
+
+  async function api(path) {
+    let res
+    try {
+      res = await fetch(path, { cache: 'no-store' })
+    } catch {
+      throw new Error(`The server did not answer ${path}. Is /runbooks:ui still running?`)
+    }
+    let body = null
+    try { body = await res.json() } catch {}
+    if (!res.ok) throw new Error(`${path} answered ${res.status}: ${body?.error ?? res.statusText}`)
+    return body
+  }
+  const settled = (promise) => (promise ? promise.then((value) => ({ value }), (error) => ({ error })) : Promise.resolve({ value: null }))
+
+  function showError(error, target = view, title = 'Could not load this page') {
+    target.replaceChildren(el('div', 'error', el('b', null, title), el('p', null, String(error?.message ?? error))))
+  }
+  const showMessage = (text) => view.replaceChildren(el('p', 'message', text))
+
+  function setMenu(page) {
+    document.getElementById('menu-runbooks').className = page === 'runbooks' ? 'on' : ''
+    document.getElementById('menu-coverage').className = page === 'coverage' ? 'on' : ''
+  }
+
+  // Sidebars
+
+  function capabilitiesSide(data, selected) {
+    const total = data.capabilities.reduce((n, cap) => n + cap.problems, 0)
+    const item = (href, name, count, on) =>
+      link(href, `item${on ? ' on' : ''}`, el('span', null, name), el('span', `n${count === 0 ? ' ok' : ''}`, String(count)))
+    side.replaceChildren(
+      el('div', 'label', 'Capabilities'),
+      item('#/runbooks', 'all', total, selected === null),
+      ...data.capabilities.map((cap) => item(`#/runbooks/${routeName(cap.name)}`, shownName(cap.name), cap.problems, selected === cap.name)),
+    )
+  }
+
+  function slicesSide(data, selected) {
+    const entries = data.result.entries
+    const item = (href, name, covered, total, on) => {
+      const value = roundPct(covered, total)
+      return link(href, `item${on ? ' on' : ''}`, el('span', null, name),
+        el('span', `pct${value !== null && value < 50 ? ' low' : ''}`, value === null ? 'n/a' : `${value}%`))
+    }
+    side.replaceChildren(
+      el('div', 'label', 'Slices'),
+      item('#/coverage', 'overall', entries.covered, entries.total, selected === null),
+      el('hr'),
+      ...data.slices.map((slice) => item(`#/coverage/${routeName(slice.name)}`, shownName(slice.name), slice.covered, slice.total, selected === slice.name)),
+    )
+  }
+
+  // Runbooks page
+
+  function counters(caps, staleDays) {
+    const runbooks = caps.reduce((n, cap) => n + cap.runbooks.length, 0)
+    const stale = caps.reduce((n, cap) => n + cap.stale, 0)
+    const uncovered = caps.reduce((n, cap) => n + cap.uncovered.length, 0)
+    const withCoverage = caps.filter((cap) => cap.coverage)
+    const covered = withCoverage.reduce((n, cap) => n + cap.coverage.covered, 0)
+    const total = withCoverage.reduce((n, cap) => n + cap.coverage.total, 0)
+    const value = roundPct(covered, total)
+    const counter = (number, label, bad) => el('div', `counter${bad ? ' bad' : ''}`, el('b', null, String(number)), label)
+    return el('div', 'counters',
+      counter(runbooks, runbooks === 1 ? 'runbook' : 'runbooks'),
+      counter(stale, `no run in ${staleDays}+ days`, stale > 0),
+      counter(value === null ? '-' : `${value}%`, 'routes covered'),
+      counter(uncovered, uncovered === 1 ? 'uncovered route' : 'uncovered routes', uncovered > 0),
+    )
+  }
+
+  function runbookRow(rb) {
+    const first = td(null, link(runbookHash(rb.id), 'flow', rb.flow))
+    if (rb.status && rb.status !== 'active') first.append(' ', el('span', 'muted small', rb.status))
+    first.append(el('span', 'title', rb.title || '(no title)'))
+    if (rb.problems.length > 0) first.append(el('span', 'problems', rb.problems.join('; ')))
+
+    const date = td(`date${rb.stale ? ' stale' : ''}`)
+    if (rb.date) date.append(rb.time ? `${rb.date} ${rb.time}` : rb.date, el('small', null, ageText(rb.age)))
+    else date.append('never run')
+
+    const result = td('nowrap')
+    if (rb.result) result.append(badge(rb.result, stateClass(rb.result)))
+    if (rb.outdated) result.append(badge('outdated', null, 'The runbook changed after this run'))
+    if (rb.problems.length > 0) result.append(badge('invalid', 'invalid'))
+    if (!result.firstChild) result.append(el('span', 'muted', '-'))
+
+    const history = link(runbookHash(rb.id, 'history'), 'nowrap', `History (${rb.runs}) →`)
+    history.addEventListener('click', (event) => event.stopPropagation())
+    const tr = row(first, date, result, td('nowrap', history))
+    tr.className = `link${rb.stale ? ' stale' : ''}`
+    tr.addEventListener('click', () => { location.hash = runbookHash(rb.id) })
+    return tr
+  }
+
+  function capabilitySection(cap, linked) {
+    const name = shownName(cap.name)
+    const section = el('div', 'section', el('h3', null, linked ? link(`#/runbooks/${routeName(cap.name)}`, null, name) : name))
+    const parts = [plural(cap.stale, 'stale runbook')]
+    if (cap.coverage) parts.push(plural(cap.uncovered.length, 'uncovered route'))
+    section.append(el('div', 'sub', parts.join(' · ')))
+    section.append(cap.runbooks.length === 0
+      ? el('p', 'none', 'No runbooks yet')
+      : table(['Runbook', 'Last full run', 'Result', ''], cap.runbooks.map(runbookRow)))
+    if (cap.coverage && cap.uncovered.length > 0) {
+      section.append(el('div', 'uncov', el('h4', null, 'Uncovered routes'),
+        el('ul', null, ...cap.uncovered.map((entry) => el('li', null, el('code', null, entry.id), el('span', null, entry.file ?? entry.kind ?? ''))))))
+    }
+    return section
+  }
+
+  async function runbooksPage(name, stale) {
+    const data = await api('/api/runbooks')
+    if (stale()) return
+    capabilitiesSide(data, name)
+    if (name === null) {
+      view.replaceChildren(counters(data.capabilities, data.staleDays), ...data.capabilities.map((cap) => capabilitySection(cap, true)))
+      return
+    }
+    const cap = data.capabilities.find((c) => c.name === name)
+    if (!cap) return showMessage(`No capability named "${name}".`)
+    view.replaceChildren(counters([cap], data.staleDays), capabilitySection(cap, false))
+  }
+
+  // Runbook detail
+
+  function detailHeader(rb, tab, staleDays) {
+    const capability = capabilityOf(rb.id)
+    const crumbs = el('div', 'crumbs', link(`#/runbooks/${routeName(capability)}`, null, capability), ' / ')
+    if (tab === 'history') crumbs.append(link(runbookHash(rb.id), null, rb.flow), ' / ', el('b', null, 'history'))
+    else crumbs.append(el('b', null, rb.flow))
+
+    const badges = el('div', 'badges')
+    if (rb.status) badges.append(badge(rb.status, rb.status))
+    if (rb.surface) badges.append(badge(rb.surface))
+    for (const tag of rb.tags ?? []) badges.append(badge(tag, tag === 'critical' ? 'critical' : null))
+    if (rb.result) badges.append(badge(`last run ${rb.result} · ${ageText(rb.age)}`, stateClass(rb.result)))
+    else badges.append(badge('never run', rb.stale ? 'failed' : null))
+    if (rb.stale && rb.date) badges.append(badge(`no run in ${staleDays}+ days`, 'stale-badge'))
+    if (rb.outdated) badges.append(badge('outdated', null, 'The runbook changed after this run'))
+    if (rb.problems.length > 0) badges.append(badge('invalid', 'invalid'))
+
+    const tabs = el('div', 'tabs',
+      link(runbookHash(rb.id), tab === 'runbook' ? 'on' : null, 'Runbook'),
+      link(runbookHash(rb.id, 'history'), tab === 'history' ? 'on' : null, `History (${rb.runs})`))
+
+    const header = [crumbs, el('h3', 'detail-id', rb.id), el('div', 'detail-title', rb.title || '(no title)'), badges]
+    if (rb.problems.length > 0) {
+      header.push(el('div', 'error problem-box', el('b', null, 'Problems'), el('ul', 'mono', ...rb.problems.map((p) => el('li', null, p)))))
+    }
+    header.push(tabs)
+    return header
+  }
+
+  function metadataPanel(rb) {
+    const dl = el('dl')
+    const add = (label, ...value) => {
+      if (value.length === 0) return
+      dl.append(el('dt', null, label), el('dd', null, ...value))
+    }
+    const lines = (list) => (list.length === 0 ? [] : [el('div', 'lines-list', ...list.map((item) => el('div', null, item)))])
+    if (rb.feature) add('Feature', rb.feature)
+    if (rb.roles.length > 0) add('Roles', rb.roles.join(', '))
+    if (rb.viewports.length > 0) {
+      add('Viewports', ...joined(rb.viewports.map((vp) => {
+        const node = el('span', null, vp.name)
+        if (vp.width && vp.height) node.append(' ', el('span', 'muted', `${vp.width}x${vp.height}`))
+        return node
+      })))
+    }
+    if (rb.upstream) add('Upstream', rb.upstream, rb.upstreamFromConfig ? el('span', 'muted', ' (config default)') : null)
+    const covers = [...(rb.covers?.entries ?? []), ...(rb.covers?.requirements ?? [])]
+    if (covers.length > 0) add('Covers', covers.join(' · '))
+    add('Scripts', ...lines(rb.scripts))
+    add('Sources', ...lines(rb.sources))
+    const design = Object.entries(rb.design ?? {})
+    if (design.length > 0) {
+      add('Design', ...joined(design.map(([name, ref]) => {
+        const external = externalLink(String(ref), `${name} ↗`)
+        return external ?? el('span', null, `${name} `, el('span', 'muted', String(ref)))
+      })))
+    }
+    if (rb.lastRun) {
+      const parts = [rb.lastRun.date ? (rb.time ? `${rb.lastRun.date} ${rb.time}` : String(rb.lastRun.date)) : 'no date']
+      if (rb.lastRun.commit) parts.push(String(rb.lastRun.commit))
+      const name = typeof rb.lastRun.report === 'string' ? rb.lastRun.report.split('/').pop() : null
+      if (name && rb.reportOnDisk) parts.push(link(reportHash(rb.id, name), null, 'report →'))
+      else if (name) parts.push(el('span', 'muted', 'report not on this machine'))
+      add('Last run', ...joined(parts))
+    } else {
+      add('Last run', el('span', 'muted', 'never run'))
+    }
+    add('File', el('span', 'muted', rb.path))
+    if (rb.warnings?.length > 0) add('Warnings', ...lines(rb.warnings))
+    return el('div', 'panel', dl)
+  }
+
+  function stepCard(step, states) {
+    const failed = states.some((s) => s.state === 'failed')
+    const badges = el('span', 'badges', ...states.map((s) => badge(s.viewport ? `${s.viewport} ${s.state}` : s.state, stateClass(s.state))))
+    const card = el('div', `step${failed ? ' has-failed' : ''}`,
+      el('div', 'h', el('b', null, el('span', null, step.step), step.title), states.length > 0 ? badges : null))
+    if (step.fields.length > 0) {
+      card.append(el('div', 'lines', ...step.fields.map((field) => el('span', null, `${field.name} `, el('i', null, field.value || '-')))))
+    }
+    if (step.actions) card.append(setHtml(el('div', 'block prose'), step.actions))
+    if (step.request) card.append(el('div', 'block', el('div', 'block-label', 'Request'), setHtml(el('div', 'prose'), step.request)))
+    if (step.expected) card.append(el('div', 'exp', el('span', 'block-label', 'Expected'), setHtml(el('div', 'prose'), step.expected)))
+    return card
+  }
+
+  function bodyNodes(rb) {
+    const { sections, steps } = rb.body
+    if (sections.length === 0 && steps.length === 0) return [el('h4', null, 'Body'), el('p', 'none', 'This runbook has no sections yet.')]
+    const blocks = sections.map((section) => [el('h4', null, section.heading), setHtml(el('div', 'prose'), section.html)])
+    if (steps.length > 0) {
+      // Steps go right after Preconditions (or Goal when there are no Preconditions), as in the runbook template.
+      const anchor = ['Preconditions', 'Goal'].map((name) => sections.findIndex((s) => s.heading === name)).find((index) => index >= 0)
+      const stepsBlock = [el('h4', null, 'Steps'), ...steps.map((step) => stepCard(step, rb.stepStates[step.step] ?? []))]
+      blocks.splice(anchor === undefined ? 0 : anchor + 1, 0, stepsBlock)
+    }
+    return blocks.flat()
+  }
+
+  function historyList(rb, history) {
+    const runs = history.runs
+    const rows = runs.map((run) => {
+      const stamp = runStamp(run.name)
+      const result = td(null, run.result ? badge(run.result, stateClass(run.result)) : el('span', 'muted', '-'))
+      if (run.partial) result.append(el('span', 'partial', 'partial'))
+      const tr = row(
+        td(null, stamp.shown, el('br'), el('span', 'muted', `${run.branch ?? '-'} · ${run.mode ?? '-'}`)),
+        td(null, run.commit ?? '-'),
+        result,
+      )
+      tr.className = 'link'
+      tr.dataset.name = run.name
+      tr.addEventListener('click', () => { location.hash = reportHash(rb.id, run.name) })
+      return tr
+    })
+    const list = el('div', 'runs', runs.length === 0
+      ? el('p', 'none', 'No runs on this machine yet.')
+      : table(['Date', 'Commit', 'Result'], rows))
+    return { list, rows }
+  }
+
+  function reportPanel(rb, report) {
+    const stamp = runStamp(report.name)
+    const close = link(runbookHash(rb.id, 'history'), 'close', '✕')
+    close.title = 'Close the report'
+    close.setAttribute('aria-label', 'Close the report')
+    const meta = el('div', 'meta', el('span', null, report.result ? badge(report.result, stateClass(report.result)) : el('span', null, 'no result')))
+    if (report.partial) meta.append(el('span', null, 'partial'))
+    const field = (label, value) => el('span', null, `${label} `, el('b', null, value ?? '-'))
+    meta.append(field('mode', report.mode), field('upstream', report.upstream), field('commit', report.commit), field('branch', report.branch))
+    if (report.viewports.length > 0) meta.append(field(report.viewports.length === 1 ? 'viewport' : 'viewports', report.viewports.join(', ')))
+
+    // sectionsHtml is the report body below its title: the step table first, then Failures, Blocked, Notes and the rest.
+    const body = report.sectionsHtml
+      ? setHtml(el('div', 'prose report-sections'), report.sectionsHtml)
+      : el('p', 'none', 'This report has no step table and no sections.')
+    return [el('div', 'top', el('h3', null, `Run ${stamp.run}`), close), meta, body]
+  }
+
+  // The history view stays on screen while the hash only changes the selected report.
+  let history = null
+
+  async function runbookPage(id, tab, reportName, stale) {
+    if (tab === 'history' && history?.id === id) return history.select(reportName)
+    history = null
+    const [list, detail, runs] = await Promise.all([
+      settled(api('/api/runbooks')),
+      settled(api(`/api/runbook/${enc(id)}`)),
+      settled(tab === 'history' ? api(`/api/runbook/${enc(id)}/runs`) : null),
+    ])
+    if (stale()) return
+    if (list.value) capabilitiesSide(list.value, capabilityOf(id))
+    else side.replaceChildren()
+    const failed = [detail, runs, list].find((r) => r.error)
+    if (failed) return showError(failed.error)
+    const rb = detail.value
+    const header = detailHeader(rb, tab, list.value.staleDays)
+    if (tab === 'runbook') {
+      view.replaceChildren(...header, metadataPanel(rb), ...bodyNodes(rb))
+      return
+    }
+
+    const { list: runsList, rows } = historyList(rb, runs.value)
+    const drawer = el('div', 'drawer')
+    drawer.hidden = true
+    const split = el('div', 'split', runsList, drawer)
+    const count = runs.value.runs.length
+    view.replaceChildren(...header, el('div', 'sub', `${plural(count, 'run')} on this machine`), split)
+
+    let panelToken = 0
+    const select = async (name) => {
+      for (const tr of rows) tr.className = `link${tr.dataset.name === name ? ' sel' : ''}`
+      const mine = ++panelToken
+      if (!name) {
+        drawer.hidden = true
+        drawer.replaceChildren()
+        return
+      }
+      drawer.hidden = false
+      drawer.replaceChildren(el('p', 'message', 'Loading the report…'))
+      try {
+        const report = await api(`/api/runs/${enc(name)}`)
+        if (mine === panelToken) drawer.replaceChildren(...reportPanel(rb, report))
+      } catch (error) {
+        if (mine === panelToken) showError(error, drawer, 'Could not load this report')
+      }
+    }
+    history = { id, select }
+    await select(reportName)
+  }
+
+  // Coverage page
+
+  function bar({ covered, pending, planned, total }) {
+    const node = el('div', 'bar')
+    for (const [name, value] of [['covered', covered], ['pending', pending], ['planned', planned]]) {
+      const part = node.appendChild(el('span', name))
+      part.style.width = total === 0 ? '0' : `${(value / total) * 100}%`
+    }
+    return node
+  }
+
+  function filterable(rows, emptyText) {
+    const empty = el('p', 'none', rows.length === 0 ? emptyText : 'Nothing matches.')
+    empty.hidden = rows.length > 0
+    const input = el('input')
+    input.type = 'search'
+    input.placeholder = 'Filter by id or file'
+    input.setAttribute('aria-label', 'Filter uncovered items')
+    input.addEventListener('input', () => {
+      const query = input.value.trim().toLowerCase()
+      let shown = 0
+      for (const tr of rows) {
+        tr.hidden = !tr.dataset.text.includes(query)
+        if (!tr.hidden) shown++
+      }
+      empty.hidden = shown > 0
+    })
+    const tableNode = table(['Id', 'Kind', 'Where'], rows)
+    tableNode.hidden = rows.length === 0
+    return [input, tableNode, empty]
+  }
+
+  function overallView(data) {
+    const result = data.result
+    const e = result.entries
+    const r = result.requirements
+    const rb = result.runbooks
+    const stat = (label, value, detail) => el('div', 'stat', el('div', 'l', label), el('div', 'v', value), el('div', 'd', detail))
+    const sub = [plural(e.total, 'entry point'), r ? plural(r.total, 'requirement') : (result.requirementsNote ?? 'no requirement source configured')]
+
+    const withSurface = result.groups.some((g) => g.surface)
+    const sliceRows = result.groups.map((g) => row(
+      td('mono', link(`#/coverage/${routeName(g.name)}`, g.name === NO_SLICE ? 'muted' : null, shownName(g.name))),
+      ...(withSurface ? [td('muted small', g.surface ?? '-')] : []),
+      td('num', String(g.covered)), td('num', String(g.pending)), td('num', String(g.planned)), td('num', String(g.total)),
+      td(null, el('div', 'meter', bar(g), el('span', 'num', pct(g.covered, g.total)))),
+    ))
+
+    const uncovered = [
+      ...e.uncovered.map((i) => ({ id: i.id, kind: i.kind ?? 'entry', where: [i.file, i.citedByMocked && 'cited, not covered (mocked)'].filter(Boolean).join(' · ') })),
+      ...(r ? r.uncovered.map((i) => ({ id: i.id, kind: 'requirement', where: [i.title, i.file].filter(Boolean).join(' · ') })) : []),
+    ]
+    const uncoveredRows = uncovered.map((item) => {
+      const tr = row(td('mono', item.id), td('kind', item.kind), td('muted small', item.where || '-'))
+      tr.className = 'unc'
+      tr.dataset.text = `${item.id} ${item.where}`.toLowerCase()
+      return tr
+    })
+
+    const skipped = result.orphanChecksSkipped ?? []
+    const orphans = result.orphans.length === 0
+      ? el('p', 'none', skipped.length > 0 ? `Orphan check skipped for ${skipped.join(', ')}: a source did not run.` : 'None.')
+      : table(['Runbook', 'Cites', 'Missing id'], result.orphans.map((o) =>
+        row(td(null, link(runbookHash(o.runbook), 'rbid', o.runbook)), td('muted small', o.kind), td('mono', el('span', 'problems', o.ref)))))
+    const invalid = result.invalid.length === 0
+      ? el('p', 'none', 'None.')
+      : table(['Runbook', 'Problems'], result.invalid.map((i) =>
+        row(td(null, link(runbookHash(i.id), 'rbid', i.id), el('span', 'kind', i.path)), td('mono', el('span', 'problems', i.problems.join('; '))))))
+
+    const uncoveredHeading = el('h4', null, 'Uncovered')
+    if (uncovered.length > 0) uncoveredHeading.append(el('span', 'c', String(uncovered.length)))
+    view.replaceChildren(
+      el('h3', null, 'overall'),
+      el('div', 'sub', sub.join(' · ')),
+      el('div', 'stats',
+        stat('Entry points', pct(e.covered, e.total), `${e.covered} of ${e.total} covered · ${e.pending} pending · ${e.planned} planned`),
+        r ? stat('Requirements', pct(r.covered, r.total), `${r.covered} of ${r.total} covered · ${r.pending} pending · ${r.planned} planned`)
+          : stat('Requirements', '-', result.requirementsNote ?? 'no requirement source configured'),
+        stat('Runbooks', String(rb.active), `active · ${rb.draft} draft · ${rb.placeholder} placeholder`),
+        stat('With a script', String(rb.automated), `of ${rb.active} active`)),
+      el('h4', null, 'By slice'),
+      sliceRows.length === 0 ? el('p', 'none', 'No entry points found.') : table(['Slice', ...(withSurface ? ['Surface'] : []), 'Covered', 'Pending', 'Planned', 'Total', 'Coverage'], sliceRows),
+      uncoveredHeading,
+      ...filterable(uncoveredRows, 'Everything is covered.'),
+      el('h4', null, 'Orphans'), orphans,
+      el('h4', null, 'Invalid runbooks'), invalid,
+    )
+  }
+
+  function sliceView(data, name, capabilities) {
+    const groups = data.result.groups
+    if (groups.length === 0) return showMessage(`No entry point falls in the slice "${shownName(name)}".`)
+    const items = groups.flatMap((g) => (g.items ?? []).map((item) => ({ ...item, surface: g.surface ?? null })))
+      .sort((a, b) => a.id.localeCompare(b.id))
+    const count = (state) => items.filter((item) => item.state === state).length
+    const sub = el('div', 'sub', [plural(items.length, 'entry point'), `${count('covered')} covered`, `${count('pending')} pending`,
+      `${count('planned')} planned`, `${count('uncovered')} uncovered`].join(' · '))
+    const capability = capabilities?.find((cap) => cap.name === name)
+    if (capability) {
+      const n = capability.runbooks.length
+      sub.append(' · ', link(`#/runbooks/${routeName(name)}`, null, n === 0 ? 'No runbooks yet →' : `${plural(n, 'runbook')} →`))
+    }
+    const rows = items.map((item) => {
+      const runbooks = td(null)
+      const ids = item.runbooks ?? []
+      if (ids.length > 0) runbooks.append(el('div', 'lines-list', ...ids.map((id) => el('div', null, link(runbookHash(id), 'rbid', id)))))
+      if (item.citedByMocked?.length > 0) {
+        runbooks.append(el('span', 'kind', 'cited, not covered (mocked)'),
+          el('div', 'lines-list', ...item.citedByMocked.map((id) => el('div', null, link(runbookHash(id), 'rbid', id)))))
+      }
+      if (!runbooks.firstChild) runbooks.append(el('span', 'muted', '-'))
+      const tests = item.tests.length === 0
+        ? td('muted', '-')
+        : td('muted small', el('div', 'lines-list', ...item.tests.map((t) => el('div', null, t))))
+      const where = [item.surface, item.file].filter(Boolean).join(' · ')
+      const tr = row(td('mono', item.id, where ? el('span', 'kind', where) : null), td(null, badge(item.state, item.state)), runbooks, tests)
+      if (item.state === 'uncovered') tr.className = 'unc'
+      return tr
+    })
+    view.replaceChildren(el('h3', null, shownName(name)), sub, table(['Entry point', 'State', 'Runbooks', 'Scripts'], rows))
+  }
+
+  async function coveragePage(name, stale) {
+    const [coverage, list] = await Promise.all([
+      settled(api(name === null ? '/api/coverage' : `/api/coverage?slice=${enc(name)}`)),
+      settled(name === null ? null : api('/api/runbooks')),
+    ])
+    if (stale()) return
+    if (coverage.error) {
+      side.replaceChildren()
+      return showError(coverage.error)
+    }
+    slicesSide(coverage.value, name)
+    if (name === null) overallView(coverage.value)
+    else sliceView(coverage.value, name, list.value?.capabilities)
+  }
+
+  // Router
+
+  function notFound() {
+    side.replaceChildren()
+    showMessage('No page at this address.')
+  }
+
+  let token = 0
+  async function render() {
+    const raw = location.hash.replace(/^#\/?/, '').replace(/\/$/, '')
+    const parts = raw === '' ? [] : raw.split('/').map((segment) => {
+      try { return decodeURIComponent(segment) } catch { return null }
+    })
+    if (parts.length === 0) return location.replace('#/runbooks')
+    const [page, a, b, c] = parts
+    setMenu(page === 'coverage' ? 'coverage' : 'runbooks')
+    const mine = ++token
+    const stale = () => mine !== token
+    const isHistory = page === 'runbook' && a && b === 'history' && parts.length <= 4
+    if (!isHistory) history = null
+    const scroll = !(isHistory && history?.id === a)
+    try {
+      if (parts.includes(null) || parts.includes('')) notFound()
+      else if (page === 'runbooks' && parts.length <= 2) await runbooksPage(a === undefined ? null : dataName(a), stale)
+      else if (page === 'runbook' && a && parts.length === 2) await runbookPage(a, 'runbook', null, stale)
+      else if (isHistory) await runbookPage(a, 'history', c ?? null, stale)
+      else if (page === 'coverage' && parts.length <= 2) await coveragePage(a === undefined ? null : dataName(a), stale)
+      else notFound()
+    } catch (error) {
+      if (!stale()) {
+        history = null
+        showError(error)
+      }
+    }
+    if (scroll && !stale()) window.scrollTo(0, 0)
+  }
+  window.addEventListener('hashchange', render)
+  render()
+</script>
+</body>
+</html>
