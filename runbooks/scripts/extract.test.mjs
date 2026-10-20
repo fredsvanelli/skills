@@ -53,10 +53,10 @@ test('extractItems over the fixture: local pages plus the sibling API', () => {
   const { items, warnings } = extractItems(FIXTURE, config.entries, 'entries')
   assert.deepEqual(warnings, [])
   assert.deepEqual(items.map((i) => `${i.kind} ${i.id} <- ${i.file}`), [
+    'ui-route /billing/invoices/[id] <- src/app/[locale]/(dashboard)/billing/invoices/[id]/page.tsx',
+    'ui-route /billing/invoices <- src/app/[locale]/(dashboard)/billing/invoices/page.tsx',
     'ui-route /deliveries/[id] <- src/app/[locale]/(dashboard)/deliveries/[id]/page.tsx',
     'ui-route /deliveries <- src/app/[locale]/(dashboard)/deliveries/page.tsx',
-    'ui-route /financeiro/faturas/[id] <- src/app/[locale]/(dashboard)/financeiro/faturas/[id]/page.tsx',
-    'ui-route /financeiro/faturas <- src/app/[locale]/(dashboard)/financeiro/faturas/page.tsx',
     'ui-route /settings <- src/app/[locale]/(dashboard)/settings/page.tsx',
     'ui-route / <- src/app/[locale]/page.tsx',
     'api-endpoint DELETE /admin/invoices/[id] <- ../api/src/app/admin/invoices/[id]/route.ts',

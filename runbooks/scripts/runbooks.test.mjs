@@ -74,7 +74,7 @@ test('loadRunbooks maps frontmatter fields', () => {
     roles: ['admin'],
     viewports: [],
     design: {},
-    covers: { entries: ['/financeiro/faturas', 'POST /admin/invoices'], requirements: ['REQ-1'] },
+    covers: { entries: ['/billing/invoices', 'POST /admin/invoices'], requirements: ['REQ-1'] },
     sources: ['docs/specs/billing.md'],
     scripts: ['e2e/billing/issue-invoice.runbook.spec.ts'],
     status: 'active',

@@ -17,7 +17,7 @@ Use at most one filter. Without one, the command writes the `overall` report.
 | `--capability x` | entries whose file is in the slice `x` of the config `slices`; report `_coverage/capability-x.md` |
 | `--slice name` | the same entries as `--capability`; report `_coverage/slice-name.md` |
 | `--feature y` | entries and requirements cited by runbooks with `feature: y` |
-| `--path glob` | entries whose file matches the glob (`src/app/**/financeiro/**`) |
+| `--path glob` | entries whose file matches the glob (`src/app/**/billing/**`) |
 | `--all-slices` | on its own: the `overall` report plus one report per slice in the config |
 
 Slice and path filters reach entries only; requirements have no file to slice by.

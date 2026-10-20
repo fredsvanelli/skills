@@ -23,11 +23,11 @@ function fixtureAffected(changed) {
 }
 
 test('a changed page affects the runbooks citing it and its slice', () => {
-  const hits = fixtureAffected(['src/app/[locale]/(dashboard)/financeiro/faturas/page.tsx'])
+  const hits = fixtureAffected(['src/app/[locale]/(dashboard)/billing/invoices/page.tsx'])
   assert.deepEqual(hits.map((h) => [h.runbook.id, h.reasons]), [
     ['billing.cancel-invoice', ['slice billing: 1 file(s)']],
     ['billing.issue-invoice', [
-      '/financeiro/faturas (src/app/[locale]/(dashboard)/financeiro/faturas/page.tsx)',
+      '/billing/invoices (src/app/[locale]/(dashboard)/billing/invoices/page.tsx)',
       'slice billing: 1 file(s)',
     ]],
   ])
@@ -40,7 +40,7 @@ test('placeholders never show: they have no steps to run', () => {
     runbooks: [placeholder],
     entries: extractItems(FIXTURE, config.entries, 'entries').items,
     slices: config.slices,
-    changed: [placeholder.path, 'src/app/[locale]/(dashboard)/financeiro/faturas/page.tsx'],
+    changed: [placeholder.path, 'src/app/[locale]/(dashboard)/billing/invoices/page.tsx'],
   })
   assert.deepEqual(hits, [])
 })

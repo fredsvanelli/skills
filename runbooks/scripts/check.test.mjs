@@ -51,7 +51,7 @@ function project({ lastRun = 'null', reports = [] } = {}) {
 const FULL = {
   run: '2026-10-01-0900-billing.pay',
   result: 'failed',
-  rows: [['S01', 'passed', 'ok'], ['S02', 'failed', '"Erro"'], ['S03', 'blocked-by-parent', '—']],
+  rows: [['S01', 'passed', 'ok'], ['S02', 'failed', '"Error"'], ['S03', 'blocked-by-parent', '—']],
 }
 const PARTIAL = {
   run: '2026-10-02-1000-billing.pay',

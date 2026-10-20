@@ -6,7 +6,7 @@ feature: invoices
 tags: [financial, critical]
 roles: [admin]
 covers:
-  entries: ["/financeiro/faturas", "POST /admin/invoices"]
+  entries: ["/billing/invoices", "POST /admin/invoices"]
   requirements: [REQ-1]
 sources: ["docs/specs/billing.md"]
 scripts: ["e2e/billing/issue-invoice.runbook.spec.ts"]

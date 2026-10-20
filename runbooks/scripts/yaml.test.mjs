@@ -9,7 +9,7 @@ feature: invoices
 tags: [financial, critical]
 roles: [admin]
 covers:
-  entries: ["/financeiro/faturas", "POST /admin/internal/invoices"]
+  entries: ["/billing/invoices", "POST /admin/internal/invoices"]
   requirements: ["CHE-581#AC2"]
 sources: ["docs/specs/x.md", "CHE-581"]
 scripts: []
@@ -26,7 +26,7 @@ test('parses the runbook frontmatter shape', () => {
     tags: ['financial', 'critical'],
     roles: ['admin'],
     covers: {
-      entries: ['/financeiro/faturas', 'POST /admin/internal/invoices'],
+      entries: ['/billing/invoices', 'POST /admin/internal/invoices'],
       requirements: ['CHE-581#AC2'],
     },
     sources: ['docs/specs/x.md', 'CHE-581'],

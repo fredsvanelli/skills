@@ -16,7 +16,7 @@ Use at most one filter. Without one, the command maps the whole project.
 |---|---|
 | `--capability x` | map only entries whose file is in the slice `x` of the config `slices` |
 | `--slice name` | the same as `--capability` |
-| `--path glob` | map only entries whose file matches the glob (`src/app/**/financeiro/**`) |
+| `--path glob` | map only entries whose file matches the glob (`src/app/**/billing/**`) |
 
 With a filter, a requirement is mapped only when it belongs to a flow mapped in that scope.
 

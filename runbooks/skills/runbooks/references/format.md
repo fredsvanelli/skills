@@ -20,7 +20,7 @@ design:
   invoices-list.mobile: "https://www.figma.com/design/AbC123/Billing?node-id=12-90"
   issue-dialog: "https://www.figma.com/design/AbC123/Billing?node-id=15-2"
 covers:
-  entries: ["/financeiro/faturas", "POST /admin/internal/invoices"]
+  entries: ["/billing/invoices", "POST /admin/internal/invoices"]
   requirements: ["CHE-581#AC2"]
 sources: ["docs/superpowers/specs/2026-09-18-CHE-581-design.md", "CHE-581"]
 scripts: []

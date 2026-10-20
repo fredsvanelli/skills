@@ -23,7 +23,7 @@ Arguments: `$ARGUMENTS`
 | `--from dir <path>` | a code directory that changed, read as in `create` |
 | `--from route <url>` | a frontend route or an API endpoint whose behavior changed, resolved to an entry as in `create` |
 
-Examples: `/runbooks:update billing.issue-invoice --from diff`, `/runbooks:update billing.issue-invoice --from ticket CHE-612`, `/runbooks:update billing.issue-invoice --from text "the Issue button is now Generate invoice"`, `/runbooks:update billing.issue-invoice --from file "src/app/[locale]/(dashboard)/financeiro/faturas/page.tsx"`, `/runbooks:update billing.issue-invoice --from route "POST /admin/invoices"`.
+Examples: `/runbooks:update billing.issue-invoice --from diff`, `/runbooks:update billing.issue-invoice --from ticket CHE-612`, `/runbooks:update billing.issue-invoice --from text "the Issue button is now Generate invoice"`, `/runbooks:update billing.issue-invoice --from file "src/app/[locale]/(dashboard)/billing/invoices/page.tsx"`, `/runbooks:update billing.issue-invoice --from route "POST /admin/invoices"`.
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`.
 

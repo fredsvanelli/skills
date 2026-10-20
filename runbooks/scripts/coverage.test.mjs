@@ -58,8 +58,8 @@ test('groups by slice with (no slice) last', () => {
 test('withItems lists each slice entry with its state and the scripts of the runbooks that cite it', () => {
   const billing = fixtureCoverage({}, true).groups.find((g) => g.name === 'billing')
   assert.deepEqual(billing.items.map(({ id, state, tests }) => ({ id, state, tests })), [
-    { id: '/financeiro/faturas', state: 'covered', tests: ['e2e/billing/issue-invoice.runbook.spec.ts'] },
-    { id: '/financeiro/faturas/[id]', state: 'pending', tests: [] },
+    { id: '/billing/invoices', state: 'covered', tests: ['e2e/billing/issue-invoice.runbook.spec.ts'] },
+    { id: '/billing/invoices/[id]', state: 'pending', tests: [] },
     { id: 'DELETE /admin/invoices/[id]', state: 'pending', tests: [] },
     { id: 'GET /admin/invoices', state: 'uncovered', tests: [] },
     { id: 'POST /admin/invoices', state: 'covered', tests: ['e2e/billing/issue-invoice.runbook.spec.ts'] },
@@ -78,7 +78,7 @@ test('placeholders make an item planned, never covered or pending', () => {
   const config = loadConfig(FIXTURE)
   const placeholder = {
     id: 'settings.edit-settings', path: 'docs/runbooks/settings/edit-settings.md', capability: 'settings', feature: null, tags: [], roles: [],
-    covers: { entries: ['/settings', '/financeiro/faturas'], requirements: ['REQ-3'] }, sources: [], scripts: [], status: 'placeholder', lastRun: null, problems: [],
+    covers: { entries: ['/settings', '/billing/invoices'], requirements: ['REQ-3'] }, sources: [], scripts: [], status: 'placeholder', lastRun: null, problems: [],
   }
   const result = computeCoverage({
     runbooks: [...loadRunbooks(FIXTURE, config), placeholder],

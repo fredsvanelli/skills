@@ -16,7 +16,7 @@
     { "extractor": "regex", "glob": "docs/specs/*.md", "pattern": "^- (?<id>REQ-\\d+): (?<title>.+)$" }
   ],
   "slices": {
-    "billing": ["src/app/[locale]/(dashboard)/financeiro/**", "../api/src/app/admin/invoices/**"],
+    "billing": ["src/app/[locale]/(dashboard)/billing/**", "../api/src/app/admin/invoices/**"],
     "deliveries": ["src/app/[locale]/(dashboard)/deliveries/**"]
   },
   "tickets": { "fetch": "" },

@@ -6,7 +6,7 @@ feature: invoices
 tags: [financial]
 roles: [admin]
 covers:
-  entries: ["/financeiro/faturas/[id]", "DELETE /admin/invoices/[id]"]
+  entries: ["/billing/invoices/[id]", "DELETE /admin/invoices/[id]"]
   requirements: [REQ-2]
 sources: ["docs/specs/billing.md"]
 scripts: []

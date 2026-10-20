@@ -20,12 +20,12 @@ Arguments: `$ARGUMENTS`
 | `--from text "<description>"` | a description of the flow in your own words |
 | `--from file <path>` | a code file of the flow: a page, a component, a route handler, a controller, a service |
 | `--from dir <path>` | a code directory, such as a feature folder; each flow found in it can become a runbook |
-| `--from route <url>` | a frontend route (`/financeiro/faturas/42`, or a full URL of the app) or an API endpoint (`POST /admin/invoices`) |
+| `--from route <url>` | a frontend route (`/billing/invoices/42`, or a full URL of the app) or an API endpoint (`POST /admin/invoices`) |
 | `--from placeholder <id>` | a placeholder written by `/runbooks:map`; this run fills that file |
 
 Whatever the source, the command looks for a placeholder of the same flow and fills it instead of writing a new file.
 
-Examples: `/runbooks:create --from spec docs/specs/billing.md`, `/runbooks:create --from diff develop`, `/runbooks:create --from ticket CHE-581`, `/runbooks:create --from text "partner downloads an invoice PDF"`, `/runbooks:create --from file "src/app/[locale]/(dashboard)/financeiro/faturas/page.tsx"`, `/runbooks:create --from dir src/features/billing`, `/runbooks:create --from route /financeiro/faturas/42`, `/runbooks:create --from route "POST /admin/invoices"`, `/runbooks:create --from placeholder billing.issue-invoice`.
+Examples: `/runbooks:create --from spec docs/specs/billing.md`, `/runbooks:create --from diff develop`, `/runbooks:create --from ticket CHE-581`, `/runbooks:create --from text "partner downloads an invoice PDF"`, `/runbooks:create --from file "src/app/[locale]/(dashboard)/billing/invoices/page.tsx"`, `/runbooks:create --from dir src/features/billing`, `/runbooks:create --from route /billing/invoices/42`, `/runbooks:create --from route "POST /admin/invoices"`, `/runbooks:create --from placeholder billing.issue-invoice`.
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`.
 
