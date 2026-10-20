@@ -127,7 +127,7 @@ test('preflight and CORS headers', async (t) => {
   assert.equal(pre.headers.get('access-control-allow-credentials'), 'true')
   assert.equal(pre.headers.get('access-control-allow-methods'), 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
   assert.equal(pre.headers.get('access-control-allow-headers'), 'x-a,content-type')
-  const plain = await fetch(`${s.base}/__runbooks/state`)
+  const plain = await fetch(`${s.base}/invoices`)
   assert.equal(plain.headers.get('access-control-allow-origin'), '*')
   assert.equal(plain.headers.get('access-control-allow-credentials'), null)
   await s.select({ runbook: 'billing.list' })
@@ -152,13 +152,116 @@ test('select validates input and changes nothing on error', async (t) => {
   const bad = await s.select({ mode: 'weird', step: 'S02' })
   assert.equal(bad.status, 400)
   assert.equal(typeof (await bad.json()).error, 'string')
-  const notObject = await fetch(`${s.base}/__runbooks/select`, { method: 'POST', body: '[1]' })
+  const json = { 'content-type': 'application/json' }
+  const notObject = await fetch(`${s.base}/__runbooks/select`, { method: 'POST', headers: json, body: '[1]' })
   assert.equal(notObject.status, 400)
-  const notJson = await fetch(`${s.base}/__runbooks/select`, { method: 'POST', body: 'x' })
+  const notJson = await fetch(`${s.base}/__runbooks/select`, { method: 'POST', headers: json, body: 'x' })
   assert.equal(notJson.status, 400)
   const state = await s.state()
   assert.equal(state.step, 'S01')
   assert.equal(state.mode, 'mocked')
+})
+
+test('control routes send no CORS headers and approve no preflight', async (t) => {
+  const s = await start(t, FILES)
+  const origin = 'https://evil.example'
+  const sel = await fetch(`${s.base}/__runbooks/select`, {
+    method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ runbook: 'billing.list' }),
+  })
+  assert.equal(sel.status, 200)
+  assert.equal(sel.headers.get('access-control-allow-origin'), null)
+  assert.equal(sel.headers.get('access-control-allow-credentials'), null)
+  const state = await fetch(`${s.base}/__runbooks/state`, { headers: { origin } })
+  assert.equal(state.headers.get('access-control-allow-origin'), null)
+  const pre = await fetch(`${s.base}/__runbooks/select`, {
+    method: 'OPTIONS', headers: { origin, 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type' },
+  })
+  assert.equal(pre.status, 404)
+  assert.equal(pre.headers.get('access-control-allow-origin'), null)
+  assert.equal(pre.headers.get('access-control-allow-methods'), null)
+})
+
+test('select needs a JSON content type and changes nothing without it', async (t) => {
+  const s = await start(t, FILES)
+  await s.select({ runbook: 'billing.list', step: 'S01' })
+  const plain = await fetch(`${s.base}/__runbooks/select`, {
+    method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ runbook: 'other.flow', mode: 'record' }),
+  })
+  assert.equal(plain.status, 415)
+  assert.deepEqual(await plain.json(), { error: 'select needs content-type: application/json' })
+  const withCharset = await fetch(`${s.base}/__runbooks/select`, {
+    method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' }, body: JSON.stringify({ step: 'S02' }),
+  })
+  assert.equal(withCharset.status, 200)
+  const state = await s.state()
+  assert.equal(state.runbook, 'billing.list')
+  assert.equal(state.mode, 'mocked')
+  assert.equal(state.step, 'S02')
+})
+
+test('select rejects a runbook or step that is not an id and changes nothing', async (t) => {
+  const s = await start(t, FILES)
+  await s.select({ runbook: 'billing.list', step: 'S01' })
+  for (const [body, key] of [
+    [{ runbook: '../../x.y', mode: 'record' }, 'runbook'],
+    [{ runbook: ['billing.list'] }, 'runbook'],
+    [{ runbook: 'billing' }, 'runbook'],
+    [{ step: '../S1', mode: 'record' }, 'step'],
+    [{ step: 'S1/..' }, 'step'],
+  ]) {
+    const r = await s.select(body)
+    assert.equal(r.status, 400, JSON.stringify(body))
+    assert.match((await r.json()).error, new RegExp(`^${key} `))
+  }
+  const state = await s.state()
+  assert.deepEqual([state.runbook, state.mode, state.step], ['billing.list', 'mocked', 'S01'])
+  const cleared = await s.select({ runbook: null, step: null })
+  assert.deepEqual(await cleared.json(), { runbook: null, mode: 'mocked', step: null })
+})
+
+// Sends a request with a chosen Host header, which fetch does not allow.
+function rawRequest(base, pathname, { method = 'GET', headers = {}, body } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(`${base}${pathname}`, { method, headers }, (res) => {
+      const chunks = []
+      res.on('data', (c) => chunks.push(c))
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }))
+    })
+    req.on('error', reject)
+    req.end(body)
+  })
+}
+
+test('control routes need a local Host and app traffic does not', async (t) => {
+  const s = await start(t, FILES)
+  await s.select({ runbook: 'billing.list' })
+  const evil = await rawRequest(s.base, '/__runbooks/select', {
+    method: 'POST', headers: { host: 'evil.example', 'content-type': 'application/json' }, body: '{"mode":"record"}',
+  })
+  assert.equal(evil.status, 403)
+  assert.deepEqual(JSON.parse(evil.text), { error: 'control routes accept only a local Host' })
+  assert.equal((await rawRequest(s.base, '/__runbooks/state', { headers: { host: 'evil.example:4010' } })).status, 403)
+  assert.equal((await rawRequest(s.base, '/__runbooks/state', { headers: { host: 'localhost.evil.example' } })).status, 403)
+  for (const host of ['127.0.0.1', 'localhost:4010', 'LOCALHOST', '[::1]:4010']) {
+    assert.equal((await rawRequest(s.base, '/__runbooks/state', { headers: { host } })).status, 200, host)
+  }
+  assert.equal((await s.state()).mode, 'mocked')
+  const app = await rawRequest(s.base, '/invoices', { headers: { host: 'evil.example' } })
+  assert.equal(app.status, 200)
+})
+
+test('a mocked response answers the request origin over fixture CORS headers', async (t) => {
+  const s = await start(t, {
+    'billing/list/a.json': fixture('GET', '/a', { status: 200, headers: { 'access-control-allow-origin': 'http://localhost:3000' }, body: {} }),
+    'billing/list/b.json': fixture('GET', '/b', { status: 200, headers: { 'Access-Control-Allow-Origin': 'http://localhost:3000', 'x-keep': 'yes' }, body: {} }),
+  })
+  await s.select({ runbook: 'billing.list' })
+  for (const name of ['a', 'b']) {
+    const r = await rawRequest(s.base, `/${name}`, { headers: { origin: 'http://127.0.0.1:3001' } })
+    assert.equal(r.headers['access-control-allow-origin'], 'http://127.0.0.1:3001', name)
+    assert.equal(r.headers['access-control-allow-credentials'], 'true', name)
+  }
+  assert.equal((await rawRequest(s.base, '/b')).headers['x-keep'], 'yes')
 })
 
 test('an unknown control route answers 404 JSON', async (t) => {
@@ -366,6 +469,24 @@ test('record mode saves a first response at runbook level without secret headers
   const state = await s.state()
   assert.equal(state.requests[0].status, 200)
   assert.deepEqual(s.logs, ['GET /v1/invoices -> 200'])
+})
+
+test('record mode drops access-control and vary headers', async (t) => {
+  const fake = await recordApi(t, (req, res) => {
+    res.writeHead(200, {
+      'content-type': 'application/json',
+      'access-control-allow-origin': 'http://localhost:3000',
+      'access-control-allow-credentials': 'true',
+      'access-control-expose-headers': 'x-keep',
+      vary: 'Origin',
+      'x-keep': 'yes',
+    })
+    res.end('{}')
+  })
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await fetch(`${s.base}/invoices`)
+  assert.deepEqual(Object.keys(readJson(s.fixturesRoot, 'get--invoices.json').response.headers).sort(), ['content-type', 'date', 'x-keep'])
 })
 
 test('record mode writes nothing for an identical response and a step file for a different one', async (t) => {

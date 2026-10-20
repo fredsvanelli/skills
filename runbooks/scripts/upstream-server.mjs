@@ -13,8 +13,11 @@ export const VERSION = '1.2.0'
 
 const MODES = ['mocked', 'live', 'record']
 const STEP_DIR = /^S\d+$/
+const RUNBOOK_ID = /^[\w-]+\.[\w-]+$/
 const CONTROL = '/__runbooks/'
-const NEVER_RECORDED = ['set-cookie', 'authorization', 'cookie', 'content-length', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive']
+const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '[::1]']
+// Headers starting with access-control- are never recorded either: the server answers CORS itself.
+const NEVER_RECORDED = ['set-cookie', 'authorization', 'cookie', 'content-length', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'vary']
 
 // Reads the .json files of a runbook folder (step null) and of its S<nn> subfolders. Invalid files are skipped.
 function readFixtures(dir) {
@@ -86,6 +89,16 @@ function readBody(req) {
   })
 }
 
+// True when the Host header names this machine, so a page on another site cannot reach the control routes
+// through DNS rebinding.
+function localHost(host) {
+  try {
+    return LOCAL_HOSTS.includes(new URL(`http://${host}`).hostname)
+  } catch {
+    return false
+  }
+}
+
 function parseBody(raw, contentType) {
   if (raw === '') return null
   if (String(contentType ?? '').includes('json')) {
@@ -103,15 +116,21 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   let requests = []
   let unmatched = []
 
+  // Control routes get no CORS headers, so a page on another origin cannot read them or send them JSON.
   const cors = (req) => {
+    if (new URL(req.url, 'http://upstream.local').pathname.startsWith(CONTROL)) return {}
     const origin = req.headers.origin
     const headers = { 'access-control-allow-origin': origin ?? '*' }
     if (origin) headers['access-control-allow-credentials'] = 'true'
     return headers
   }
 
+  // The server's CORS headers replace any header of the same name, in any case, from a fixture.
   const send = (req, res, status, headers = {}, body) => {
-    res.writeHead(status, { ...cors(req), ...headers })
+    const own = cors(req)
+    const out = {}
+    for (const [name, value] of Object.entries(headers)) if (!Object.hasOwn(own, name.toLowerCase())) out[name] = value
+    res.writeHead(status, { ...out, ...own })
     res.end(body)
   }
 
@@ -121,10 +140,16 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   const snapshot = () => ({ runbook: state.runbook, mode: state.mode, step: state.step })
 
   async function control(req, res, pathname) {
+    if (!localHost(req.headers.host)) {
+      return sendJson(req, res, 403, { error: 'control routes accept only a local Host' })
+    }
     if (req.method === 'GET' && pathname === `${CONTROL}state`) {
       return sendJson(req, res, 200, { ...snapshot(), requests, unmatched })
     }
     if (req.method === 'POST' && pathname === `${CONTROL}select`) {
+      if (String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase() !== 'application/json') {
+        return sendJson(req, res, 415, { error: 'select needs content-type: application/json' })
+      }
       let body
       try {
         body = JSON.parse(await readBody(req))
@@ -136,6 +161,12 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
       }
       if ('mode' in body && !MODES.includes(body.mode)) {
         return sendJson(req, res, 400, { error: `mode must be one of ${MODES.join(', ')}` })
+      }
+      if ('runbook' in body && body.runbook !== null && !(typeof body.runbook === 'string' && RUNBOOK_ID.test(body.runbook))) {
+        return sendJson(req, res, 400, { error: 'runbook must be null or a runbook id like billing.list' })
+      }
+      if ('step' in body && body.step !== null && !(typeof body.step === 'string' && STEP_DIR.test(body.step))) {
+        return sendJson(req, res, 400, { error: 'step must be null or a step id like S01' })
       }
       if ('runbook' in body) {
         state.runbook = body.runbook
@@ -207,7 +238,9 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     if (!dir) return
     const skip = new Set([...NEVER_RECORDED, ...redactHeaders.map((name) => String(name).toLowerCase())])
     const headers = {}
-    for (const [name, value] of Object.entries(upRes.headers)) if (!skip.has(name)) headers[name] = value
+    for (const [name, value] of Object.entries(upRes.headers)) {
+      if (!skip.has(name) && !name.startsWith('access-control-')) headers[name] = value
+    }
     const body = parseBody(raw, upRes.headers['content-type'])
     const response = { status: upRes.statusCode, ...(Object.keys(headers).length ? { headers } : {}), ...(body === null ? {} : { body }) }
     const existing = matchFixture(readFixtures(dir), request, state.step)
