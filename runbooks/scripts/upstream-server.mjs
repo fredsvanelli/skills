@@ -368,7 +368,19 @@ export function serveUpstream({ port, ...options }) {
   server.listen(port, '127.0.0.1', () => {
     process.stdout.write(`runbooks-upstream listening on http://127.0.0.1:${server.address().port}\n`)
   })
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)))
+  // Upgraded sockets leave the HTTP server's own bookkeeping, so every connection is tracked here and destroyed on a signal.
+  const sockets = new Set()
+  server.on('connection', (socket) => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+  const stop = () => {
+    server.close()
+    server.closeAllConnections()
+    for (const socket of sockets) socket.destroy()
+    process.exit(0)
+  }
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop)
   return server
 }
 

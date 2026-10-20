@@ -323,3 +323,71 @@ test('the copied server file exits 2 when the port is in use', async () => {
     holder.close()
   }
 })
+
+// Spawns the upstream CLI, waits for the listening line, and resolves with the child and its port.
+function startUpstream(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args)
+    let out = ''
+    child.stdout.on('data', (chunk) => {
+      out += chunk
+      const match = /listening on http:\/\/127\.0\.0\.1:(\d+)/.exec(out)
+      if (match) resolve({ child, port: Number(match[1]) })
+    })
+    child.on('error', reject)
+    child.on('exit', () => reject(new Error(`exited early: ${out}`)))
+  })
+}
+
+// Sends the signal and resolves with the exit code, failing after 5 seconds so a regression cannot hang the suite.
+function exitOnSignal(child, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error(`still running 5s after ${signal}`)) }, 5000)
+    child.on('exit', (code) => { clearTimeout(timer); resolve(code) })
+    child.kill(signal)
+  })
+}
+
+test('runbooks.mjs upstream exits 0 on SIGINT and SIGTERM', async () => {
+  const dir = upstreamProject({})
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const { child } = await startUpstream([SCRIPT, 'upstream', '--root', dir, '--port', '0'])
+    assert.equal(await exitOnSignal(child, signal), 0)
+  }
+})
+
+test('runbooks.mjs upstream exits 0 on SIGINT with an open connection', async () => {
+  const dir = upstreamProject({})
+  const { child, port } = await startUpstream([SCRIPT, 'upstream', '--root', dir, '--port', '0'])
+  const client = net.connect(port, '127.0.0.1')
+  client.on('error', () => {})
+  await new Promise((resolve) => client.once('connect', resolve))
+  client.write('GET /__runbooks/state HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n')
+  await new Promise((resolve) => client.once('data', resolve))
+  assert.equal(await exitOnSignal(child, 'SIGINT'), 0)
+  client.destroy()
+})
+
+test('runbooks.mjs upstream exits 0 on SIGINT with a tunneled upgrade socket open', async () => {
+  const sockets = []
+  const api = net.createServer((socket) => {
+    sockets.push(socket)
+    socket.on('error', () => {})
+    socket.once('data', () => socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n'))
+  })
+  await new Promise((resolve) => api.listen(0, '127.0.0.1', resolve))
+  const dir = upstreamProject({ mode: 'live', baseUrl: `http://127.0.0.1:${api.address().port}` })
+  try {
+    const { child, port } = await startUpstream([SCRIPT, 'upstream', '--root', dir, '--port', '0'])
+    const client = net.connect(port, '127.0.0.1')
+    client.on('error', () => {})
+    await new Promise((resolve) => client.once('connect', resolve))
+    client.write('GET /ws HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n')
+    await new Promise((resolve) => client.once('data', resolve))
+    assert.equal(await exitOnSignal(child, 'SIGINT'), 0)
+    client.destroy()
+  } finally {
+    sockets.forEach((socket) => socket.destroy())
+    api.close()
+  }
+})
