@@ -25,7 +25,7 @@ Arguments: `$ARGUMENTS`
 
 Examples: `/runbooks:update billing.issue-invoice --from diff`, `/runbooks:update billing.issue-invoice --from ticket CHE-612`, `/runbooks:update billing.issue-invoice --from text "the Issue button is now Generate invoice"`, `/runbooks:update billing.issue-invoice --from file "src/app/[locale]/(dashboard)/financeiro/faturas/page.tsx"`, `/runbooks:update billing.issue-invoice --from route "POST /admin/invoices"`.
 
-Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`.
+Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, and for a `ui` runbook `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 
 An update changes what the runbook expects, so it is investigated like a new runbook, but only where the change reaches. Every edited or added `ui` step names a real route, a real control and the exact text the UI shows; every `api` step a real endpoint, role, request and the exact status and body (`create.md`, step 3).
 
@@ -34,7 +34,7 @@ Run `git status --porcelain` now and keep the list for the commit step.
 ## 1. Load the runbook
 
 1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json`: find the id. A runbook with `problems` is fixed in this update too; a `deprecated` one is not updated (offer `/runbooks:create` instead).
-2. Read the runbook. Write down its steps with their `Parents:`, the highest step number, `covers`, `sources`, `status` and `last_run`.
+2. Read the runbook. Write down its steps with their `Parents:`, the highest step number, `covers`, `sources`, `status` and `last_run`. For a `ui` runbook, also its `upstream` mode (the `upstream` field of the list output, which is the effective mode) and, when it is `mocked`, the output of `... fixtures <id> --json`.
 3. When `last_run.report` exists, read it. Its failures and its Notes are evidence of where the screen already differs from the runbook.
 
 Done when you hold the step tree and the last report's findings.
@@ -55,6 +55,8 @@ With `file`, `dir` and `route`, the code is the new behavior: compare what it do
 
 Write the changes as a list: what the user sees or does now that differs from the runbook, each with the source's id when it has one. Add the last report's findings that the change explains.
 
+A change of upstream mode is also a change. It comes from the source (`text "make it mocked"`), from an `upstream:` the user edited by hand, or from a new config `upstream.mode` that differs from the runbook's effective mode. Write the target mode on the list. Only a `ui` runbook has a mode.
+
 Done when every behavior change the source promises, or the code of a `file`, `dir` or `route` source shows, is on the list.
 
 ## 3. Map changes to steps
@@ -66,6 +68,9 @@ For each change, mark every step it reaches:
 - **add**: the change brings behavior no step proves, including its edge case and, when it saves something, a reload check;
 - **preconditions**: services, migrations, accounts or data the steps now need;
 - **design**: the change brings a screen, or a new design for a screen the runbook shows. Find and confirm its references as `create` does (step 3, "Design references"), when the config has `design`;
+- **mode**: the runbook changes upstream mode. Rewrite its content in the direction of the change (`references/upstream.md`, Changing a runbook's mode):
+  - to `mocked`: every step whose Expected checks persistence after a reload, or a value the API saved, becomes a check of the request (method, URL and body). The persistence goes under "Not covered". The Data line points to the fixtures folder. The fixtures are recorded in step 5;
+  - to `live`: every step rewritten that way gets its persistence check back, with the reload. Exact values that fixtures supplied move into Preconditions, created through the upstream API with the run suffix (`RUNBOOKS_RUN_ID`), and Expected quotes only the fixed part. The persistence lines leave "Not covered". The fixtures folder is deleted in step 5;
 - **viewports**: the change reaches the layout at some sizes only (responsive classes, media queries). Edit or add the steps of those viewports, with `Viewports:` lines. When the change brings a layout at a size the runbook does not run at, or the runbook has no `viewports` and the change is responsive, ask which viewports it runs at as `create` does (step 2, item 6).
 
 Then follow the tree down: the children of every edited or removed step stay valid only if what they inherit still holds. Mark the ones that change.
@@ -101,8 +106,13 @@ Then:
 - `design`: the references from step 3 added or replaced, the ones of screens no step reaches any more removed, and the `Design:` lines of the steps that end on them;
 - `viewports`: the answer from step 3, when it changed; a size the config lacks goes into the config `viewports`, as in `create`;
 - "Not covered": add what the surface cannot show about the change, and remove what a step now proves;
+- `upstream`: write `upstream: live|mocked` only when the target mode differs from the config `upstream.mode`, and remove the field when it does not;
+- fixtures, for a `ui` runbook in `<upstream.fixtures>/<capability>/<flow>/`:
+  - to `live`, delete the folder (`git rm -r`, or remove untracked files) and say so in the summary;
+  - to `mocked`, record them. After a step change in a `mocked` runbook, re-record the fixtures the edited, added and removed steps reach: delete the affected files first, and the whole `<Sxx>/` folder of a removed step, because the recorder keeps an equal fixture and saves a differing response in the step's folder. Then record as `create` does (step 5): `/runbooks:run <id> --record` when `upstream.baseUrl` answers, over the data the Preconditions create and never over data that already sits in the environment, else from `upstream.schema`, else by hand. Each fixture has a `source` (`recorded <YYYY-MM-DD> from <origin>`, `schema`, or `hand-written: <reason>`). Remove volatile query keys such as `_t` from the recorded files. Run `... fixtures <id> --json` and fix every problem it lists;
+  - a `mocked` step that `run` marked `blocked` for an unmatched request is the same case: the missing fixture is recorded here;
 - `scripts` of an `api` runbook: leave the files alone here. The next `/runbooks:run` finds new step ids without a test and completes the script, and `/runbooks:audit-runbooks` finds assertions that no longer match;
-- `status` stays as it is. When `last_run` is set and this update changed a step, a precondition, `viewports` or `design`, add `outdated: true` to it and keep its other fields: the run verified the old text. Only the next full run replaces `last_run` and moves `status`.
+- `status` stays as it is. When `last_run` is set and this update changed a step, a precondition, `viewports`, `design` or `upstream`, add `outdated: true` to it and keep its other fields: the run verified the old text. Only the next full run replaces `last_run` and moves `status`.
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and confirm the runbook has an empty `problems` list.
 
@@ -116,11 +126,13 @@ Print the changes in the conversation before any commit question:
 - The viewports added or dropped, with the viewports added to the config.
 - The design references added, replaced or removed.
 - The unverified steps: every edited and added step and their children.
+- The upstream mode change, when there is one, with the steps rewritten and the "Not covered" lines added or removed.
+- For a `mocked` runbook, the fixtures diff: files added, changed and deleted, the count by `source` from `... fixtures <id> --json`, and every fixture that is not `recorded`. For a change to `live`, the folder deleted.
 - Whether `last_run` is now marked `outdated`.
 
 ## 7. Commit
 
-Commit by the `runbooks` policy, and the config by the `setup` policy when step 5 added a viewport to it. Ask an `ask` question only after the table from step 6 is on screen; the question names the files and the message and does not repeat the table.
+Commit by the `runbooks` policy, with the fixtures changes in the same commit, and the config by the `setup` policy when step 5 added a viewport to it. Ask an `ask` question only after the table from step 6 is on screen; the question names the files and the message and does not repeat the table.
 
 ## 8. Close
 
