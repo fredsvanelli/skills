@@ -39,7 +39,7 @@ Leave out `deprecated`, `placeholder` and invalid runbooks and name them in the 
 
 Split the selection by `surface` (in the `list --json` output). `ui` runbooks follow every step below, except that one run in mode `test` follows the "test" section of `run-modes.md` for its execution, as `api` runbooks do. `api` runbooks run in mode `test`, by that section, and use steps 2 to 4 as it says.
 
-Mode for the `ui` runbooks: `--mode` when given; otherwise ask the user to choose among the available modes, as "Choosing the mode" in `run-modes.md` describes. Mode `test` is available for a `ui` runbook whose script has one test per step; the question says why it is not offered for the others. `--record` needs a browser mode (`guided`, `headless`, `headed` or `chrome`), because a script selects `mocked` and overrides `record`, and a prompt run is not read until the import, and the server must stay up for it. With `--record` and mode `test`, `script` or `prompt`, say so and ask for a browser mode. When the selection has no `ui` runbook, ask nothing. With `--import`, go to step 6.
+Mode for the `ui` runbooks: `--mode` when given; otherwise ask the user to choose among the available modes, as "Choosing the mode" in `run-modes.md` describes. Mode `test` is available for a `ui` runbook whose script has one test per step; the question says why it is not offered for the others. `--record` needs a browser mode (`guided`, `headless`, `headed` or `chrome`). A script selects `mocked` and overrides `record`. A prompt run is not read until the import, and the server must stay up for it. With `--record` and mode `test`, `script` or `prompt`, say so and ask for a browser mode. When the selection has no `ui` runbook, ask nothing. With `--import`, go to step 6.
 
 Run id per runbook: `<YYYY-MM-DD-HHMM>-<runbook id>`.
 
@@ -94,7 +94,7 @@ Then, once for the whole run, with or without `--steps`: `node "${CLAUDE_PLUGIN_
 
 ## 6. Import (prompt mode)
 
-Parse the reply by the Import rules in `run-modes.md`, resolve every question with the user, then do step 5 with `mode: prompt`. Before step 5, when the upstream server still runs, read `GET /__runbooks/state`: mark the steps named in `unmatched` as `blocked` with the request as the reason, and when `requests` is empty and the prompt ran against the app, show the `<urlEnv>=http://127.0.0.1:<port> <app.start>` hint and stop. Then stop the server. When it no longer runs (another session, a restart), take the states from the reply alone and say in Notes that `unmatched` was not checked.
+Parse the reply by the Import rules in `run-modes.md`, resolve every question with the user, then do step 5 with `mode: prompt`. Before step 5, when the upstream server still runs, read `GET /__runbooks/state`. An empty `requests` list means the app points elsewhere: show the `<urlEnv>=http://127.0.0.1:<port> <app.start>` hint and stop. Unmatched entries carry no step in this mode: list them in Notes, turn the steps the reply reports `failed` into `blocked` with the unmatched requests as the reason, and offer `/runbooks:update <id>`. Then stop the server. When it no longer runs (another session, a restart), take the states from the reply alone and say in Notes that `unmatched` was not checked.
 
 ## 7. Show the results
 
