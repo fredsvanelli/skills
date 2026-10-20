@@ -25,6 +25,7 @@ function readSteps(body) {
       continue
     }
     if (!/^S\d+$/.test(row[columns.step]) || columns.state < 0) continue
+    if (!row[columns.state]) continue
     const entry = { step: row[columns.step], state: row[columns.state] }
     if (columns.viewport >= 0) entry.viewport = row[columns.viewport] ?? ''
     steps.push(entry)
@@ -35,7 +36,14 @@ function readSteps(body) {
 function readReport(runsDir, runbooksDir, name) {
   const text = fs.readFileSync(path.join(runsDir, name), 'utf8')
   const parts = splitFrontmatter(text)
-  const data = parts ? parseYaml(parts.yaml) : {}
+  let data = {}
+  if (parts) {
+    try {
+      data = parseYaml(parts.yaml)
+    } catch {
+      // Hand-edited frontmatter that does not parse: list the report with null fields.
+    }
+  }
   const body = parts ? parts.body : text
   const steps = readSteps(body)
   const counts = {}

@@ -125,3 +125,24 @@ test('reportByName rejects names outside the runs directory and unknown names', 
   assert.match(found.body, /^\n?# Run 2026-10-01-0900-billing\.pay/)
   assert.doesNotMatch(found.body, /^runbook:/m)
 })
+
+test('a report with malformed frontmatter still lists, with null fields', () => {
+  const name = '2026-10-01-0900-billing.pay.md'
+  const dir = project({ [name]: `---\nbranch: [x\n---\n\n${TABLE}\n` })
+  const [r] = listReports(dir, RUNBOOKS, 'billing.pay')
+  assert.equal(r.branch, null)
+  assert.deepEqual(r.steps, [{ step: 'S01', state: 'passed' }])
+  assert.equal(reportByName(dir, RUNBOOKS, name).branch, null)
+})
+
+test('a row without a state cell is skipped', () => {
+  const table = `| Step | State | Seen |
+|---|---|---|
+| S01 |
+| S02 | | x |
+| S03 | passed | ok |`
+  const dir = project({ '2026-10-01-0900-billing.pay.md': report({ run: '2026-10-01-0900-billing.pay', table }) })
+  const [r] = listReports(dir, RUNBOOKS, 'billing.pay')
+  assert.deepEqual(r.steps, [{ step: 'S03', state: 'passed' }])
+  assert.deepEqual(r.counts, { passed: 1 })
+})
