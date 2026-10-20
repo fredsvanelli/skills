@@ -5,9 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from './lib/args.mjs'
 import { loadConfig } from './lib/config.mjs'
 import { loadRunbooks } from './lib/runbooks.mjs'
+import { collect, runbookWarnings, coverageResult } from './lib/project.mjs'
 import { filterRunbooks } from './lib/filter.mjs'
-import { extractItems } from './lib/extract.mjs'
-import { computeCoverage, sliceOf } from './lib/coverage.mjs'
 import { nextStatus } from './lib/status.mjs'
 import { changedFiles, affectedRunbooks } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
@@ -53,17 +52,6 @@ const json = (value) => `${JSON.stringify(value, null, 2)}\n`
 const pick = (options, keys) =>
   Object.fromEntries(keys.filter((key) => typeof options[key] === 'string').map((key) => [key, options[key]]))
 
-function collect(root, config, listName, warnings, status = {}) {
-  const { items, warnings: found, ran, complete } = extractItems(root, config[listName], listName)
-  warnings.push(...found)
-  Object.assign(status, { ran, complete })
-  return items.map((item) => ({ ...item, slice: sliceOf(item.file, config.slices) }))
-}
-
-function runbookWarnings(runbooks) {
-  return runbooks.flatMap((rb) => [...rb.problems, ...rb.warnings].map((problem) => `${rb.path}: ${problem}`))
-}
-
 function commandList(root, config, options, warnings) {
   const runbooks = loadRunbooks(root, config)
   warnings.push(...runbookWarnings(runbooks))
@@ -84,30 +72,6 @@ function commandItems(root, config, options, listName, warnings) {
     (typeof options.path !== 'string' || (item.file !== null && matchesGlob(item.file, options.path))),
   )
   return options.json ? json(items) : itemsMarkdown(items)
-}
-
-function coverageResult(root, config, filters, warnings, withItems = false) {
-  const runbooks = loadRunbooks(root, config)
-  const sourceWarnings = []
-  const entriesStatus = {}
-  const requirementsStatus = {}
-  const entries = collect(root, config, 'entries', sourceWarnings, entriesStatus)
-  const requirements = collect(root, config, 'requirements', sourceWarnings, requirementsStatus)
-  warnings.push(...sourceWarnings, ...runbookWarnings(runbooks))
-  const result = computeCoverage({
-    runbooks,
-    entries,
-    requirements,
-    requirementsConfigured: config.requirements.length > 0,
-    requirementsRan: requirementsStatus.ran > 0,
-    slices: config.slices,
-    stack: config.stack,
-    filters,
-    unavailable: { entries: !entriesStatus.complete, requirements: !requirementsStatus.complete },
-    withItems,
-  })
-  result.warnings = sourceWarnings
-  return result
 }
 
 function commandCoverage(root, config, options, warnings) {
