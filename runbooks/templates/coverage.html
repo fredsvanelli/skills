@@ -60,6 +60,20 @@
   .meter { display: flex; align-items: center; gap: 12px; }
   .muted { color: var(--muted); font: 13px var(--mono); }
   .problem { color: var(--failed); }
+  .group { cursor: pointer; }
+  .toggle { display: inline-flex; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+  .toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+  .chevron { width: 12px; height: 12px; color: var(--muted); transition: transform .15s; }
+  .toggle[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+  tr.item td { padding-top: 10px; padding-bottom: 10px; background: color-mix(in srgb, var(--bg) 45%, transparent); }
+  tr.item td:first-child { padding-left: 42px; }
+  .item-id { color: color-mix(in srgb, var(--fg) 90%, transparent); font: 13px var(--mono); white-space: nowrap; }
+  .item-file { display: block; color: var(--muted); font: 12px var(--mono); }
+  .check { width: 16px; height: 16px; color: var(--c); }
+  .check-covered { --c: var(--prompt); } .check-pending { --c: var(--blocked); } .check-planned { --c: var(--muted); }
+  .tests { color: var(--muted); font: 12px var(--mono); }
+  .tests div + div { margin-top: 4px; }
+  .path-part { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -155,10 +169,74 @@
   )
   document.getElementById('count').textContent = `entry points ${pct(e.covered, e.total)}`
 
-  document.getElementById('slices').append(...data.groups.map((g) => row([
-    [g.surface ? `${g.name} (${g.surface})` : g.name, 'id'], [String(g.covered), 'num'], [String(g.pending), 'num'], [String(g.planned), 'num'], [String(g.total), 'num'],
-    [meter(g)],
-  ])))
+  const SVG = 'http://www.w3.org/2000/svg'
+  const icon = (className, points) => {
+    const svg = document.createElementNS(SVG, 'svg')
+    svg.setAttribute('viewBox', '0 0 16 16')
+    svg.setAttribute('class', className)
+    svg.setAttribute('aria-hidden', 'true')
+    const line = svg.appendChild(document.createElementNS(SVG, 'polyline'))
+    for (const [name, value] of [['points', points], ['fill', 'none'], ['stroke', 'currentColor'], ['stroke-width', '2'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round']]) {
+      line.setAttribute(name, value)
+    }
+    return svg
+  }
+  // A check in the column of the item's state; an uncovered item has none.
+  const check = (item, state) => {
+    if (item.state !== state) return ''
+    const node = icon(`check check-${state}`, '3,8.5 6.5,12 13,4.5')
+    node.setAttribute('aria-hidden', 'false')
+    node.setAttribute('role', 'img')
+    node.setAttribute('aria-label', state)
+    return node
+  }
+  // A path that wraps only after a slash.
+  const pathText = (text, tag = 'div', className) => {
+    const node = el(tag, undefined, className)
+    text.split('/').forEach((part, index, parts) => {
+      node.append(el('span', part + (index < parts.length - 1 ? '/' : ''), 'path-part'))
+      if (index < parts.length - 1) node.append(el('wbr'))
+    })
+    return node
+  }
+  const tests = (paths) => {
+    if (paths.length === 0) return el('span', '-', 'muted')
+    const node = el('div')
+    node.append(...paths.map((p) => pathText(p)))
+    return node
+  }
+
+  const slices = document.getElementById('slices')
+  for (const g of data.groups) {
+    const items = g.items ?? []
+    const toggle = el('button', undefined, 'toggle')
+    toggle.type = 'button'
+    toggle.setAttribute('aria-expanded', 'false')
+    toggle.append(icon('chevron', '6,3 11,8 6,13'), g.surface ? `${g.name} (${g.surface})` : g.name)
+    const tr = row([
+      [toggle, 'id'], [String(g.covered), 'num'], [String(g.pending), 'num'], [String(g.planned), 'num'], [String(g.total), 'num'],
+      [meter(g)],
+    ])
+    tr.className = 'group'
+    const children = items.map((item) => {
+      const name = el('span', item.id, 'item-id')
+      const cell = el('div')
+      cell.append(name)
+      if (item.file) cell.append(pathText(item.file, 'span', 'item-file'))
+      // The test paths take the space under Total and Coverage.
+      const child = row([[cell], [check(item, 'covered')], [check(item, 'pending')], [check(item, 'planned')], [tests(item.tests), 'tests']])
+      child.lastChild.colSpan = 2
+      child.className = 'item'
+      child.hidden = true
+      return child
+    })
+    tr.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') !== 'true'
+      toggle.setAttribute('aria-expanded', String(open))
+      for (const child of children) child.hidden = !open
+    })
+    slices.append(tr, ...children)
+  }
 
   const uncovered = [
     ...e.uncovered.map((i) => ({ id: i.id, kind: i.kind ?? 'entry', where: i.file ?? '' })),

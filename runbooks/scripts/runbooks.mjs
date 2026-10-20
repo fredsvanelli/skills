@@ -29,7 +29,8 @@ Commands:
   junit         <id> --file <junit.xml> [--waive S03,S04] maps the JUnit report of an api runbook's
                 script onto its steps: one state per step, parents resolved
   output        [--coverage] writes runs.json and runs.html in the runbooks folder: every runbook
-                with its last full run; with --coverage, also coverage.json and coverage.html (overall)
+                with its last full run; with --coverage, also coverage.json and coverage.html (overall,
+                with each slice's entries, their state and the scripts that test them)
 
 Global options:
   --root <dir>     project root (default: current directory)
@@ -77,7 +78,7 @@ function commandItems(root, config, options, listName, warnings) {
   return options.json ? json(items) : itemsMarkdown(items)
 }
 
-function coverageResult(root, config, filters, warnings) {
+function coverageResult(root, config, filters, warnings, withItems = false) {
   const runbooks = loadRunbooks(root, config)
   const sourceWarnings = []
   const entriesStatus = {}
@@ -95,6 +96,7 @@ function coverageResult(root, config, filters, warnings) {
     stack: config.stack,
     filters,
     unavailable: { entries: !entriesStatus.complete, requirements: !requirementsStatus.complete },
+    withItems,
   })
   result.warnings = sourceWarnings
   return result
@@ -155,7 +157,7 @@ function commandOutput(root, config, options, warnings) {
   const runbooks = loadRunbooks(root, config)
   const written = writeRuns(root, config.paths.runbooks, outputRows(runbooks))
   if (options.coverage) {
-    written.push(...writeCoverage(root, config.paths.runbooks, { scope: 'overall', ...coverageResult(root, config, {}, warnings) }))
+    written.push(...writeCoverage(root, config.paths.runbooks, { scope: 'overall', ...coverageResult(root, config, {}, warnings, true) }))
   } else {
     warnings.push(...runbookWarnings(runbooks))
   }

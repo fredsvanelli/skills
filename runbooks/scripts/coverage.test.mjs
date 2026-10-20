@@ -9,7 +9,7 @@ import { nextStatus } from './lib/status.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
 
-function fixtureCoverage(filters = {}) {
+function fixtureCoverage(filters = {}, withItems = false) {
   const config = loadConfig(FIXTURE)
   return computeCoverage({
     runbooks: loadRunbooks(FIXTURE, config),
@@ -18,6 +18,7 @@ function fixtureCoverage(filters = {}) {
     requirementsConfigured: config.requirements.length > 0,
     slices: config.slices,
     filters,
+    withItems,
   })
 }
 
@@ -52,6 +53,18 @@ test('groups by slice with (no slice) last', () => {
     { name: 'deliveries', total: 2, covered: 1, pending: 0, planned: 0 },
     { name: '(no slice)', total: 2, covered: 0, pending: 0, planned: 0 },
   ])
+})
+
+test('withItems lists each slice entry with its state and the scripts of the runbooks that cite it', () => {
+  const billing = fixtureCoverage({}, true).groups.find((g) => g.name === 'billing')
+  assert.deepEqual(billing.items.map(({ id, state, tests }) => ({ id, state, tests })), [
+    { id: '/financeiro/faturas', state: 'covered', tests: ['e2e/billing/issue-invoice.runbook.spec.ts'] },
+    { id: '/financeiro/faturas/[id]', state: 'pending', tests: [] },
+    { id: 'DELETE /admin/invoices/[id]', state: 'pending', tests: [] },
+    { id: 'GET /admin/invoices', state: 'uncovered', tests: [] },
+    { id: 'POST /admin/invoices', state: 'covered', tests: ['e2e/billing/issue-invoice.runbook.spec.ts'] },
+  ])
+  assert.equal(billing.items.length, billing.total)
 })
 
 test('an id that does not exist exactly is an orphan, not silent', () => {

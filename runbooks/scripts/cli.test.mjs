@@ -156,14 +156,16 @@ test('output writes runs.json and runs.html with the same rows and removes the o
   assert.ok(html.includes(`const rows = ${JSON.stringify(rows, null, 2)}`))
 })
 
-test('output --coverage also writes coverage.json and coverage.html with the overall numbers', () => {
+test('output --coverage also writes coverage.json and coverage.html with the overall numbers and each slice\'s entries', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-output-'))
   fs.cpSync(FIXTURE, root, { recursive: true })
   const result = run(['output', '--coverage', '--root', root])
   assert.equal(result.code, 0)
   assert.equal(result.stdout, 'docs/runbooks/runs.json\ndocs/runbooks/runs.html\ndocs/runbooks/coverage.json\ndocs/runbooks/coverage.html\n')
   const coverage = JSON.parse(fs.readFileSync(path.join(root, 'docs/runbooks/coverage.json'), 'utf8'))
-  assert.deepEqual(coverage, { scope: 'overall', ...JSON.parse(run(['coverage', '--json', '--root', root]).stdout) })
+  const groups = coverage.groups.map(({ items, ...group }) => group)
+  assert.ok(coverage.groups.every((g) => g.items.length === g.total))
+  assert.deepEqual({ ...coverage, groups }, { scope: 'overall', ...JSON.parse(run(['coverage', '--json', '--root', root]).stdout) })
   const html = fs.readFileSync(path.join(root, 'docs/runbooks/coverage.html'), 'utf8')
   assert.ok(html.includes(`const data = ${JSON.stringify(coverage, null, 2)}`))
 })

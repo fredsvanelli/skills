@@ -12,9 +12,24 @@ export function sliceOf(file, slices) {
   return null
 }
 
+// For each ref, the scripts of the runbooks that cite it: active runbooks first, then draft, then placeholder.
+function scriptsByRef(runbooks, field) {
+  const scripts = new Map()
+  for (const status of ['active', 'draft', 'placeholder']) {
+    for (const rb of runbooks.filter((r) => r.status === status)) {
+      for (const ref of rb.covers[field]) {
+        const list = scripts.get(ref) ?? []
+        list.push(...rb.scripts.filter((script) => !list.includes(script)))
+        scripts.set(ref, list)
+      }
+    }
+  }
+  return scripts
+}
+
 function refsByStatus(runbooks, field) {
   const pick = (status) => new Set(runbooks.filter((rb) => rb.status === status).flatMap((rb) => rb.covers[field]))
-  return { active: pick('active'), draft: pick('draft'), placeholder: pick('placeholder') }
+  return { active: pick('active'), draft: pick('draft'), placeholder: pick('placeholder'), scripts: scriptsByRef(runbooks, field) }
 }
 
 export const surfaceOfEntry = (entry) => (entry.kind === 'api-endpoint' ? 'api' : 'ui')
@@ -59,6 +74,7 @@ export function computeCoverage({
   stack = 'frontend',
   filters = {},
   unavailable = { entries: false, requirements: false },
+  withItems = false,
 }) {
   const requirementsAvailable = requirementsConfigured && requirementsRan
   const valid = runbooks.filter((rb) => rb.problems.length === 0 && rb.status !== 'deprecated')
@@ -72,6 +88,7 @@ export function computeCoverage({
     ? Object.fromEntries(['ui', 'api'].map((surface) => [surface, refsByStatus(valid.filter((rb) => rb.surface === surface), 'entries')]))
     : null
   const allEntryRefs = refsByStatus(valid, 'entries')
+  const entryRefsFor = (entry) => (bySurface ? entryRefs[surfaceOfEntry(entry)] : allEntryRefs)
   const scopedEntries = withState(
     entries
       .map((entry) => ({ ...entry, slice: sliceOf(entry.file, slices) }))
@@ -80,7 +97,7 @@ export function computeCoverage({
         (!filters.path || (entry.file !== null && matchesGlob(entry.file, filters.path))) &&
         (!featureEntries || featureEntries.has(entry.id)),
       ),
-    (entry) => (bySurface ? entryRefs[surfaceOfEntry(entry)] : allEntryRefs),
+    entryRefsFor,
   )
 
   const requirementRefs = refsByStatus(valid, 'requirements')
@@ -93,13 +110,17 @@ export function computeCoverage({
     const name = entry.slice ?? NO_SLICE
     const surface = bySurface ? surfaceOfEntry(entry) : null
     const key = `${name}\0${surface}`
-    const group = groupMap.get(key) ?? { name, ...(bySurface && { surface }), total: 0, covered: 0, pending: 0, planned: 0 }
+    const group = groupMap.get(key) ?? {
+      name, ...(bySurface && { surface }), total: 0, covered: 0, pending: 0, planned: 0, ...(withItems && { items: [] }),
+    }
     group.total++
     if (entry.state === 'covered') group.covered++
     if (entry.state === 'pending') group.pending++
     if (entry.state === 'planned') group.planned++
+    group.items?.push({ id: entry.id, file: entry.file, state: entry.state, tests: entryRefsFor(entry).scripts.get(entry.id) ?? [] })
     groupMap.set(key, group)
   }
+  for (const group of groupMap.values()) group.items?.sort((a, b) => a.id.localeCompare(b.id))
   const groups = [...groupMap.values()].sort((a, b) =>
     (a.name === NO_SLICE) - (b.name === NO_SLICE) || a.name.localeCompare(b.name) || (a.surface ?? '').localeCompare(b.surface ?? ''))
 
