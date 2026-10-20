@@ -236,11 +236,11 @@ test('a mocked runbook covers its screens but not its endpoints', () => {
     const result = coverageOf(dir)
     const uncovered = Object.fromEntries(result.entries.uncovered.map((i) => [i.id, i]))
     assert.deepEqual(uncovered['POST /admin/invoices'].citedByMocked, ['billing.issue-invoice'])
-    assert.equal(result.entries.uncovered.some((i) => i.id === '/financeiro/faturas'), false)
+    assert.equal(result.entries.uncovered.some((i) => i.id === '/billing/invoices'), false)
     assert.match(coverageMarkdown(result, 'overall'), /`POST \/admin\/invoices`.*cited, not covered \(mocked: billing\.issue-invoice\)/)
     const items = coverageOf(dir, {}, true).groups.find((g) => g.name === 'billing').items
     assert.deepEqual(items.find((i) => i.id === 'POST /admin/invoices').citedByMocked, ['billing.issue-invoice'])
-    assert.equal('citedByMocked' in items.find((i) => i.id === '/financeiro/faturas'), false)
+    assert.equal('citedByMocked' in items.find((i) => i.id === '/billing/invoices'), false)
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
@@ -270,7 +270,7 @@ test('in a fullstack stack a mocked ui runbook still covers its ui-route, not it
       stack: 'fullstack',
     })
     const uncovered = Object.fromEntries(result.entries.uncovered.map((i) => [i.id, i]))
-    assert.equal('/financeiro/faturas' in uncovered, false)
+    assert.equal('/billing/invoices' in uncovered, false)
     assert.deepEqual(uncovered['POST /admin/invoices'].citedByMocked, ['billing.issue-invoice'])
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
