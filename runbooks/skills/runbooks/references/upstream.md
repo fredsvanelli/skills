@@ -95,7 +95,7 @@ The server answers in one of three modes, which a select call changes without a 
 
 | Mode | Behavior |
 |---|---|
-| `mocked` | Serves the selected runbook's fixtures. A request that matches none gets a 501 that names the method, path, runbook and step. The server logs it in `unmatched`. The step that needed it becomes `blocked`, and `run` offers `/runbooks:update <id>` to record it. It answers CORS preflights |
+| `mocked` | Serves the selected runbook's fixtures. A request that matches none gets a 501 that names the method, path, runbook and step. The server logs it in `unmatched`. The step that needed it becomes `blocked`, and `run` offers `/runbooks:update <id>` to record it. It answers CORS preflights, and its own `access-control-allow-origin` (the request's origin, else `*`) and `access-control-allow-credentials` replace the same headers in a fixture |
 | `live` | Proxies every request to `upstream.baseUrl`, SSE as a stream and WebSocket through Node's `upgrade` event. The target's path prefix is not added: the app sends it already |
 | `record` | Proxies like `live` and saves each response as a fixture (see "Recording") |
 
@@ -121,12 +121,23 @@ node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mo
 
 The agent and the scripts steer the server through these routes. They sit under `/__runbooks/` and answer JSON. They verify nothing: a result is verified by what the browser shows.
 
+```
+curl -s -X POST http://127.0.0.1:<port>/__runbooks/select -H 'content-type: application/json' -d '{"runbook":"billing.list","mode":"mocked"}'
+curl -s http://127.0.0.1:<port>/__runbooks/state
+```
+
 | Route | Does |
 |---|---|
-| `POST /__runbooks/select` | Takes a JSON object with any of `runbook`, `step` and `mode`, and changes only the keys it gets. A new `runbook` without `step` resets the step. `mode` must be `mocked`, `live` or `record`. Every select clears the request log. Answers `{ runbook, mode, step }` |
+| `POST /__runbooks/select` | Takes a JSON object with any of `runbook`, `step` and `mode`, and changes only the keys it gets. A new `runbook` without `step` resets the step. `runbook` is `null` or an id `<capability>.<flow>`, `step` is `null` or `S<nn>`, and `mode` is `mocked`, `live` or `record`. Every select clears the request log. Answers `{ runbook, mode, step }` |
 | `GET /__runbooks/state` | Answers `{ runbook, mode, step, requests, unmatched }` |
 
-An invalid body gets a 400, and any other control route a 404.
+Three rules keep web pages away from these routes:
+
+- A control call gets a 403 unless its `Host` header names `127.0.0.1`, `localhost` or `[::1]`, on any port. The app's own requests to the server are not checked.
+- A select whose `content-type` is not `application/json` gets a 415. Playwright `request.post` with `data` and Cypress `cy.request` with an object body send that type.
+- The control routes send no CORS headers, and a preflight to them gets a 404, so a page on another origin can neither read them nor send them JSON.
+
+An invalid body, or a `runbook` or `step` that is not an id, gets a 400 and changes nothing. Any other control route gets a 404.
 
 `requests` lists every request the app made since the last select, in all three modes, as `{ method, path, query, body, step, status }`. An agent checks the request a mocked screen sent by reading it there. `unmatched` lists the mocked requests that had no fixture, as `{ method, path, step }`.
 
@@ -139,7 +150,7 @@ The agent selects the runbook and the step before each step, and scripts do it i
 Rules for what is saved:
 
 - Each file is named from the method, the path and a hash of the query, and holds `request`, `response` and `source` (`recorded <date> from <upstream.baseUrl origin>`).
-- `set-cookie`, `authorization`, `cookie` and every header in `upstream.redactHeaders` are dropped, whatever the case. Transport headers (`content-length`, `content-encoding`, `transfer-encoding`, `connection`, `keep-alive`) are dropped too.
+- `set-cookie`, `authorization`, `cookie` and every header in `upstream.redactHeaders` are dropped, whatever the case. Transport headers (`content-length`, `content-encoding`, `transfer-encoding`, `connection`, `keep-alive`) are dropped too, and so are `vary` and every `access-control-*` header, because the server sends its own CORS headers in `mocked` mode.
 - A request that already has an equal fixture writes nothing. A response that differs is saved in the current step's folder.
 - A `text/event-stream` response streams to the app and is not recorded.
 - With no runbook selected, nothing is written.
@@ -162,6 +173,16 @@ test.beforeEach(async ({ request }, info) => {
     data: { runbook: 'billing.issue-invoice', step, mode: 'mocked' },
   })
 })
+
+test.afterAll(async ({ playwright }) => {
+  const api = await playwright.request.newContext()
+  await api.post(`${process.env.RUNBOOKS_UPSTREAM_URL}/__runbooks/select`, {
+    data: { runbook: null, mode: 'live' },
+  })
+  await api.dispose()
+})
 ```
+
+The server holds one state for every client: one runbook, one step and one mode. So every test suite whose app points at the server runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. With two workers, one worker's select would change the responses the other worker's app gets. When `upstream.baseUrl` is set, the copy starts with `--mode live --target <upstream.baseUrl>`, so a test that never selects reaches the live API through it. A mocked script posts `{ runbook, mode: 'mocked', step }` in `beforeEach` and `{ runbook: null, mode: 'live' }` in `afterAll`, which hands the server back to those tests. A live `ui` script posts nothing.
 
 A script keeps the design comparison out: only a browser run compares a screen with its design. A mocked runbook without a script is allowed, but then no automated run checks its fixtures, and only the schema check or `list --affected` notices an API change. `setup` warns about this.
