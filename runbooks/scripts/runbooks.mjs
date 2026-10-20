@@ -15,7 +15,8 @@ import { latestReport } from './lib/reports.mjs'
 import { outputRows, writeRuns, writeCoverage } from './lib/output.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown } from './lib/format.mjs'
+import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown } from './lib/format.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
 
@@ -29,6 +30,8 @@ Commands:
   junit         <id> --file <junit.xml> [--waive S03,S04] maps the JUnit report of an api runbook's
                 script onto its steps: one state per step, parents resolved; a ui runbook with
                 viewports gets one state per step and viewport (tests named "S01 title @ mobile")
+  fixtures      <id> loads the fixtures of a mocked ui runbook, counts them by source and, with
+                upstream.schema set, checks each JSON response against the OpenAPI schema
   output        [--coverage] writes runs.json and runs.html in the runbooks folder: every runbook
                 with its last full run; with --coverage, also coverage.json and coverage.html (overall,
                 with each slice's entries, their state and the scripts that test them)
@@ -154,6 +157,29 @@ function commandJunit(root, config, options, positionals) {
   return options.json ? json(result) : junitMarkdown(result)
 }
 
+function commandFixtures(root, config, options, positionals) {
+  const id = positionals[0]
+  if (!id) throw new Error('fixtures needs a runbook id')
+  const runbook = loadRunbooks(root, config).find((rb) => rb.id === id)
+  if (!runbook) throw new Error(`no runbook with id "${id}"`)
+  if (runbook.surface !== 'ui') throw new Error(`${id} is not a ui runbook: only ui runbooks have fixtures`)
+  const dir = fixturesDir(config, runbook)
+  const { fixtures, problems } = loadFixtures(root, dir)
+  if (config.upstream?.schema) {
+    const file = path.resolve(root, config.upstream.schema)
+    if (!fs.existsSync(file)) throw new Error(`${config.upstream.schema} not found: upstream.schema points to a missing file`)
+    let doc
+    try {
+      doc = JSON.parse(fs.readFileSync(file, 'utf8'))
+    } catch (err) {
+      throw new Error(`${config.upstream.schema} is not valid JSON: ${err.message}`)
+    }
+    problems.push(...checkFixtures(fixtures, doc))
+  }
+  const result = { id, dir, fixtures, sources: sourceCounts(fixtures), problems }
+  return options.json ? json(result) : fixturesMarkdown(result)
+}
+
 function commandOutput(root, config, options, warnings) {
   const runbooks = loadRunbooks(root, config)
   const written = writeRuns(root, config.paths.runbooks, outputRows(runbooks))
@@ -165,7 +191,7 @@ function commandOutput(root, config, options, warnings) {
   return `${written.join('\n')}\n`
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'output']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'output']
 
 export function run(argv) {
   const stderr = []
@@ -186,6 +212,7 @@ export function run(argv) {
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
     else if (command === 'junit') stdout = commandJunit(root, config, options, positionals)
+    else if (command === 'fixtures') stdout = commandFixtures(root, config, options, positionals)
     else if (command === 'output') stdout = commandOutput(root, config, options, warnings)
     else stdout = commandItems(root, config, options, command, warnings)
     stderr.push(...warnings.map((warning) => `warning: ${warning}`))

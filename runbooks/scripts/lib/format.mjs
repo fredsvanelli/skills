@@ -117,3 +117,17 @@ export function junitMarkdown({ id, steps, result, extra, others }) {
   }
   return `${lines.join('\n')}\n`
 }
+
+export function fixturesMarkdown({ id, dir, fixtures, sources, problems }) {
+  const lines = [
+    `Fixtures of ${id} in ${dir}: ${fixtures.length}`,
+    `Sources: ${sources.recorded} recorded, ${sources.schema} from the schema, ${sources.handWritten} hand-written`,
+    '',
+  ]
+  if (fixtures.length > 0) {
+    lines.push(table(['File', 'Step', 'Request', 'Status'],
+      fixtures.map((f) => [f.file, f.step ?? 'all', `${f.request.method} ${f.request.path}`, f.response.status])), '')
+  }
+  lines.push('### Problems', '', ...bullets(problems))
+  return `${lines.join('\n')}\n`
+}
