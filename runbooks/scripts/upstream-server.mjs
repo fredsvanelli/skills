@@ -259,8 +259,12 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
       upRes.on('data', (chunk) => parts.push(chunk))
       upRes.on('end', () => {
         const raw = Buffer.concat(parts)
-        saveFixture(request, upRes, raw.toString('utf8'))
         res.end(raw)
+        try {
+          saveFixture(request, upRes, raw.toString('utf8'))
+        } catch (err) {
+          log(`could not record ${request.method} ${request.path}: ${err?.message ?? err}`)
+        }
       })
     })
     upstream.on('error', () => {

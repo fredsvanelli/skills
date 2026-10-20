@@ -424,3 +424,18 @@ test('record mode with no runbook proxies and writes nothing; event streams are 
   assert.equal(await (await fetch(`${s.base}/events`)).text(), 'data: 1\n\n')
   assert.deepEqual(fs.readdirSync(path.join(s.fixturesRoot, 'billing/list')), ['.keep'])
 })
+
+test('record mode keeps serving when a fixture cannot be written', async (t) => {
+  const fake = await recordApi(t)
+  const files = {
+    'billing/list/get--invoices.json': fixture('GET', '/invoices', { status: 200, body: { items: ['old'] } }),
+    'billing/list/S03': 'not a folder',
+  }
+  const s = await start(t, files, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', step: 'S03' })
+  const r = await fetch(`${s.base}/invoices`)
+  assert.equal(r.status, 200)
+  assert.deepEqual(await r.json(), { items: [1] })
+  assert.equal((await fetch(`${s.base}/__runbooks/state`)).status, 200)
+  assert.ok(s.logs.some((line) => line.startsWith('could not record GET /invoices')), s.logs.join('\n'))
+})
