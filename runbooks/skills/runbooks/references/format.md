@@ -8,7 +8,7 @@
 
 ```yaml
 id: billing.issue-invoice
-title: Issue a partner invoice
+title: Issue a client invoice
 capability: billing
 surface: ui
 feature: invoices
