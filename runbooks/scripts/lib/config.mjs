@@ -58,9 +58,12 @@ const UPSTREAM_MODES = ['live', 'mocked']
 // The upstream block is absent in live projects, so a missing block means live.
 export const upstreamModeOf = (config) => config.upstream?.mode ?? 'live'
 
+function checkUpstreamShape(upstream) {
+  if (typeof upstream !== 'object' || Array.isArray(upstream)) throw new ConfigError('upstream must be an object with a "mode"')
+}
+
 function validateUpstream(upstream, stack) {
   if (upstream === null) return
-  if (typeof upstream !== 'object' || Array.isArray(upstream)) throw new ConfigError('upstream must be an object with a "mode"')
   if (!surfacesOf(stack).includes('ui')) throw new ConfigError(`upstream applies only to ui runbooks, and a ${stack} stack has none`)
   if (!UPSTREAM_MODES.includes(upstream.mode)) throw new ConfigError(`upstream.mode must be one of ${UPSTREAM_MODES.join(', ')}`)
   if (upstream.mode === 'mocked' && !upstream.urlEnv) {
@@ -141,6 +144,7 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
   validateViewports(config.viewports)
   validateDesign(config.design, config.stack)
   if (raw.upstream != null) {
+    checkUpstreamShape(raw.upstream)
     config.upstream = {
       mode: 'live', baseUrl: '', start: [], root: null, urlEnv: '', port: 4010,
       fixtures: `${config.paths.runbooks}/_fixtures`, schema: null, redactHeaders: [], tokenEnv: '', serverFile: null,

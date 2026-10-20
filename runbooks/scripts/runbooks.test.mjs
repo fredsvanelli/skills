@@ -245,3 +245,10 @@ test('loadConfig rejects a bad upstream block', () => {
   assert.throws(() => loadConfig(bad({ mode: 'live', schema: 'openapi.yaml' })), /upstream.schema must be a JSON file/)
   assert.throws(() => loadConfig(bad({ mode: 'live', redactHeaders: 'x-key' })), /upstream.redactHeaders must be a list of header names/)
 })
+
+test('loadConfig rejects an upstream block that is not an object', () => {
+  for (const upstream of ['abc', [1], false, 0]) {
+    const dir = tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, upstream }) })
+    assert.throws(() => loadConfig(dir), /upstream must be an object/)
+  }
+})
