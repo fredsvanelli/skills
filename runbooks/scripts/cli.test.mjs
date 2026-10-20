@@ -307,6 +307,14 @@ test('runbooks.mjs ui exits 2 naming the port when it is in use', async () => {
   }
 })
 
+test('runbooks.mjs ui exits 2 when the root has no config', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ui-noconfig-'))
+  const result = spawnSync(process.execPath, [SCRIPT, 'ui', '--port', '0', '--root', dir], { encoding: 'utf8', timeout: 10000 })
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /^runbooks: /)
+  assert.equal(result.stdout, '')
+})
+
 test('runbooks.mjs ui exits 2 on a bad --port', () => {
   const dir = upstreamProject({})
   const result = spawnSync(process.execPath, [SCRIPT, 'ui', '--port', '70000', '--root', dir], { encoding: 'utf8' })

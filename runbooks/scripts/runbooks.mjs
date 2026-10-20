@@ -220,6 +220,7 @@ if (invokedPath && invokedPath === fs.realpathSync(fileURLToPath(import.meta.url
       }
       const root = path.resolve(typeof options.root === 'string' ? options.root : process.cwd())
       const configPath = typeof options.config === 'string' ? options.config : undefined
+      loadConfig(root, configPath)
       serveUi({ root, configPath, port })
     } catch (err) {
       process.stderr.write(`runbooks: ${err.message}\n`)
