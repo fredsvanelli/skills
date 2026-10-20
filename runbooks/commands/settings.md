@@ -61,6 +61,8 @@ Done when you hold the groups to change.
 
 Ask with `AskUserQuestion`, in rounds of four, each question with the current value as the recommended option ("Keep `<value>`"). Ask the questions `setup.md` step 2 asks for those keys, with its detection from step 1 where a question needs it (installed test libraries, design links, breakpoints). A key the user wants to clear takes its default from `config.md`.
 
+Setup does not ask `staleDays`, because the default fits a new project, so the `ui` group has its own question: one `AskUserQuestion` with the current value as "Keep `<value>`" and the options `14`, `30` and `60`. The user types any other positive integer under "Other". A value that is not a positive integer is asked again, because the loader rejects it.
+
 Some changes reach past their own key. Work out each one from the table below, ask what it needs, and add its files to the write list:
 
 | Change | Also |
