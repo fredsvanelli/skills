@@ -17,7 +17,8 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, rolesMarkdown, roleMarkdown, affectedRolesMarkdown, citingMarkdown } from './lib/format.mjs'
+import { roleRows, roleDetail, affectedByChange, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
 import { loadRoles, noAccountRoles, REVIEW_REASONS } from './lib/roles.mjs'
@@ -51,6 +52,11 @@ Commands:
                 role-deleted. <id...> --clear [--write] removes the review key. A dry run unless --write
   enable-roles  [--date YYYY-MM-DD] [--write] sets roles: all on every runbook that is not deprecated and
                 adds a roles-enabled review entry to those that are not placeholders. A dry run unless --write
+  roles         [name] lists the roles with their account, runbook count, reviews, guessed keys and last
+                results, or shows one role: effective permissions and its runbooks
+  roles         --affected --role r --key k lists the runbooks a permission change reaches: the role and
+                its heirs, per role. Both flags are required
+  roles         --citing r lists the runbooks that cite the role (roles, Roles:, role line, As:) and its heirs
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
                 and prints its address; stop it with Ctrl+C
 
@@ -223,7 +229,35 @@ function commandEnableRoles(root, config, options) {
   return options.json ? json(plan) : reviewPlanMarkdown({ title: 'Sets roles: all and marks the runbooks for review.', write, ...plan })
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles']
+function commandRoles(root, config, options, positionals) {
+  requireTracking(config)
+  const registry = loadRoles(root, config)
+  const runbooks = loadRunbooks(root, config)
+  const known = (name) => {
+    if (!registry.roles[name]) throw new Error(`no role "${name}"`)
+    return name
+  }
+  if (options.affected === true) {
+    for (const flag of ['role', 'key']) {
+      if (typeof options[flag] !== 'string') throw new Error(`roles --affected needs --${flag}`)
+    }
+    const groups = affectedByChange(registry, runbooks, known(options.role), options.key)
+    return options.json ? json(groups) : affectedRolesMarkdown(groups, options)
+  }
+  if (options.citing !== undefined) {
+    if (typeof options.citing !== 'string') throw new Error('roles --citing needs a role name')
+    const result = citingRole(root, registry, runbooks, known(options.citing))
+    return options.json ? json(result) : citingMarkdown(result, options.citing)
+  }
+  if (positionals.length > 0) {
+    const detail = roleDetail(root, config, registry, runbooks, known(positionals[0]))
+    return options.json ? json(detail) : roleMarkdown(detail)
+  }
+  const rows = roleRows(root, config, registry, runbooks)
+  return options.json ? json(rows) : rolesMarkdown(rows)
+}
+
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles']
 
 export function run(argv) {
   const stderr = []
@@ -250,6 +284,7 @@ export function run(argv) {
     else if (command === 'move-to-calls') stdout = commandMoveToCalls(root, config, options)
     else if (command === 'mark-review') stdout = commandMarkReview(root, config, options, positionals)
     else if (command === 'enable-roles') stdout = commandEnableRoles(root, config, options)
+    else if (command === 'roles') stdout = commandRoles(root, config, options, positionals)
     else stdout = commandItems(root, config, options, command, warnings)
     if (command === 'list' || command === 'coverage') {
       const copied = copiedServerWarning(root, config, VERSION)

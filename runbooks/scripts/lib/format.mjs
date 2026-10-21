@@ -168,6 +168,44 @@ export function reviewPlanMarkdown({ title, runbooks, skipped = [], written, wri
   return `${lines.join('\n')}\n`
 }
 
+const resultsText = (results) => {
+  const parts = Object.entries(results).filter(([, count]) => count > 0).map(([state, count]) => `${count} ${state}`)
+  return parts.length > 0 ? parts.join(', ') : 'none'
+}
+
+export function rolesMarkdown(rows) {
+  return `${table(['Role', 'Description', 'Inherits', 'Account', 'Runbooks', 'Reviews', 'Guesses', 'Last results'],
+    rows.map((r) => [r.name, r.description, r.inherits.join(', ') || '-', r.account ? 'yes' : 'no', r.runbooks, r.reviews, r.guesses.length, resultsText(r.results)]))}\n`
+}
+
+export function roleMarkdown(detail) {
+  const lines = [`## ${detail.name}`, '', detail.description || 'No description.', '']
+  lines.push(`Inherits: ${detail.inherits.join(', ') || 'nothing'}.`)
+  lines.push(detail.account ? `Account: ${detail.account.emailEnv}, ${detail.account.passwordEnv}.` : 'Account: none in the config.')
+  if (detail.found.length > 0) lines.push(`Found in: ${detail.found.join(', ')}.`)
+  lines.push('', '### Effective permissions', '')
+  const keys = Object.keys(detail.effective)
+  lines.push(keys.length === 0 ? 'None.' : table(['Key', 'Actions', 'Source', 'From'],
+    keys.map((key) => [key, detail.effective[key].actions.join(', '), detail.effective[key].source, detail.effective[key].from.join(', ')])), '')
+  lines.push('### Runbooks', '')
+  const stateText = (states) => (states.length === 0 ? 'never run' : states.map((s) => (s.viewport ? `${s.viewport}: ${s.result}` : s.result)).join(', '))
+  lines.push(detail.runbooksOf.length === 0 ? 'None.' : table(['Id', 'Title', 'Status', 'Outcomes', 'Last run', 'Review'],
+    detail.runbooksOf.map((rb) => [rb.id, rb.title, rb.status, rb.outcomes.join(', '), stateText(rb.states), rb.review ? 'yes' : 'no'])))
+  return `${lines.join('\n')}\n`
+}
+
+export function affectedRolesMarkdown(groups, { role, key }) {
+  if (groups.length === 0) return `No runbook is affected by ${key} for ${role}.\n`
+  return `${table(['Role', 'Runbooks'], groups.map((g) => [g.role, g.runbooks.join(', ')]))}\n`
+}
+
+export function citingMarkdown(result, name) {
+  const lines = [result.runbooks.length === 0 ? `No runbook cites ${name}.` : table(['Runbook', 'File', 'Cited in'],
+    result.runbooks.map((rb) => [rb.id, rb.path, rb.places.join(', ')])), '']
+  lines.push(`Heirs: ${result.heirs.join(', ') || 'none'}.`)
+  return `${lines.join('\n')}\n`
+}
+
 export function contractMarkdown({ schema, runbooks, findings }) {
   const lines = [
     schema ? `Contract: ${schema}. Runbooks checked: ${runbooks.length}.` : `Runbooks checked: ${runbooks.length}.`,
