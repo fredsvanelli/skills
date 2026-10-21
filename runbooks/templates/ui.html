@@ -360,7 +360,7 @@
     )
   }
 
-  function runbookRow(rb) {
+  function runbookRow(rb, showUpstream) {
     const first = td(null, link(runbookHash(rb.id), 'flow', rb.flow))
     if (rb.status && rb.status !== 'active') first.append(badge(rb.status, rb.status))
     first.append(el('span', 'title', rb.title || '(no title)'))
@@ -376,17 +376,20 @@
     if (rb.problems.length > 0) result.append(badge('invalid', 'invalid'))
     if (!result.firstChild) result.append(el('span', 'muted', '-'))
 
-    const upstream = td('upstream', rb.upstream ?? el('span', 'muted', '-'))
-
     const history = link(runbookHash(rb.id, 'history'), 'nowrap', `History (${rb.runs}) →`)
     history.addEventListener('click', (event) => event.stopPropagation())
-    const tr = row(first, upstream, date, result, td('nowrap', history))
+    const cells = [first, date, result, td('nowrap', history)]
+    if (showUpstream) cells.splice(1, 0, td('upstream', rb.upstream ?? el('span', 'muted', '-')))
+    const tr = row(...cells)
     tr.className = `link${rb.stale ? ' stale' : ''}`
     tr.addEventListener('click', () => { location.hash = runbookHash(rb.id) })
     return tr
   }
 
-  function capabilitySection(cap, linked) {
+  // Only ui runbooks have an upstream mode, so a page of api runbooks has no Upstream column.
+  const hasUpstream = (caps) => caps.some((cap) => cap.runbooks.some((rb) => rb.upstream))
+
+  function capabilitySection(cap, linked, showUpstream) {
     const name = shownName(cap.name)
     const section = el('div', 'section', el('h3', null, linked ? link(`#/runbooks/${routeName(cap.name)}`, null, name) : name))
     const parts = [plural(cap.stale, 'stale runbook')]
@@ -394,7 +397,7 @@
     section.append(el('div', 'sub', parts.join(' · ')))
     section.append(cap.runbooks.length === 0
       ? el('p', 'none', 'No runbooks yet')
-      : table(['Runbook', 'Upstream', 'Last full run', 'Result', ''], cap.runbooks.map(runbookRow)))
+      : table(['Runbook', ...(showUpstream ? ['Upstream'] : []), 'Last full run', 'Result', ''], cap.runbooks.map((rb) => runbookRow(rb, showUpstream))))
     if (cap.coverage && cap.uncovered.length > 0) {
       section.append(el('div', 'uncov', el('h4', null, 'Uncovered routes'),
         el('ul', null, ...cap.uncovered.map((entry) => el('li', null, el('code', null, entry.id), el('span', null, entry.file ?? entry.kind ?? ''))))))
@@ -407,12 +410,13 @@
     if (stale()) return
     capabilitiesSide(data, name)
     if (name === null) {
-      view.replaceChildren(...warningBox(data.warnings), counters(data.capabilities, data.staleDays), ...data.capabilities.map((cap) => capabilitySection(cap, true)))
+      const showUpstream = hasUpstream(data.capabilities)
+      view.replaceChildren(...warningBox(data.warnings), counters(data.capabilities, data.staleDays), ...data.capabilities.map((cap) => capabilitySection(cap, true, showUpstream)))
       return
     }
     const cap = data.capabilities.find((c) => c.name === name)
     if (!cap) return showMessage(`No capability named "${name}".`)
-    view.replaceChildren(...warningBox(data.warnings), counters([cap], data.staleDays), capabilitySection(cap, false))
+    view.replaceChildren(...warningBox(data.warnings), counters([cap], data.staleDays), capabilitySection(cap, false, hasUpstream([cap])))
   }
 
   // Runbook detail
