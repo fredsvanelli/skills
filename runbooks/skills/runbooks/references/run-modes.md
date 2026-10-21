@@ -43,6 +43,19 @@ A `ui` runbook with `viewports` runs its steps once per viewport, in the frontma
 
 A size that cannot be set makes every step of that pass `blocked`, with the reason. Evidence of a pass goes in a folder per viewport: `<run id>/<viewport>/<step>.png`.
 
+## Roles
+
+With role tracking on (`config.md`, Roles), a runbook runs its steps once per role of its `roles`, and each pass checks the role lines of Expected (`format.md`, Roles).
+
+- **Pass order.** Role is the outer loop and viewport the inner one: all viewports of the first role, then all viewports of the next. Each role logs in once.
+- **Between passes.** Cleanup runs and the preconditions are checked again, as between viewports.
+- **Login.** A role change is a logout and a new login with the next role's `accounts` entry, in `headless`, `headed` and `script`. In `guided`, `chrome` and `prompt`, the user signs in as the role before its pass. `anonymous` logs out and logs in as nobody.
+- **`no-account`.** A `ui` role with no `accounts` entry, or whose env var names are missing from `mcp.secretsFile`, gets `no-account` for every step of its pass. The other roles still run, and the state does not make the run `blocked`. `anonymous` never gets it, and `api` runs never get it. Before the first step, `run` lists the roles that have no account.
+- **`--role editor,viewer`.** Runs only those roles. Like `--steps`, it makes the run partial: `status`, `last_run` and `review` stay unchanged.
+- **Review warning.** A runbook with a `review` entry runs anyway. `run` warns before the first step that its Expected may be out of date.
+- **States.** The state of a step is kept per step, role and viewport. A step that follows a `denied`, `hidden` or `read-only` outcome of its parent is `not-applicable` for that role, and the agent does not run it.
+- **Mocked runbooks.** Before each pass, `run` selects the role on the upstream server (`upstream.md`, "Control routes"), so the role's session and its 403s come from the `@<role>` fixtures.
+
 ## Design
 
 A `ui` step with a `Design:` line is also compared with its design reference when the config has `design`. At a viewport, the reference is `<name>.<viewport>` from the runbook's `design` when it exists, else `<name>`.
@@ -102,7 +115,7 @@ For `api` runbooks, with `tests.api`. For a `ui` runbook, the same flow with `te
 1. **Preconditions.** `tests.<surface>.command` is set, and `tests.<surface>.root` exists when given. When `tests.<surface>.baseUrl` is set, it answers (`curl -s -o /dev/null -w '%{http_code}' <baseUrl>`); otherwise the app is not checked, because the scripts boot it themselves. For `ui`, `run` starts the upstream server before this item. The app's reach to it is not checked in this mode (item 3).
 2. **Sync.** Every step has exactly one test whose name starts with its id in `scripts`, and no test there names a step the runbook does not have. Read the test names in the script files. When `scripts` is empty, or a step has no test, or a test names a missing step, follow `${CLAUDE_PLUGIN_ROOT}/commands/to-test.md` for the runbook first, skipping its "Run once" item: this run is that run. Content (whether each assertion matches its Expected) is not checked here; that is `audit-runbooks`'s job.
 3. **Execute.** Run `tests.<surface>.command` in `tests.<surface>.root` (default the project root), with `{files}` replaced by the `scripts` paths relative to that folder and `{junit}` by `.runbooks/junit/<run id>.xml` (absolute path). Create the folder first. For `ui`, put `RUNBOOKS_UPSTREAM_URL` (the server origin, `http://127.0.0.1:<upstream.port>`) and `RUNBOOKS_RUN_ID` (the run suffix) in the command's environment, so the script selects its runbook and step in `beforeEach` and creates live data with the run suffix. The agent selects nothing in this mode and does not check that the app reaches the server, because every select clears the request log and the state afterwards holds only the last step's requests. The report's Notes say the reach was not checked. An app that points elsewhere shows up as failing mocked tests (real data instead of fixtures): check `<urlEnv>=http://127.0.0.1:<port>` in the app's start command.
-4. **Read.** `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" junit <id> --file .runbooks/junit/<run id>.xml --json`, with `--waive <steps>` when the user asked before the run to skip steps. A `ui` runbook with `viewports` has one test per step and viewport, named `S01 <title> @ <viewport>`, and `junit` gives one state per step and viewport. It gives one state per step with parents resolved, the run `result`, and the tests outside the runbook. A missing report means the command did not write `{junit}`: show its output and stop.
+4. **Read.** `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" junit <id> --file .runbooks/junit/<run id>.xml --json`, with `--waive <steps>` when the user asked before the run to skip steps. A `ui` runbook with `viewports` has one test per step and viewport, named `S01 <title> @ <viewport>`, and `junit` gives one state per step and viewport. With role tracking on, the name is `S01 <title> as <role> @ <viewport>` (without `@ <viewport>` when the runbook has no viewports), and `junit` gives one state per step, role and viewport. A role's tests for a step after a closing outcome are not written, and `junit` reports it as `not-applicable`. A role with no account gets no tests, and `junit` reports it as `no-account`. It gives one state per step with parents resolved, the run `result`, and the tests outside the runbook. A missing report means the command did not write `{junit}`: show its output and stop.
 5. **Script mistakes.** A failure caused by the script itself (an import, a helper, a fixture, a typo in a route) may be fixed and the run repeated; say in the report's Notes what was fixed. Never loosen or remove an assertion so the app passes: a step whose Expected the app does not meet is a `failed` finding.
 
 The report's `mode` is `test` and its `executor` is "the project's test command". Evidence is the JUnit report path, plus the fixtures folder for a `mocked` runbook. A `ui` script takes no screenshots for design, so the report has no "Design differences" and its Notes say the design was not compared in this mode. Tests outside the runbook go in the report's "Other tests in the file" section and do not change its `result`.
@@ -117,8 +130,8 @@ Load the browser skill for Claude in Chrome when one is listed, then use the `mc
 
 ## prompt
 
-1. Fill `${CLAUDE_PLUGIN_ROOT}/templates/prompt.md` with the runbook's role, `app.baseUrl`, preconditions and steps in run order. Never put a credential in it. With viewports, write one prompt per viewport, holding only the steps that run at it.
-2. Save it to `.runbooks/prompts/<run id>.md` (`<run id>-<viewport>.md` with viewports), print it, and tell the user to sign in as the role, set the browser to the viewport's size when there is one, paste the prompt into the Claude in Chrome extension, and bring back the reply with `/runbooks:run <id> --import <file or pasted text>`. The replies of several viewports can come back in one import.
+1. Fill `${CLAUDE_PLUGIN_ROOT}/templates/prompt.md` with the runbook's role, `app.baseUrl`, preconditions and steps in run order. Never put a credential in it. With viewports, write one prompt per viewport, holding only the steps that run at it. With role tracking on, write one prompt per role and viewport, holding only the steps that run for that role and viewport, and each prompt's Expected holds the common result and that role's line.
+2. Save it to `.runbooks/prompts/<run id>.md` (`<run id>-<viewport>.md` with viewports, `<run id>-<role>.md` with roles, `<run id>-<role>-<viewport>.md` with both), print it, and tell the user to sign in as the role (as nobody for `anonymous`), set the browser to the viewport's size when there is one, paste the prompt into the Claude in Chrome extension, and bring back the reply with `/runbooks:run <id> --import <file or pasted text>`. The replies of several roles and viewports can come back in one import.
 3. When the upstream server runs, it serves the fixtures and mode of the last runbook selected, so prompt mode handles one runbook at a time. The agent selects the runbook (`POST /__runbooks/select` with `{ runbook, mode }` and `content-type: application/json`), prints its prompts (one per viewport) and names the runbooks still waiting. Every viewport's prompt of that runbook runs against that one log. The agent prints the next runbook's prompts only after the `--import` of the previous one: the import step in `run.md` (step 6) reads the log, then selects the next runbook and prints its prompts. The report's Notes say that step folders of fixtures are not served in a prompt run. The server keeps running until the import of the last runbook, which stops it. When it no longer runs at import, the states come from the reply alone and the Notes say `unmatched` was not checked.
 
 ### Import
@@ -126,14 +139,14 @@ Load the browser skill for Claude in Chrome when one is listed, then use the `mc
 The reply block:
 
 ```
-RUNBOOK RESULT <runbook id> @ <viewport>
+RUNBOOK RESULT <runbook id> as <role> @ <viewport>
 S01 | passed | <what was seen>
 S02 | failed | <what was seen>
 END
 ```
 
-- The id after `RUNBOOK RESULT` must match the runbook. `@ <viewport>` names one of its viewports, and is absent when the runbook has none.
-- Every step that runs at that viewport appears once, with one of the step states.
-- With viewports, the report waits for a reply from every viewport. When one is missing, ask whether to import it later or record its steps as `blocked`.
+- The id after `RUNBOOK RESULT` must match the runbook. `as <role>` names one of its roles, and is absent when role tracking is off. `@ <viewport>` names one of its viewports, and is absent when the runbook has none.
+- Every step that runs for that role at that viewport appears once, with one of the step states.
+- With roles or viewports, the report waits for a reply from every role and viewport. When one is missing, ask whether to import it later or record its steps as `blocked`.
 - Ask the user about missing, repeated or unknown lines before writing anything.
 - The report's `executor` is "Claude in Chrome extension, result reported by the user" and `mode` is `prompt`.

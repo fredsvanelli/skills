@@ -5,7 +5,7 @@ A plugin that keeps a project's verified behavior as runbooks: versioned scripts
 ## Language
 
 **Runbook**:
-A versioned script for one flow, with preconditions, ordered steps and the exact expected result of each step.
+A versioned script for one flow, with preconditions, ordered steps and the exact expected result of each step. Its `roles` key names the roles that run it when role tracking is on.
 _Avoid_: test case, scenario
 
 **Flow**:
@@ -26,6 +26,22 @@ An entry or requirement that an `active` runbook cites. When the stack allows `a
 **Viewport**:
 A named screen size from the config (`desktop`, `mobile`) that a `ui` runbook runs at. The runbook's steps run once per viewport it cites, and each run has its own states. A breakpoint is the width where the project's layout changes; a viewport is the size a run uses, chosen inside one breakpoint range.
 _Avoid_: device, resolution
+
+**Role**:
+A kind of user, registered in `roles.json` when role tracking is on. A run repeats the steps once per role, like a viewport, and each step states what each role should see. `anonymous` is the role with no session and is always registered.
+_Avoid_: account, user type
+
+**Permission**:
+An action a role has on a `capability/feature` key of the registry. `view`, `create`, `edit` and `delete` are fixed, and the project may add others. A role inherits the permissions of its parents, and its own entry for a key replaces the inherited one.
+_Avoid_: access, right
+
+**Outcome**:
+The keyword that opens a role line under a step's Expected and says what that role gets. `allowed` means the common Expected applies. `read-only` means the role sees the screen and cannot act. `hidden` means the control or screen does not appear. `denied` means a 403 page, a redirect or an error. `partial` means the role acts with limits that the text after the keyword states. `api` steps use only `allowed`, `denied` and `partial`.
+_Avoid_: result, verdict
+
+**Review**:
+A mark in a runbook's frontmatter that its text may be wrong after a role change, for example a new role or a changed permission. It differs from `last_run.outdated`, which says the runbook should run again. Only `update` clears it, after the user confirms each role's Expected. A run does not clear it.
+_Avoid_: stale, dirty
 
 **Design reference**:
 The design a `ui` screen should look like, in the project's design system (a Figma frame, a Claude Design design, an exported file). A runbook names its screens' references in `design`, and `run` reports each difference between a screen and its reference without changing the step's state: the Expected decides the state. Only a run in the browser compares a screen with its reference; a script never does.

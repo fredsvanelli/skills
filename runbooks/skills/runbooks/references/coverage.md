@@ -17,6 +17,20 @@ A `ui` runbook's `calls` never count. They name operations of an upstream API in
 
 Requirements count through runbooks of any surface.
 
+### By role
+
+With role tracking on, `runbooks.mjs coverage` adds a by-role section, and `--role <name>` limits it to one role (`config.md`, Roles). It counts matrix keys of `roles.json`, not actions: a key is `<capability>/<feature>` or `<capability>/*`, and the unit is a role and key pair.
+
+The keys are the union of the effective keys of every role. For a role and a key:
+
+- The role **has access** when its effective actions for the key, by the lookup rule of `config.md`, are not empty.
+- A runbook **qualifies** when it has no problems, its status is `active` or `draft`, its `roles` include the role, and its `capability/feature` matches the key (`capability/*` matches every feature of that capability).
+- When the role has access, any qualifying runbook counts.
+- When the role has no access, a runbook counts only if it has a `denied`, `hidden` or `read-only` line for that role. A denial that no step proves leaves the key uncovered.
+- The pair is **covered** when a qualifying runbook is `active`, **pending** when only `draft` runbooks qualify, and **uncovered** otherwise.
+
+A runbook in review still counts, so turning tracking on does not drop coverage to zero. Placeholders and `deprecated` runbooks never count.
+
 ## Filters
 
 | Filter | Keeps |

@@ -5,7 +5,7 @@ capability: <capability>
 surface: <ui | api>
 feature: <feature>
 tags: []
-roles: []
+roles: all  # valid only with role tracking on; with tracking off write roles: []
 covers:
   entries: []
   requirements: []

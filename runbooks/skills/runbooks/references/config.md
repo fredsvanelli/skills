@@ -14,6 +14,7 @@
 | `app.baseUrl` | `""` | the app under test; every browser mode stays inside it. `ui` only |
 | `app.start` | `[]` | commands that start the app, shown when it is down |
 | `accounts.<role>` | `{}` | `{ emailEnv, passwordEnv, loginPath }`: env var names, never values. `ui` only: an `api` script authenticates the way the agents block says |
+| `roles.enabled` | `false` | whether the project tracks roles. `setup` asks, and `settings roles` turns it on. When true, `<paths.runbooks>/roles.json` must exist and every key of `accounts` must be a registered role. Turning it off again is not supported. With it false or missing, nothing about roles applies (below) |
 | `uiText` | `[]` | files holding UI strings (i18n messages), default locale first |
 | `data.seedHint` | `""` | the project's own command for test data, cited in preconditions |
 | `entries` | `[]` | entry point sources (below) |
@@ -57,6 +58,71 @@ One key per surface the stack allows, `tests.ui` and `tests.api`. A key for a su
 JUnit flags by framework: Jest `--reporters=default --reporters=jest-junit` with `JEST_JUNIT_OUTPUT_FILE={junit}` (needs `jest-junit`), Vitest `--reporter=junit --outputFile={junit}`, PHPUnit and Pest `--log-junit {junit}`, Playwright `--reporter=junit` with `PLAYWRIGHT_JUNIT_OUTPUT_NAME={junit}`, Cypress `--reporter junit --reporter-options mochaFile={junit}`.
 
 Endpoint sources: the `next-app-router` extractor marks route handlers `api-endpoint`. A `regex` source for endpoints (`routes/api.php`, Nest controllers) sets `"kind": "api-endpoint"`, so coverage can tell endpoints from screens.
+
+## Roles
+
+`roles.enabled` is the switch. With it true, the project keeps a registry of its roles at `<paths.runbooks>/roles.json`, committed by the `runbooks` commit policy. With it false or missing, `roles: [admin]` in a runbook keeps its meaning (the account roles the steps log in as), `roles: all` and `review` are problems, and no command or script reads the registry. The runbook side of roles: `format.md`, "Roles".
+
+```json
+{
+  "version": 1,
+  "actions": ["approve", "export"],
+  "roles": {
+    "anonymous": { "description": "No session", "permissions": {} },
+    "editor": {
+      "description": "Edits invoices and clients",
+      "found": ["src/auth/roles.ts:12", "contract: scope invoices:write"],
+      "permissions": { "billing/invoices": ["view", "create", "edit"], "billing/clients": ["view", "create", "edit"] },
+      "origins": { "billing/clients": "guess" }
+    },
+    "manager": {
+      "description": "Billing manager",
+      "inherits": ["editor"],
+      "found": ["user"],
+      "permissions": { "billing/invoices": ["view", "create", "edit", "approve"] }
+    }
+  }
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `version` | required, `1` |
+| `actions` | the actions the project adds to the four fixed ones. The registry's action list is the fixed four followed by these. Identifiers are English and the UI shows them as they are |
+| `roles.<name>` | one entry per role. Names are kebab-case (`^[a-z0-9][a-z0-9-]*$`) |
+| `description` | one line about the role |
+| `inherits` | the parent roles. Missing means none |
+| `found` | where the role came from: `file:line`, `contract: <what>`, or `user`. `/runbooks:ui` shows it |
+| `permissions` | the matrix: each key maps to a list of actions |
+| `origins` | per matrix key, how the scanner got it: `code`, `contract` or `guess` |
+
+Base actions are `view`, `create`, `edit` and `delete`. They are fixed and need no entry in `actions`. An action in a role's permissions that is not in the action list is an error.
+
+**Keys.** A matrix key is `<capability>/<feature>` or `<capability>/*`, with the same names as runbook frontmatter. A key that matches no runbook's `capability/feature` and no slice gives a warning, to catch typos.
+
+**Lookup.** For a runbook, the role's entry for `<capability>/<feature>` wins over `<capability>/*`. A runbook with no `feature` uses `<capability>/*`. No entry means no access.
+
+**Inheritance and override.** Roles can be independent or cumulative. The effective matrix of a role is the union of its parents' effective entries, plus its own. An own entry for a key replaces the inherited entry for that same key, so a manager can lose `delete` that its parent has. When two parents give the same key, their actions are joined. A cycle in `inherits` is an error.
+
+**`found` and `origins`.** `found` is per role and `origins` is per key. A key the user typed has no `origins` entry. `manage-permissions` removes a key's entry when the user edits that key. `roles` listings and `/runbooks:ui` flag the keys still marked `guess`. An `origins` key that is not in `permissions` is an error.
+
+**`anonymous`.** It is always present, even when the file omits it. It cannot be deleted, renamed or given an account, and it inherits nothing.
+
+**Relation to `accounts`.** `accounts.<role>` holds the login of a role, as env var names. Every key of `accounts` must be a registered role, and `accounts.anonymous` is an error. A registered role without an `accounts` entry is valid: a `ui` run gives it `no-account`. The registry never holds a credential value.
+
+Permission history comes from `git log` of `roles.json`. The plugin writes no history of its own.
+
+Errors the loader raises, each prefixed with the file path:
+
+- `unsupported version <n>, expected 1`
+- `role "<name>" must be kebab-case`
+- `<role> inherits "<parent>", which is not a registered role`
+- `anonymous inherits nothing`
+- `inheritance cycle: a -> b -> a`
+- `<role>: key "<key>" must be <capability>/<feature> or <capability>/*`
+- `<role> "<key>": action "<action>" is not in actions`
+- `accounts.<role> is not a registered role`
+- `accounts.anonymous is not allowed, because anonymous has no session`
 
 ## Viewports
 

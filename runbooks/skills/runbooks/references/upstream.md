@@ -47,7 +47,7 @@ The change goes through `update`.
 
 ## Fixtures
 
-A mocked runbook `<capability>.<flow>` keeps its fixtures in `<upstream.fixtures>/<capability>/<flow>/`. `upstream.fixtures` defaults to `<paths.runbooks>/_fixtures`. A fixture for one step goes in a folder named for the step, `<flow>/S03/`, and overrides the files in the runbook folder while that step is current. Any other subfolder is a problem.
+A mocked runbook `<capability>.<flow>` keeps its fixtures in `<upstream.fixtures>/<capability>/<flow>/`. `upstream.fixtures` defaults to `<paths.runbooks>/_fixtures`. A fixture for one step goes in a folder named for the step, `<flow>/S03/`, and overrides the files in the runbook folder while that step is current. A `@<role>` folder is a role layer ("Role layer" below). Any other subfolder is a problem.
 
 One fixture is one `.json` file:
 
@@ -80,6 +80,28 @@ Which command touches fixtures:
 - `to-test` only reads them.
 - `run <id> --record` records them from one live execution of the flow (see "Recording").
 - When the live API does not answer, fixtures come from `upstream.schema`, else they are written by hand.
+
+### Role layer
+
+With role tracking on (`config.md`, Roles), a role has its own responses. A folder named `@<role>` holds them, at two levels:
+
+```
+_fixtures/billing/list-invoices/
+  invoices.json
+  @editor/
+    me.json
+  S02/
+    invoices.json
+    @anonymous/
+      invoices.json
+```
+
+- `<capability>/<flow>/@<role>/` holds a role's responses for the whole runbook: its session (`GET /me` and the like) and its 403s.
+- `<capability>/<flow>/S02/@<role>/` holds them for one step.
+
+Lookup goes from the most specific folder to the least: step and role, then step, then role, then runbook. A fixture in a role folder answers only while that role is selected. Among the candidates, the order above decides before the rule on query keys. The role names are registered roles, `anonymous` included.
+
+`runbooks.mjs fixtures` accepts `@<role>` folders. It reports a folder whose name is not a role name, one whose role the registry does not have, and any role folder when role tracking is off.
 
 ### Checking fixtures
 
@@ -138,8 +160,8 @@ curl -s http://127.0.0.1:<port>/__runbooks/state
 
 | Route | Does |
 |---|---|
-| `POST /__runbooks/select` | Takes a JSON object with any of `runbook`, `step` and `mode`, and changes only the keys it gets. A new `runbook` without `step` resets the step. `runbook` is `null` or an id `<capability>.<flow>`, `step` is `null` or `S<nn>`, and `mode` is `mocked`, `live` or `record`. Every select clears the request log. Answers `{ runbook, mode, step }` |
-| `GET /__runbooks/state` | Answers `{ runbook, mode, step, requests, unmatched }` |
+| `POST /__runbooks/select` | Takes a JSON object with any of `runbook`, `role`, `step` and `mode`, and changes only the keys it gets. A new `runbook` without `role` or `step` resets the role and the step. A new `role` without `step` resets the step. `runbook` is `null` or an id `<capability>.<flow>`, `role` is `null` or a role name, `step` is `null` or `S<nn>`, and `mode` is `mocked`, `live` or `record`. Every select clears the request log. Answers `{ runbook, mode, role, step }` |
+| `GET /__runbooks/state` | Answers `{ runbook, mode, role, step, requests, unmatched }` |
 
 Three rules keep web pages away from these routes:
 
@@ -151,7 +173,7 @@ An invalid body, or a `runbook` or `step` that is not an id, gets a 400 and chan
 
 `requests` lists every request the app made since the last select, in all three modes, as `{ method, path, query, body, step, status }`. An agent checks the request a mocked screen sent by reading it there. `unmatched` lists the mocked requests that had no fixture, as `{ method, path, step }`.
 
-The agent selects the runbook and the step before each step, and scripts do it in `beforeEach`. The scripts get `RUNBOOKS_UPSTREAM_URL`, the server origin, to make these calls.
+The agent selects the runbook, the role and the step before each step, and scripts do it in `beforeEach`. The scripts get `RUNBOOKS_UPSTREAM_URL`, the server origin, to make these calls.
 
 ## Recording
 
@@ -159,9 +181,10 @@ The agent selects the runbook and the step before each step, and scripts do it i
 
 Rules for what is saved:
 
+- With a role selected, the file goes in that role's folder (`@<role>/`) inside the folder it would use otherwise, the runbook's or the current step's. Without a role, it goes in the runbook's or the step's folder. A run records each role's pass under its own folder.
 - Each file is named from the method, the path and a hash of the query, and holds `request`, `response` and `source` (`recorded <date> from <upstream.baseUrl origin>`).
 - `set-cookie`, `authorization`, `cookie` and every header in `upstream.redactHeaders` are dropped, whatever the case. Transport headers (`content-length`, `content-encoding`, `transfer-encoding`, `connection`, `keep-alive`) are dropped too, and so are `vary` and every `access-control-*` header, because the server sends its own CORS headers in `mocked` mode.
-- A request that already has an equal fixture writes nothing. A response that differs is saved in the current step's folder.
+- A request that already has an equal fixture for the selected role writes nothing. A response that differs is saved in the current step's folder.
 - A `text/event-stream` response streams to the app and is not recorded.
 - With no runbook selected, nothing is written.
 - `request.query` holds the full query, so remove volatile keys such as a cache-buster (`_t`) from the file by hand. Otherwise the fixture never matches again.
@@ -174,7 +197,7 @@ Rules for the agent:
 
 ## Scripts
 
-The script of a mocked runbook has one test per step, named `S01 <title>`. Each test selects the runbook and the step on the server, then navigates to the step's start page. `Parents:` still decide `blocked-by-parent`, which `runbooks.mjs junit` applies afterwards. With viewports, there is one test per step and viewport, named `S01 <title> @ <viewport>`, and `junit` gives one state per step and viewport. This shape is what makes mode `test` available.
+The script of a mocked runbook has one test per step, named `S01 <title>`. Each test selects the runbook and the step on the server, then navigates to the step's start page. `Parents:` still decide `blocked-by-parent`, which `runbooks.mjs junit` applies afterwards. With viewports, there is one test per step and viewport, named `S01 <title> @ <viewport>`, and `junit` gives one state per step and viewport. With role tracking on, there is one test per step, role and viewport, named `S01 <title> as <role> @ <viewport>`, and `junit` gives one state per step, role and viewport. This shape is what makes mode `test` available.
 
 ```ts
 test.beforeEach(async ({ request }, info) => {
@@ -193,7 +216,7 @@ test.afterAll(async ({ playwright }) => {
 })
 ```
 
-The server holds one state for every client: one runbook, one step and one mode. So every test suite whose app points at the server runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. With two workers, one worker's select would change the responses the other worker's app gets. When `upstream.baseUrl` is set, the copy starts with `--mode live --target <upstream.baseUrl>`, so a test that never selects reaches the live API through it. A mocked script posts `{ runbook, mode: 'mocked', step }` in `beforeEach` and `{ runbook: null, mode: 'live' }` in `afterAll`, which hands the server back to those tests. A live `ui` script posts nothing.
+The server holds one state for every client: one runbook, one step and one mode. So every test suite whose app points at the server runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. With two workers, one worker's select would change the responses the other worker's app gets. When `upstream.baseUrl` is set, the copy starts with `--mode live --target <upstream.baseUrl>`, so a test that never selects reaches the live API through it. A mocked script posts `{ runbook, mode: 'mocked', step }` in `beforeEach` (`{ runbook, mode: 'mocked', role, step }` with role tracking on, the role being the one the test is named for) and `{ runbook: null, mode: 'live' }` in `afterAll`, which hands the server back to those tests. A live `ui` script posts nothing.
 
 A script keeps the design comparison out: only a browser run compares a screen with its design. A mocked runbook without a script is allowed, but then no automated run checks its fixtures, and only the schema check or `list --affected` notices an API change. `setup` warns about this.
 

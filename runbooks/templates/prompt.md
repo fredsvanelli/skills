@@ -1,4 +1,4 @@
-You are running a UAT runbook in this browser tab. I am already signed in as <role>. Stay on pages under <baseUrl>.
+You are running a UAT runbook in this browser tab. I am already signed in as <role>. <for anonymous: I am signed out, and I stay signed out.> Stay on pages under <baseUrl>.
 
 <only with viewports: The browser is set to <width>x<height> (<viewport>). Do not resize it.>
 
@@ -19,11 +19,11 @@ Parents: <parents>
 Page: <baseUrl><route>
 Actions:
 1. <action>
-Expected: <expected>>
+Expected: <expected; with role tracking, the common result followed by this role's line only, and no line for other roles>>
 
 When you finish, reply with this block and nothing after it:
 
-RUNBOOK RESULT <runbook id><only with viewports: @ <viewport>>
+RUNBOOK RESULT <runbook id><only with role tracking: as <role>><only with viewports: @ <viewport>>
 S01 | <passed|failed|blocked|blocked-by-parent> | <what you saw>
 S02 | <passed|failed|blocked|blocked-by-parent> | <what you saw>
 END
