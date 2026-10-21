@@ -25,7 +25,7 @@ A mode is available when:
 | `headed` | `.mcp.json` has the `mcp.headed` server and its tools are loaded in this session |
 | `chrome` | the `mcp__claude-in-chrome__*` tools, or a tool that enables them, are in this session |
 | `prompt` | always |
-| `test` | for a `ui` runbook: its `scripts` hold a script with one test per step (the mocked shape, `upstream.md`, "Scripts"). A live script has one test with a `test.step` per step, so the question says `test` is not offered for it |
+| `test` | for a `ui` runbook: its `scripts` hold a script with one test per step (the mocked shape, `upstream.md`, "Scripts"), or with role tracking on one test per step and role. A live script has one test with a `test.step` per step, or with role tracking on one such test per role, so the question says `test` is not offered for it |
 
 Offer only the available modes, in the table's order, each with a one-line description from the first table. Mark `headless` "(Recommended)" and list it first when it is available; otherwise recommend `guided`. `AskUserQuestion` takes four options at most: when five are available, leave `prompt` out of the options and name it in the question text as an answer the user can type under "Other". Name the unavailable modes in the question text with the reason, for example "headed: `.mcp.json` has no `runbooks-playwright-headed` server".
 

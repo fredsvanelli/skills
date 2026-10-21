@@ -11,7 +11,7 @@ A `ui` runbook runs in one of two modes:
 
 The config holds the project default in `upstream.mode`. A runbook overrides it with `upstream: live|mocked` in its frontmatter, written only when it differs from the default. There is no per-step mode. A config without `upstream` means `live`, and `upstream` in a `backend` stack is a config error.
 
-Every browser mode (`guided`, `headless`, `headed`, `chrome`, `prompt`, `script`) works with both modes, and a script stays optional for both. Mode `test` is offered for a `ui` runbook only when its script has one test per step, the shape of a mocked script (see "Scripts"). A live script keeps one test with a `test.step` per step, so `test` is not offered for it, and the mode question says why.
+Every browser mode (`guided`, `headless`, `headed`, `chrome`, `prompt`, `script`) works with both modes, and a script stays optional for both. Mode `test` is offered for a `ui` runbook only when its script has one test per step, the shape of a mocked script (see "Scripts"). A live script keeps one test with a `test.step` per step (with role tracking on, one such test per role and viewport), so `test` is not offered for it, and the mode question says why.
 
 Design comparison happens only in browser runs. A mocked runbook keeps its `design` references.
 
