@@ -70,11 +70,17 @@ export function coverageMarkdown(result, scope) {
   return `${lines.join('\n')}`
 }
 
-export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLatest }) {
+function reviewLine(entry) {
+  const change = entry.change ? ` (${entry.change})` : ''
+  return `Review: ${[entry.reason, entry.role, entry.key && `${entry.key}${change}`, entry.date].filter(Boolean).join(', ')}`
+}
+
+export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLatest, review = [] }) {
   const name = title ? `${id} (${title})` : id
+  const reviewLines = review.map(reviewLine)
   if (!latest) {
     const dangling = lastRun?.report ? `\nlast_run cites ${lastRun.report}, which does not exist.` : ''
-    return `${name} has never ${full ? 'had a full run' : 'been run'}.${dangling}\n`
+    return `${[`${name} has never ${full ? 'had a full run' : 'been run'}.${dangling}`, ...reviewLines].join('\n')}\n`
   }
   const where = [
     latest.date,
@@ -96,6 +102,7 @@ export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLates
       : 'Last full run (last_run): never')
   }
   if (lastRun?.outdated === true) lines.push('Outdated: the runbook changed after its last full run')
+  lines.push(...reviewLines)
   return `${lines.join('\n')}\n`
 }
 

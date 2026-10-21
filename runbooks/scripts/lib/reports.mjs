@@ -21,12 +21,13 @@ function readSteps(body) {
     }
     const row = cells(line)
     if (!columns) {
-      if (row[0] === 'Step') columns = { step: 0, state: row.indexOf('State'), viewport: row.indexOf('Viewport') }
+      if (row[0] === 'Step') columns = { step: 0, state: row.indexOf('State'), role: row.indexOf('Role'), viewport: row.indexOf('Viewport') }
       continue
     }
     if (!/^S\d+$/.test(row[columns.step]) || columns.state < 0) continue
     if (!row[columns.state]) continue
     const entry = { step: row[columns.step], state: row[columns.state] }
+    if (columns.role >= 0) entry.role = row[columns.role] ?? ''
     if (columns.viewport >= 0) entry.viewport = row[columns.viewport] ?? ''
     steps.push(entry)
   }
@@ -58,6 +59,7 @@ function readReport(runsDir, runbooksDir, name) {
     branch: data.branch ?? null,
     mode: data.mode ?? null,
     upstream: data.upstream ?? null,
+    roles: Array.isArray(data.roles) ? data.roles.map(String) : [],
     viewports: Array.isArray(data.viewports) ? data.viewports.map(String) : [],
     result: data.result ?? null,
     partial: data.partial === true,

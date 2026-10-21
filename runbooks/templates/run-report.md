@@ -8,21 +8,22 @@ mode: <guided | headless | headed | chrome | prompt | script | test>
 executor: <the user | the agent | Claude in Chrome extension, result reported by the user | the project's test command>
 partial: false
 upstream: <live | mocked>
+roles: [<the roles that ran, in run order; [] when role tracking is off>]
 viewports: [<name widthxheight, in run order; [] when the runbook has none>]
 result: <passed | failed | blocked>
 ---
 
 # Run <run id>
 
-| Step | State | Viewport | Seen | Evidence |
-|---|---|---|---|---|
-| S01 | passed | <viewport, or leave the column out when the runbook has none> | <what was observed> | `<evidence path>` |
+| Step | State | Role | Viewport | Seen | Evidence |
+|---|---|---|---|---|---|
+| S01 | passed | <role, or leave the column out when role tracking is off> | <viewport, or leave the column out when the runbook has none> | <what was observed> | `<evidence path>` |
 
-<With viewports, one row per step and viewport, grouped by viewport in run order.>
+<One row per step, role and viewport. Rows are grouped by role, then by viewport, in run order. Leave the Role column out when role tracking is off and the Viewport column out when the runbook has none.>
 
 ## Failures
 
-### S0N <@ viewport, with viewports>
+### S0N <as role, with role tracking> <@ viewport, with viewports>
 
 Expected: <from the runbook>
 
@@ -31,6 +32,12 @@ Seen: <exact text or state observed>
 ## Blocked
 
 - S0N: <what is missing>
+
+## No account
+
+- <role>: <the config has no account for this role>
+
+<Role tracking only. Lists the roles without an account; their rows have the state no-account. Leave the section out when every role has an account.>
 
 ## Waived
 

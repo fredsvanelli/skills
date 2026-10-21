@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { run } from './runbooks.mjs'
+
+const ROLES = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
 
 const RUNBOOK = (lastRun) => `---
 id: billing.pay
@@ -163,4 +166,10 @@ test('check --full says when a runbook only has partial runs', () => {
   const { code, stdout } = run(['check', 'billing.pay', '--full', '--root', dir])
   assert.equal(code, 0)
   assert.equal(stdout, 'billing.pay (Pay an invoice) has never had a full run.\n')
+})
+
+test('check prints one line per pending review entry', () => {
+  const { code, stdout } = run(['check', 'billing.cancel-invoice', '--root', ROLES])
+  assert.equal(code, 0)
+  assert.match(stdout, /^Review: role-permissions, manager, billing\/invoices \(delete removed\), 2026-10-14$/m)
 })

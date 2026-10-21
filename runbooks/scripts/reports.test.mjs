@@ -146,3 +146,21 @@ test('a row without a state cell is skipped', () => {
   assert.deepEqual(r.steps, [{ step: 'S03', state: 'passed' }])
   assert.deepEqual(r.counts, { passed: 1 })
 })
+
+test('reports read the Role column and roles', () => {
+  const ROLES = path.join(import.meta.dirname, '__fixtures__/roles')
+  const [r] = listReports(ROLES, 'docs/runbooks', 'billing.cancel-invoice')
+  assert.deepEqual(r.roles, ['viewer', 'editor', 'manager', 'admin', 'anonymous'])
+  assert.deepEqual(r.steps.find((s) => s.step === 'S03' && s.role === 'manager' && s.viewport === 'desktop'), { step: 'S03', state: 'failed', role: 'manager', viewport: 'desktop' })
+  assert.equal(r.counts['not-applicable'] > 0, true)
+})
+
+test('a report without roles has roles [] and no role on its steps', () => {
+  const table = `| Step | State | Seen |
+|---|---|---|
+| S01 | passed | ok |`
+  const dir = project({ '2026-10-01-0900-billing.pay.md': report({ run: '2026-10-01-0900-billing.pay', table }) })
+  const [r] = listReports(dir, RUNBOOKS, 'billing.pay')
+  assert.deepEqual(r.roles, [])
+  assert.deepEqual(r.steps, [{ step: 'S01', state: 'passed' }])
+})

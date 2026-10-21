@@ -107,6 +107,7 @@ function commandCheck(root, config, options, positionals) {
     lastRun: runbook.lastRun,
     full,
     latest,
+    review: runbook.review,
     lastRunIsLatest: latest !== null && `${config.paths.runbooks}/${runbook.lastRun?.report}` === latest.path,
   }
   return options.json ? json(result) : checkMarkdown(result)

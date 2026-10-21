@@ -12,6 +12,7 @@ covers:
 sources: []
 scripts: []
 status: active
+last_run: { date: 2026-10-15, commit: "abc1234", result: failed, report: _runs/2026-10-15-0900-billing.cancel-invoice.md }
 review: [{ reason: role-permissions, role: manager, key: billing/invoices, change: delete removed, date: 2026-10-14 }]
 ---
 
