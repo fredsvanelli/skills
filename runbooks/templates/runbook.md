@@ -5,7 +5,7 @@ capability: <capability>
 surface: ui
 feature: <feature>
 tags: []
-roles: all  # with role tracking on: all, or a list of registered roles. With tracking off, list account roles ([admin]); all is invalid
+roles: [<role>]  # only with role tracking (roles.enabled): all, or a list of registered roles
 viewports: [<viewport>]
 # upstream: mocked  # only when the runbook differs from the config upstream.mode: live or mocked
 design: {}  # with a design system in the config, one line per screen, indented: <screen>: "<frame link or file path>"
@@ -32,7 +32,8 @@ last_run: null
 ## Preconditions
 
 - Services: <app.start commands; migrations or config the flow needs>
-- Accounts: one line per role that runs this runbook, <role> (`<emailEnv>` / `<passwordEnv>`). `anonymous` needs none. A role without an account gets `no-account`
+- Accounts: <role> (`<emailEnv>` / `<passwordEnv>`)
+<Only with role tracking (roles.enabled): one Accounts line per role that runs this runbook. `anonymous` needs none. A role without an account gets `no-account`.>
 - Data: <each piece of data, and the setup step or seed command that creates it>
 
 ---
@@ -52,7 +53,7 @@ Actions:
 
 1. <action, naming the control by its visible label>
 
-Expected: <exact UI text and state for the roles with no line below; after a reload when the step checks persistence>
+Expected: <exact UI text and state; after a reload when the step checks persistence>
 <Only with role tracking: one line per role whose behavior differs, starting with an outcome (allowed, read-only, hidden, denied, partial). Leave them out when tracking is off.>
 - <role>: <outcome>. <what that role sees instead>
 

@@ -169,7 +169,7 @@ Only `update` of that runbook clears `review`, after the user confirms each role
 
 Items 3 and 4 live only in the script, in the project's isolated test environment. The agent itself still reads no database and writes no SQL.
 
-An `api` runbook covers at least: the main path, invalid input (422 with the fields), and a read-back for anything it saves. With role tracking on, the 422 step and the read-back stay steps. The role that must not get in (403) and no authentication (401) are role lines on the main step: `denied` for a signed-in role and `denied` for `anonymous`, each with its status and body. Its Preconditions say how the script creates each piece of data (factory, seed, a call to another endpoint), and Cleanup names the isolation that undoes it (`RefreshDatabase`, a transaction per test).
+An `api` runbook covers at least: the main path, invalid input (422 with the fields), a role that must not get in (403), no authentication (401), and a read-back for anything it saves. With role tracking on, the 403 and 401 cases become role lines on the main step instead of steps of their own: `denied` for a signed-in role and `denied` for `anonymous`, each with its status and body. The 422 step and the read-back stay steps. Its Preconditions say how the script creates each piece of data (factory, seed, a call to another endpoint), and Cleanup names the isolation that undoes it (`RefreshDatabase`, a transaction per test).
 
 ### Preconditions and the upstream mode
 

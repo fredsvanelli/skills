@@ -5,7 +5,7 @@ capability: <capability>
 surface: api
 feature: <feature>
 tags: []
-roles: all  # with role tracking on: all, or a list of registered roles. With tracking off, list account roles ([admin]); all is invalid
+roles: [<role>]  # only with role tracking (roles.enabled): all, or a list of registered roles
 covers:
   entries: []
   requirements: []
@@ -28,7 +28,8 @@ last_run: null
 ## Preconditions
 
 - Test environment: <tests.api.command; migrations or config the operation needs>
-- Auth: one line per role that runs this runbook, acted through <the project's test helper, from the agents block>. `anonymous` sends no credentials
+- Auth: <role>, through <the project's test helper, from the agents block>
+<Only with role tracking (roles.enabled): one Auth line per role that runs this runbook, through the same helper. `anonymous` sends no credentials.>
 - Data: <each piece of data, and the factory, seed or call that creates it in the script>
 
 ---
@@ -40,12 +41,15 @@ last_run: null
 Parents: none
 Requirement: <requirement id or none>
 Endpoint: `<METHOD /path>`
+As: <role or anonymous. Only with role tracking off: with role tracking (roles.enabled), leave the line out, because the role lines below replace it>
 Request: <body, query and headers that matter>
 
-Expected: <status; body fields; effects through a read-back call or the framework's fakes, for the roles with no line below>
-<One line per role whose behavior differs, starting with allowed, denied or partial. denied states the status and the body: 403 for a signed-in role, 401 for anonymous.>
+Expected: <status; body fields; effects through a read-back call or the framework's fakes>
+<Only with role tracking (roles.enabled): one line per role whose behavior differs, starting with allowed, denied or partial. denied states the status and the body: 403 for a signed-in role, 401 for anonymous. Leave them out when tracking is off.>
 - <role>: denied. 403 with <body>.
 - anonymous: denied. 401 with <body>.
+
+<With role tracking off, the role that must not get in (403) and no authentication (401) are steps of their own, each with its As: line. With role tracking on, they are the role lines above, on the main step (format.md, "What a step can verify").>
 
 ---
 
