@@ -8,18 +8,19 @@ import { fileURLToPath } from 'node:url'
 import { createUiServer } from './ui-server.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
+const ROLES = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
 const CONFIG = 'docs/runbooks/runbooks.config.json'
 const API = { 'x-runbooks': '1' }
 // The API answers only requests with the x-runbooks header, as the page sends.
 const get = (url, init = {}) => fetch(url, { ...init, headers: { ...API, ...init.headers } })
 
 // The config reads endpoints from the sibling ../api, so the temp dir holds both.
-async function start(t, options = {}) {
+async function start(t, { fixture, ...rest } = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ui-'))
   const root = path.join(tmp, 'project')
-  fs.cpSync(FIXTURE, root, { recursive: true })
+  fs.cpSync(fixture ?? FIXTURE, root, { recursive: true })
   fs.cpSync(path.join(FIXTURE, '../api'), path.join(tmp, 'api'), { recursive: true })
-  const server = createUiServer({ root, today: () => '2026-10-20', html: () => '<!doctype html><title>ui</title>', ...options })
+  const server = createUiServer({ root, today: () => '2026-10-20', html: () => '<!doctype html><title>ui</title>', ...rest })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   t.after(() => new Promise((resolve) => {
     server.closeAllConnections?.()
@@ -173,4 +174,23 @@ test('a broken config answers 500 naming the problem', async (t) => {
   const res = await get(`${base}/api/runbooks`)
   assert.equal(res.status, 500)
   assert.match((await res.json()).error, /version/)
+})
+
+test('/api/roles and /api/role/<name> serve the registry', async (t) => {
+  const { base } = await start(t, { fixture: ROLES })
+  const roles = await get(`${base}/api/roles`)
+  assert.equal(roles.status, 200)
+  assert.equal((await roles.json()).enabled, true)
+  const manager = await get(`${base}/api/role/manager`)
+  assert.equal(manager.status, 200)
+  assert.equal((await manager.json()).name, 'manager')
+  assert.equal((await get(`${base}/api/role/ghost`)).status, 404)
+  const coverage = await (await get(`${base}/api/coverage?role=viewer`)).json()
+  assert.deepEqual(coverage.result.roles.map((r) => r.role), ['viewer'])
+})
+
+test('/api/roles answers enabled false without role tracking', async (t) => {
+  const { base } = await start(t)
+  assert.deepEqual(await (await get(`${base}/api/roles`)).json(), { enabled: false })
+  assert.equal((await get(`${base}/api/role/manager`)).status, 404)
 })

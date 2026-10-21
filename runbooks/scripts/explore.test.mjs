@@ -5,7 +5,7 @@ import path from 'node:path'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './lib/config.mjs'
-import { runbooksView, runbookView, historyView, reportView, coverageView } from './lib/explore.mjs'
+import { runbooksView, runbookView, historyView, reportView, coverageView, rolesView, roleView } from './lib/explore.mjs'
 import { run } from './runbooks.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
@@ -185,7 +185,7 @@ test('runbookView reads step states per viewport from the last_run report', () =
   fs.writeFileSync(path.join(root, RUNS, name), REPORT('', TABLE))
   fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('2026-10-01-0900-billing.issue-invoice.md', name))
   const view = runbookView(root, config, 'billing.issue-invoice', TODAY)
-  assert.deepEqual(view.stepStates.S01, [{ viewport: 'desktop', state: 'passed' }, { viewport: 'mobile', state: 'failed' }])
+  assert.deepEqual(view.stepStates.S01, [{ role: null, viewport: 'desktop', state: 'passed' }, { role: null, viewport: 'mobile', state: 'failed' }])
 }))
 
 test('a missing last_run report gives no step states, even with a newer local report', () => withProject(({ root, config }) => {
@@ -243,3 +243,50 @@ test('coverageView takes the filters of runbooks.mjs coverage and reports the sa
   assert.equal(coverageView(root, config, { path: 'src/**' }).result.entries.total, 6)
   assert.equal(coverageView(root, config).result.entries.total, 9)
 }))
+
+const ROLES = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
+
+test('rolesView counts roles, reviews, roles without an account and uncovered keys', () => {
+  const view = rolesView(ROLES, loadConfig(ROLES), TODAY)
+  assert.equal(view.enabled, true)
+  assert.equal(view.counters.roles, 5)
+  assert.equal(view.counters.reviews, 1)
+  assert.equal(view.counters.noAccount, 1)
+  assert.equal(typeof view.counters.keysWithoutRunbook, 'number')
+  assert.equal(view.rows.length, 5)
+  assert.ok(view.matrix.keys.includes('billing/invoices'))
+  const manager = view.matrix.roles.find((r) => r.name === 'manager')
+  assert.deepEqual(manager.cells['billing/invoices'].actions, ['view', 'create', 'edit', 'approve'])
+  assert.equal(manager.cells['billing/invoices'].source, 'overridden')
+})
+
+test('rolesView is disabled without role tracking', () => {
+  assert.deepEqual(rolesView(FIXTURE, loadConfig(FIXTURE), TODAY), { enabled: false })
+})
+
+test('roleView adds history and answers null for an unknown role', () => {
+  const config = loadConfig(ROLES)
+  const view = roleView(ROLES, config, 'manager')
+  assert.equal(view.name, 'manager')
+  assert.ok(Array.isArray(view.history))
+  assert.equal(roleView(ROLES, config, 'ghost'), null)
+  assert.equal(roleView(FIXTURE, loadConfig(FIXTURE), 'manager'), null)
+})
+
+test('runbookView and runbooksView carry the role review fields', () => {
+  const config = loadConfig(ROLES)
+  const view = runbookView(ROLES, config, 'billing.cancel-invoice', TODAY)
+  assert.equal(view.review.length, 1)
+  assert.equal(typeof view.rolesAll, 'boolean')
+  const rows = runbooksView(ROLES, config, TODAY).capabilities.flatMap((c) => c.runbooks)
+  assert.equal(rows.find((r) => r.id === 'billing.cancel-invoice').review, true)
+  assert.equal(rows.find((r) => r.id === 'billing.create-invoice').review, false)
+})
+
+test('coverageView narrows the roles to the role filter', () => {
+  const config = loadConfig(ROLES)
+  assert.equal(coverageView(ROLES, config, {}).result.roles.length, 5)
+  const one = coverageView(ROLES, config, { role: 'viewer' })
+  assert.deepEqual(one.result.roles.map((r) => r.role), ['viewer'])
+  assert.equal(one.scope, 'overall')
+})

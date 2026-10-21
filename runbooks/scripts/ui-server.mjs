@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './lib/config.mjs'
 import { todayLocal } from './lib/stale.mjs'
-import { runbooksView, runbookView, historyView, reportView, coverageView } from './lib/explore.mjs'
+import { runbooksView, runbookView, historyView, reportView, coverageView, rolesView, roleView } from './lib/explore.mjs'
 
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '[::1]']
 const PAGE = fileURLToPath(new URL('../templates/ui.html', import.meta.url))
@@ -51,10 +51,12 @@ export function createUiServer({ root, configPath, today = todayLocal, html = ()
     if (second === 'runbooks' && id === undefined) return sendJson(res, 200, runbooksView(root, config, { today: today() }))
     if (second === 'runbook' && id && third === undefined) return found(res, runbookView(root, config, id, { today: today() }))
     if (second === 'runbook' && id && third === 'runs' && rest.length === 0) return found(res, historyView(root, config, id))
+    if (second === 'roles' && id === undefined) return sendJson(res, 200, rolesView(root, config, { today: today() }))
+    if (second === 'role' && id && third === undefined) return found(res, roleView(root, config, id))
     if (second === 'runs' && id === undefined) return sendJson(res, 404, { error: 'not found' })
     if (second === 'runs' && third === undefined) return found(res, reportView(root, config, id))
     if (second === 'coverage' && id === undefined) {
-      const filters = Object.fromEntries(['capability', 'feature', 'path', 'slice']
+      const filters = Object.fromEntries(['capability', 'feature', 'path', 'slice', 'role']
         .filter((key) => url.searchParams.has(key)).map((key) => [key, url.searchParams.get(key)]))
       return sendJson(res, 200, coverageView(root, config, filters))
     }

@@ -2,7 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { loadRunbooks } from './runbooks.mjs'
 import { collect, coverageResult } from './project.mjs'
-import { computeCoverage } from './coverage.mjs'
+import { computeCoverage, roleCoverage } from './coverage.mjs'
+import { rolesEnabled } from './config.mjs'
+import { loadRoles, effectivePermissions } from './roles.mjs'
+import { roleRows, roleDetail } from './role-views.mjs'
+import { roleHistory } from './role-history.mjs'
 import { staleState } from './stale.mjs'
 import { listReports, reportByName } from './reports.mjs'
 import { renderMarkdown } from './markdown.mjs'
@@ -34,6 +38,7 @@ function rowOf(rb, reportCount, { today, staleDays }) {
     result: rb.lastRun?.result ?? null,
     outdated: rb.lastRun?.outdated === true,
     runs: reportCount,
+    review: rb.review.length > 0,
     problems: rb.problems,
   }
 }
@@ -107,14 +112,16 @@ export function runbookView(root, config, id, { today }) {
   const name = reportFileName(rb.lastRun)
   const report = name ? reportByName(root, runbooksDir, name) : null
   const stepStates = {}
-  for (const { step, state, viewport } of report?.steps ?? []) {
-    ;(stepStates[step] ??= []).push({ viewport: viewport ?? null, state })
+  for (const { step, state, viewport, role } of report?.steps ?? []) {
+    ;(stepStates[step] ??= []).push({ role: role || null, viewport: viewport ?? null, state })
   }
 
   return {
     ...row,
     feature: rb.feature,
     roles: rb.roles,
+    rolesAll: rb.rolesAll,
+    review: rb.review,
     viewports: rb.viewports.map((vp) => ({ name: vp, width: config.viewports[vp]?.width ?? null, height: config.viewports[vp]?.height ?? null })),
     upstreamFromConfig: rb.surface === 'ui' && (data.upstream === undefined || data.upstream === null),
     covers: rb.covers,
@@ -129,6 +136,44 @@ export function runbookView(root, config, id, { today }) {
     reportOnDisk: name === null || report !== null,
     warnings: rb.warnings,
   }
+}
+
+// The Roles page. With tracking off the page has nothing to show.
+export function rolesView(root, config, { today }) {
+  if (!rolesEnabled(config)) return { enabled: false }
+  const registry = loadRoles(root, config)
+  const runbooks = loadRunbooks(root, config)
+  const rows = roleRows(root, config, registry, runbooks)
+  const keys = [...new Set(registry.names.flatMap((name) => Object.keys(effectivePermissions(registry, name))))].sort()
+  const keysWithoutRunbook = roleCoverage(registry, runbooks).reduce((n, entry) => n + entry.keys.filter((k) => k.state === 'uncovered').length, 0)
+  return {
+    enabled: true,
+    today,
+    counters: {
+      roles: rows.length,
+      reviews: runbooks.filter((rb) => rb.review.length > 0).length,
+      noAccount: rows.filter((row) => row.name !== 'anonymous' && row.account === null).length,
+      keysWithoutRunbook,
+    },
+    rows,
+    matrix: {
+      keys,
+      roles: registry.names.map((name) => {
+        const effective = effectivePermissions(registry, name)
+        return {
+          name,
+          cells: Object.fromEntries(Object.entries(effective).map(([key, entry]) => [key, { actions: entry.actions, source: entry.source }])),
+        }
+      }),
+    },
+  }
+}
+
+export function roleView(root, config, name) {
+  if (!rolesEnabled(config)) return null
+  const registry = loadRoles(root, config)
+  const detail = roleDetail(root, config, registry, loadRunbooks(root, config), name)
+  return detail ? { ...detail, history: roleHistory(root, config, name) } : null
 }
 
 export function historyView(root, config, id) {
@@ -168,7 +213,8 @@ const SCOPE_KEYS = ['capability', 'feature', 'path', 'slice']
 // filters takes the keys of runbooks.mjs coverage. The side list of slices always shows the overall numbers.
 export function coverageView(root, config, filters = {}) {
   const withWarnings = (result) => ({ ...result, warnings: [...(config.warnings ?? []), ...result.warnings] })
-  const result = withWarnings(coverageResult(root, config, {}, [], true))
+  const narrow = (scoped) => (typeof filters.role === 'string' && scoped.roles ? { ...scoped, roles: scoped.roles.filter((entry) => entry.role === filters.role) } : scoped)
+  const result = narrow(withWarnings(coverageResult(root, config, {}, [], true)))
   const names = new Set([...Object.keys(config.slices), ...result.groups.map((group) => group.name)])
   const slices = [...names].map((name) => ({ name, ...(sumGroups(result.groups, name) ?? { covered: 0, total: 0 }) })).sort(byName)
   const keys = SCOPE_KEYS.filter((key) => typeof filters[key] === 'string')
@@ -176,7 +222,7 @@ export function coverageView(root, config, filters = {}) {
   if (keys.length > 1 || keys[0] !== 'slice') {
     const picked = Object.fromEntries(keys.map((key) => [key, filters[key]]))
     const scope = keys.map((key) => `${key} ${picked[key]}`).join(', ')
-    return { slices, scope, filters: picked, result: withWarnings(coverageResult(root, config, picked, [], true)) }
+    return { slices, scope, filters: picked, result: narrow(withWarnings(coverageResult(root, config, picked, [], true))) }
   }
   const slice = filters.slice
   // The counts come from the slice's own groups, so they agree with its uncovered list.
