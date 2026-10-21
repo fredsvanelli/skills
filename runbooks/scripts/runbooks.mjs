@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from './lib/args.mjs'
-import { loadConfig } from './lib/config.mjs'
+import { loadConfig, rolesEnabled } from './lib/config.mjs'
 import { loadRunbooks } from './lib/runbooks.mjs'
 import { collect, runbookWarnings, coverageResult } from './lib/project.mjs'
 import { filterRunbooks } from './lib/filter.mjs'
@@ -20,6 +20,7 @@ import { serveUi } from './ui-server.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown } from './lib/format.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
+import { noAccountRoles } from './lib/roles.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
 
@@ -32,7 +33,8 @@ Commands:
   status        --current <draft|active|deprecated> --states <s1,s2,...> [--partial]
   junit         <id> --file <junit.xml> [--waive S03,S04] maps the JUnit report of an api runbook's
                 script onto its steps: one state per step, parents resolved; a ui runbook with
-                viewports gets one state per step and viewport (tests named "S01 title @ mobile")
+                viewports gets one state per step and viewport (tests named "S01 title @ mobile"); with
+                roles on, one state per step and role (tests named "S01 title as editor @ mobile")
   fixtures      <id> loads the fixtures of a mocked ui runbook, counts them by source and, with
                 upstream.schema set, checks each JSON response against the OpenAPI schema
   upstream      [--port n] [--mode mocked|live|record] [--runbook id] [--step Sxx] starts the upstream
@@ -130,7 +132,8 @@ function commandJunit(root, config, options, positionals) {
   const steps = parseSteps(parts ? parts.body : '')
   if (steps.length === 0) throw new Error(`${runbook.path} has no steps`)
   const waived = typeof options.waive === 'string' ? options.waive.split(',').map((s) => s.trim()) : []
-  const result = { id, ...stepStates(steps, parseJunit(fs.readFileSync(file, 'utf8')), { waived, viewports: runbook.viewports }) }
+  const tracking = rolesEnabled(config) ? { roles: runbook.roles, noAccount: noAccountRoles(config, runbook) } : {}
+  const result = { id, ...stepStates(steps, parseJunit(fs.readFileSync(file, 'utf8')), { waived, viewports: runbook.viewports, ...tracking }) }
   return options.json ? json(result) : junitMarkdown(result)
 }
 

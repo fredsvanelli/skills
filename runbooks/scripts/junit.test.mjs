@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseSteps, parseJunit, stepOfTest, stepStates, viewportOfTest } from './lib/junit.mjs'
+import { parseSteps, parseJunit, roleOfTest, stepOfTest, stepStates, viewportOfTest } from './lib/junit.mjs'
+import { nextStatus } from './lib/status.mjs'
 import { junitMarkdown } from './lib/format.mjs'
 import { run } from './runbooks.mjs'
 
@@ -211,4 +212,72 @@ test('runbooks.mjs junit passes the runbook viewports through', () => {
   const parsed = JSON.parse(out.stdout)
   assert.equal(parsed.result, 'failed')
   assert.equal(parsed.steps.length, 5)
+})
+
+const ROLE_BODY = `### S01. Lists the invoices
+
+Parents: none
+
+Expected: the list shows.
+- viewer: denied.
+
+### S02. Cancels an invoice
+
+Parents: S01
+
+### S03. Reloads the list
+
+Parents: S02
+`
+
+const xmlOf = (names) => `<testsuite>${names.map((name) => `<testcase name="${name}"/>`).join('')}</testsuite>`
+
+test('roleOfTest reads the role suffix only for the runbook roles', () => {
+  assert.equal(roleOfTest({ name: 'S01 creates an invoice as editor @ mobile' }, ['editor']), 'editor')
+  assert.equal(roleOfTest({ name: 'S01 creates an invoice as Editor' }, ['editor']), 'editor')
+  assert.equal(roleOfTest({ name: 'S01 logs in as a guest' }, ['editor']), null)
+})
+
+test('stepStates closes the branch after a denied parent', () => {
+  const steps = parseSteps(ROLE_BODY)
+  const cases = parseJunit(xmlOf(['S01 lists as admin', 'S02 cancels as admin', 'S03 reloads as admin', 'S01 lists as viewer']))
+  const { steps: rows, result, extra } = stepStates(steps, cases, { roles: ['admin', 'viewer', 'editor'], noAccount: ['editor'] })
+  assert.deepEqual(rows.filter((r) => r.role === 'viewer').map((r) => r.state), ['passed', 'not-applicable', 'not-applicable'])
+  assert.deepEqual(rows.filter((r) => r.role === 'editor').map((r) => r.state), ['no-account', 'no-account', 'no-account'])
+  assert.equal(rows.find((r) => r.role === 'editor').seen, 'no account for editor')
+  assert.deepEqual(rows.map((r) => r.role), ['admin', 'admin', 'admin', 'viewer', 'viewer', 'viewer', 'editor', 'editor', 'editor'])
+  assert.equal(result, 'passed')
+  assert.deepEqual(extra, [])
+})
+
+test('stepStates sends tests without a role, for a not-applicable step or for a no-account role to extra', () => {
+  const steps = parseSteps(ROLE_BODY)
+  const cases = parseJunit(xmlOf(['S01 lists as admin', 'S02 cancels as admin', 'S03 reloads as admin', 'S01 lists', 'S01 lists as viewer', 'S02 cancels as viewer', 'S01 lists as editor']))
+  const { extra } = stepStates(steps, cases, { roles: ['admin', 'viewer', 'editor'], noAccount: ['editor'] })
+  assert.deepEqual(extra.map((e) => e.test).sort(), ['S01 lists', 'S01 lists as editor', 'S02 cancels as viewer'])
+})
+
+test('stepStates orders rows by role, then viewport, then step', () => {
+  const steps = parseSteps(ROLE_BODY)
+  const { steps: rows } = stepStates(steps, [], { roles: ['admin', 'viewer'], viewports: ['desktop', 'mobile'] })
+  assert.deepEqual(rows.slice(0, 4).map((r) => `${r.role}|${r.viewport}|${r.step}`), ['admin|desktop|S01', 'admin|desktop|S02', 'admin|desktop|S03', 'admin|mobile|S01'])
+  assert.equal(rows[6].role, 'viewer')
+})
+
+test('stepStates applies waived to every role', () => {
+  const steps = parseSteps(ROLE_BODY)
+  const { steps: rows } = stepStates(steps, [], { roles: ['admin', 'viewer'], waived: ['S02'] })
+  assert.deepEqual(rows.filter((r) => r.step === 'S02').map((r) => r.state), ['waived', 'waived'])
+})
+
+test('stepStates without roles is unchanged', () => {
+  const steps = parseSteps(BODY)
+  const cases = parseJunit(XML)
+  assert.deepEqual(stepStates(steps, cases, { roles: [] }), stepStates(steps, cases))
+  assert.equal('role' in stepStates(steps, cases).steps[0], false)
+})
+
+test('nextStatus accepts not-applicable and no-account', () => {
+  assert.equal(nextStatus('draft', ['passed', 'not-applicable', 'no-account']), 'active')
+  assert.equal(nextStatus('draft', ['not-applicable', 'no-account']), 'draft')
 })

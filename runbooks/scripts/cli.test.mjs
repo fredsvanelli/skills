@@ -450,3 +450,18 @@ test('a front checked out alone, with no sibling folder, runs coverage, list --a
   assert.equal(res.status, 200)
   assert.deepEqual(await res.json(), [{ id: 'q1', total: 120 }])
 })
+
+test('junit maps a roles runbook per role', () => {
+  const ROLES = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-cli-'))
+  const names = ['admin', 'editor', 'manager'].flatMap((role) => [`S01 creates as ${role}`, `S02 reads back as ${role}`])
+  names.push('S01 creates as viewer', 'S01 creates as anonymous')
+  fs.writeFileSync(path.join(dir, 'junit.xml'), `<testsuite>${names.map((name) => `<testcase name="${name}"/>`).join('')}</testsuite>`)
+  const out = run(['junit', 'billing.create-invoice', '--root', ROLES, '--file', path.join(dir, 'junit.xml'), '--json'])
+  assert.equal(out.code, 0, out.stderr)
+  const parsed = JSON.parse(out.stdout)
+  assert.ok(parsed.steps.every((row) => typeof row.role === 'string'))
+  assert.deepEqual(parsed.steps.filter((r) => r.role === 'viewer').map((r) => r.state), ['passed', 'not-applicable'])
+  assert.deepEqual(parsed.extra, [])
+  assert.equal(parsed.result, 'passed')
+})
