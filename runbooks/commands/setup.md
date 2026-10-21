@@ -137,7 +137,7 @@ A `backend` stack skips every browser question.
   2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" enable-roles` as a dry run. It refuses while tracking is off, which is why the config comes first. Show what it would do: the runbooks that get `roles: all` (the old `roles` list is replaced) and a `review` entry with `roles-enabled`. Ask whether to apply.
   3. On a yes, run it again with `--write` and add the changed runbooks to the write list. The user then runs `/runbooks:update` on each to write the per-role Expected lines (`format.md`, Roles). On a no, tracking stays on and the runbooks stay as they are, which `list` reports as problems until `enable-roles --write` runs.
 
-  The config and `roles.json` go into the `setup` commit, the runbook edits into the `runbooks` commit (`commits.md`).
+  The config goes into the `setup` commit. `roles.json` and the runbook edits go into the `runbooks` commit (`commits.md`).
 - Test command: when `tests.<surface>.command` is set and the framework is installed, run it once with `{files}` set to one existing test of that surface (or an empty run when there is none) and `{junit}` set to `.runbooks/junit/setup.xml`, and confirm the file appears. Fix the command until it does.
 - Design server: write the chosen template to `mcpServers` under the name `figma`, or the other tool's server under its name, and set `design.mcp` to that name. For Framelink, replace `<version>` with what `npm view figma-developer-mcp version` prints. A token stays in the user's environment: `.mcp.json` holds only `${NAME}`.
 - `.mcp.json`: merge the two servers into `mcpServers`, keeping every existing server. Replace `<mcp.secretsFile>` and `<paths.evidence>`. Confirm the secrets file is ignored with `git check-ignore -q <file>`; when it is not, stop and tell the user, because the MCP server would read a tracked file.
@@ -166,7 +166,7 @@ Print the summary in the conversation before any commit question:
 
 ## 5. Commit
 
-Commit by the `setup` policy, and the runbooks changed by `enable-roles` or `move-to-calls` by the `runbooks` policy. Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
+Commit by the `setup` policy, and `roles.json` and the runbooks changed by `enable-roles` or `move-to-calls` by the `runbooks` policy. Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
 
 ## 6. Close
 

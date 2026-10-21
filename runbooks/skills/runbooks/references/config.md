@@ -61,7 +61,7 @@ Endpoint sources: the `next-app-router` extractor marks route handlers `api-endp
 
 ## Roles
 
-`roles.enabled` is the switch. With it true, the project keeps a registry of its roles at `<paths.runbooks>/roles.json`, committed by the `runbooks` commit policy. With it false or missing, `roles: [admin]` in a runbook keeps its meaning (the account roles the steps log in as), `roles: all` and `review` are problems, and no command or script reads the registry. The runbook side of roles: `format.md`, "Roles".
+`roles.enabled` is the switch. With it true, the project keeps a registry of its roles at `<paths.runbooks>/roles.json`, committed by the `runbooks` commit policy, with the runbook edits, while config changes stay in the `setup` commit. With it false or missing, `roles: [admin]` in a runbook keeps its meaning (the account roles the steps log in as), `roles: all` and `review` are problems, and no command or script reads the registry. The runbook side of roles: `format.md`, "Roles".
 
 ```json
 {
