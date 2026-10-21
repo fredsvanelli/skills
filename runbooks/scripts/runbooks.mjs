@@ -8,7 +8,7 @@ import { loadRunbooks } from './lib/runbooks.mjs'
 import { collect, runbookWarnings, coverageResult } from './lib/project.mjs'
 import { filterRunbooks } from './lib/filter.mjs'
 import { nextStatus } from './lib/status.mjs'
-import { changedFiles, affectedRunbooks } from './lib/affected.mjs'
+import { changedFiles, affectedRunbooks, schemaChanges } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
 import { latestReport } from './lib/reports.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
@@ -17,8 +17,9 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown } from './lib/format.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
+import { checkContract } from './lib/contract.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
 
@@ -36,6 +37,8 @@ Commands:
                 upstream.schema set, checks each JSON response against the OpenAPI schema
   upstream      [--port n] [--mode mocked|live|record] [--runbook id] [--step Sxx] starts the upstream
                 server from the config in the foreground and prints its address; stop it with Ctrl+C
+  contract      [--strict] checks the calls of every ui runbook against upstream.schema, and the fixtures of
+                every mocked one against its calls and the schema (docs/adr/0005); --strict exits 1 on a finding
   move-to-calls [--source n] [--write] moves the endpoint ids of an upstream API in another repository
                 from covers.entries to calls (docs/adr/0005): the ids of entries[n], or without --source the
                 orphan ids shaped "METHOD /path". A dry run unless --write, which edits only those two keys
@@ -47,7 +50,8 @@ Global options:
   --config <file>  config path relative to the root (default: docs/runbooks/runbooks.config.json)
   --json           print JSON instead of Markdown
 
-Read-only, except move-to-calls --write: prints to stdout, warnings to stderr. Exit 0 on success, 2 on error.
+Read-only, except move-to-calls --write: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
+contract --strict has findings, 2 on error.
 `
 
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`
@@ -64,7 +68,9 @@ function commandList(root, config, options, warnings) {
   if (!options.affected) return options.json ? json(selected) : listMarkdown(selected)
 
   const base = options.affected === true ? config.git.base : options.affected
-  const hits = affectedRunbooks({ runbooks: selected, entries, slices: config.slices, changed: changedFiles(root, base) })
+  const changed = changedFiles(root, base)
+  const schema = schemaChanges(root, base, config.upstream?.schema, changed)
+  const hits = affectedRunbooks({ runbooks: selected, entries, slices: config.slices, changed, schema })
   if (options.json) return json(hits.map(({ runbook, reasons }) => ({ ...runbook, reasons })))
   return listMarkdown(hits.map((hit) => hit.runbook), new Map(hits.map((hit) => [hit.runbook.id, hit.reasons])))
 }
@@ -128,6 +134,25 @@ function commandJunit(root, config, options, positionals) {
   return options.json ? json(result) : junitMarkdown(result)
 }
 
+function readSchema(root, schema) {
+  const file = path.resolve(root, schema)
+  if (!fs.existsSync(file)) throw new Error(`${schema} not found: upstream.schema points to a missing file`)
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch (err) {
+    throw new Error(`${schema} is not valid JSON: ${err.message}`)
+  }
+}
+
+function commandContract(root, config, options) {
+  if (!config.upstream) throw new Error('the config has no upstream block, so there is no contract to check')
+  const schema = config.upstream.schema
+  const doc = schema ? readSchema(root, schema) : null
+  const result = { schema, ...checkContract({ root, config, runbooks: loadRunbooks(root, config), doc }) }
+  const code = options.strict === true && result.findings.length > 0 ? 1 : 0
+  return { code, stdout: options.json ? json(result) : contractMarkdown(result) }
+}
+
 function commandFixtures(root, config, options, positionals) {
   const id = positionals[0]
   if (!id) throw new Error('fixtures needs a runbook id')
@@ -136,17 +161,7 @@ function commandFixtures(root, config, options, positionals) {
   if (runbook.surface !== 'ui') throw new Error(`${id} is not a ui runbook: only ui runbooks have fixtures`)
   const dir = fixturesDir(config, runbook)
   const { fixtures, problems } = loadFixtures(root, dir)
-  if (config.upstream?.schema) {
-    const file = path.resolve(root, config.upstream.schema)
-    if (!fs.existsSync(file)) throw new Error(`${config.upstream.schema} not found: upstream.schema points to a missing file`)
-    let doc
-    try {
-      doc = JSON.parse(fs.readFileSync(file, 'utf8'))
-    } catch (err) {
-      throw new Error(`${config.upstream.schema} is not valid JSON: ${err.message}`)
-    }
-    problems.push(...checkFixtures(fixtures, doc))
-  }
+  if (config.upstream?.schema) problems.push(...checkFixtures(fixtures, readSchema(root, config.upstream.schema)))
   const result = { id, dir, fixtures, sources: sourceCounts(fixtures), problems }
   return options.json ? json(result) : fixturesMarkdown(result)
 }
@@ -158,7 +173,7 @@ function commandMoveToCalls(root, config, options) {
   return options.json ? json(plan) : moveToCallsMarkdown(plan)
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract']
 
 export function run(argv) {
   const stderr = []
@@ -175,7 +190,9 @@ export function run(argv) {
     const config = loadConfig(root, typeof options.config === 'string' ? options.config : undefined)
     const warnings = ['list', 'coverage', 'entries', 'requirements'].includes(command) ? [...config.warnings] : []
     let stdout
-    if (command === 'list') stdout = commandList(root, config, options, warnings)
+    let code = 0
+    if (command === 'contract') ({ code, stdout } = commandContract(root, config, options))
+    else if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
     else if (command === 'junit') stdout = commandJunit(root, config, options, positionals)
@@ -187,7 +204,7 @@ export function run(argv) {
       if (copied) warnings.push(copied)
     }
     stderr.push(...warnings.map((warning) => `warning: ${warning}`))
-    return finish(0, stdout)
+    return finish(code, stdout)
   } catch (err) {
     stderr.push(`runbooks: ${err.message}`)
     return finish(2)

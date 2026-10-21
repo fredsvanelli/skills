@@ -406,7 +406,7 @@ test('runbooks.mjs upstream exits 0 on SIGINT with a tunneled upgrade socket ope
 })
 
 // docs/adr/0005: in CI a front is checked out alone, and nothing it runs may need the API's repository.
-test('a front checked out alone, with no sibling folder, runs coverage, list --affected, fixtures and the upstream server', async (t) => {
+test('a front checked out alone, with no sibling folder, runs coverage, list --affected, fixtures, contract and the upstream server', async (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ci-'))
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
   const root = path.join(tmp, 'front')
@@ -436,6 +436,8 @@ test('a front checked out alone, with no sibling folder, runs coverage, list --a
 
   const fixtures = JSON.parse(run(['fixtures', 'quotes.list-quotes', '--root', root, '--json']).stdout)
   assert.deepEqual([fixtures.fixtures.length, fixtures.problems], [2, []])
+  const contract = run(['contract', '--strict', '--root', root])
+  assert.deepEqual([contract.code, contract.stderr], [0, ''])
 
   const { port, ...options } = upstreamOptions(root, config, {})
   assert.equal(port, 4010)

@@ -154,7 +154,8 @@ Tell the user:
 - the commit outcome: the short sha, or the paths left uncommitted;
 - tools missing, each with its install command (Node 18+, `npx @playwright/mcp@0.0.83 --help` to pre-fetch the MCP server when the stack has `ui`, the install command from step 2 of each framework left for later);
 - what needs a restart: new `.mcp.json` servers load in a new session or through `/mcp`;
-- what the design server needs before its first use: sign-in with Figma through `/mcp` for the remote server, the Figma desktop app open with its MCP server on for the desktop server, `FIGMA_API_KEY` exported in the shell that starts Claude Code for Framelink, `/login` for Claude Design.
+- what the design server needs before its first use: sign-in with Figma through `/mcp` for the remote server, the Figma desktop app open with its MCP server on for the desktop server, `FIGMA_API_KEY` exported in the shell that starts Claude Code for Framelink, `/login` for Claude Design;
+- when the config sets `upstream.schema` for an API in another repository: the two CI jobs the project needs and the plugin does not write, one that brings each new version of the API's OpenAPI document into `upstream.schema` and opens a pull request, and one that runs `runbooks.mjs contract --strict` (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`, Contract).
 
 Install nothing without asking; the only installs setup runs itself are the test libraries, after a yes in step 2. Offer `/runbooks:coverage` for a coverage baseline.
 

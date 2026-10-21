@@ -126,7 +126,7 @@ The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design
 | `urlEnv` | `""` | the env var the app reads the API URL from (`NEXT_PUBLIC_API_URL`). The app starts with it set to the upstream server. Required when `mode` is `mocked` |
 | `port` | `4010` | the upstream server's port, an integer from 1 to 65535 |
 | `fixtures` | `<paths.runbooks>/_fixtures` | the folder of the fixtures |
-| `schema` | `null` | a local OpenAPI 3 JSON file (`.json`). `run` and `fixtures` check each fixture against it. YAML files and URLs are not read. For an API in another repository, the document it publishes, kept here at `docs/runbooks/_contract/openapi.json` by default (`upstream.md`, Another repository) |
+| `schema` | `null` | a local OpenAPI 3 JSON file (`.json`). `run` and `fixtures` check each fixture against it. YAML files and URLs are not read. For an API in another repository, the document it publishes, kept here at `docs/runbooks/_contract/openapi.json` by default (`upstream.md`, Another repository). `contract` checks calls and fixtures against it, and `list --affected` reads its changes (`upstream.md`, Contract) |
 | `redactHeaders` | `[]` | header names the recorder drops, besides `set-cookie`, `authorization` and `cookie`. Case does not matter |
 | `tokenEnv` | `""` | env var holding a service token, for an upstream API without password login |
 | `serverFile` | `null` | where `setup` copied the upstream server in the project (`<tests.ui.dir>/runbooks-upstream.mjs`) |

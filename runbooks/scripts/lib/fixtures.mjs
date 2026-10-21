@@ -68,7 +68,7 @@ function findTemplate(templates, requestPath) {
     new RegExp(`^${template.split(/\{[^}]+\}/).map(escapeRegex).join('[^/]+')}$`).test(requestPath))
 }
 
-function serverPrefix(doc) {
+export function serverPrefix(doc) {
   const url = doc?.servers?.[0]?.url
   if (typeof url !== 'string') return ''
   try {
