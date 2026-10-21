@@ -74,6 +74,8 @@ Print, before any commit question:
 - the runbooks marked, and the number left unmarked;
 - when the role has no account: that `ui` runs give it `no-account`.
 
+Done when the user has seen this summary.
+
 ## 7. Commit
 
 Commit `roles.json` and the marked runbooks by the `runbooks` policy, and the config by the `setup` policy. Ask an `ask` question only after the summary from step 6 is on screen; the question names the files and the message and does not repeat the summary.
@@ -81,3 +83,7 @@ Commit `roles.json` and the marked runbooks by the `runbooks` policy, and the co
 Write in the config `language`.
 
 Done when the user has seen the diff before the write and the summary before any commit question.
+
+## 8. Close
+
+Give the commit outcome: the short sha, or the paths left uncommitted. Then offer `/runbooks:update <id>` for each runbook marked for review, which writes the role lines and clears the review.
