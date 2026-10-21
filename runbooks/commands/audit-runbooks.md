@@ -31,7 +31,7 @@ Run `git status --porcelain` now and keep the list for the commit step.
 
 ## 2. Check
 
-Run `... coverage --json` once and read its `orphans`. Then, for each runbook, check every item below and record each finding with the step, the evidence (`file:line`) and the edit that would fix it:
+Run `... coverage --json` once and read its `orphans`. When the config has an `upstream` block, also run `... contract --json` once and read its `findings` (`references/upstream.md`, Contract). Then, for each runbook, check every item below and record each finding with the step, the evidence (`file:line`) and the edit that would fix it:
 
 | Check | Verdict when it fails |
 |---|---|
@@ -53,8 +53,11 @@ Run `... coverage --json` once and read its `orphans`. Then, for each runbook, c
 | every control named in Actions is visible at each viewport the step runs at (responsive classes such as `hidden md:flex`, media queries) | `drift` |
 | no step of a `mocked` runbook has an Expected that checks persistence after a reload or a value the API saved | `drift` |
 | a `live` runbook has no fixtures folder, `<upstream.fixtures>/<capability>/<flow>/` | `drift` |
+| every call matches an operation of `upstream.schema`, when it is set (a `call` finding of `contract`) | `drift` |
+| every fixture of a `mocked` runbook is named by one of its `calls` or `covers.entries`, and the schema accepts it (a `fixture` finding of `contract`) | `drift` |
+| every operation of an upstream API in another repository that the runbook's screens call, read from the code behind its `Page:` routes, is in its `calls`; and no `calls` item is one the screens no longer call | `drift` |
 
-For the two upstream rows, the mode is the `upstream` field of the list output. A `mocked` runbook with such a step is stale, because a mocked run never reaches what the API saves. Its edit is to check the request instead (method, URL and body) and to list the persistence under "Not covered". A `live` runbook with a fixtures folder is stale, because the fixtures serve no run. Its edit is "delete `<dir>` or set `upstream: mocked` through `/runbooks:update`", with `<dir>` the folder (default `<paths.runbooks>/_fixtures/<capability>/<flow>`). A hand-edited `upstream:` that leaves the content incoherent shows up this way (`references/upstream.md`, Changing a runbook's mode).
+For the three rows on calls, the edit is the `calls` list to write, or the fixture to record again through `/runbooks:update`. A `call` finding can also mean the API removed or renamed the operation: say so, because then the screen needs a change, not the runbook. For the two upstream rows above them, the mode is the `upstream` field of the list output. A `mocked` runbook with such a step is stale, because a mocked run never reaches what the API saves. Its edit is to check the request instead (method, URL and body) and to list the persistence under "Not covered". A `live` runbook with a fixtures folder is stale, because the fixtures serve no run. Its edit is "delete `<dir>` or set `upstream: mocked` through `/runbooks:update`", with `<dir>` the folder (default `<paths.runbooks>/_fixtures/<capability>/<flow>`). A hand-edited `upstream:` that leaves the content incoherent shows up this way (`references/upstream.md`, Changing a runbook's mode).
 
 `api` runbooks:
 

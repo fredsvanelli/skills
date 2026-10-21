@@ -27,7 +27,7 @@ Examples: `/runbooks:list`, `/runbooks:list --capability billing --status draft`
 2. Show the table as printed. For each `warning:` line on stderr, add the runbook path and what to fix; the warning text names the problem.
 3. With `--affected`:
    - The base defaults to `git.base` in the config.
-   - The script sees changes in this repository only. A change in an upstream API in another repository reaches this project as a new version of `upstream.schema`; until then nothing here shows it (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). When the loader warns about an `entries` source outside the project, say that it never showed changes either, and offer `/runbooks:settings sources`.
+   - The script sees changes in this repository only. A change in an upstream API in another repository reaches this project as a new version of `upstream.schema`. A reason `upstream schema: <METHOD /path> changed` (or `added`, `removed`) means that file changed that operation and the runbook's `calls` name it; offer `/runbooks:update <id>` to record its fixtures again and `runbooks.mjs contract` to see what broke (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`, Contract). Without `upstream.schema`, nothing here shows an API change (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). When the loader warns about an `entries` source outside the project, say that it never showed changes either, and offer `/runbooks:settings sources`.
    - End with the command that runs them: `/runbooks:run --affected <base>`.
 
 Exit code 2 means the script could not run; show its message (missing config: offer `/runbooks:setup`).
