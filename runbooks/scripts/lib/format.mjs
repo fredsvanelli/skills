@@ -103,7 +103,7 @@ export function junitMarkdown({ id, steps, result, extra, others }) {
   const withViewport = steps.some((s) => s.viewport)
   const withRole = steps.some((s) => s.role)
   const label = (s) => `${s.step}${s.role ? ` as ${s.role}` : ''}${s.viewport ? ` @ ${s.viewport}` : ''}`
-  const missing = steps.filter((s) => s.tests.length === 0).map(label)
+  const missing = steps.filter((s) => s.tests.length === 0 && s.state !== 'not-applicable' && s.state !== 'no-account').map(label)
   const duplicates = steps.filter((s) => s.tests.length > 1).map(label)
   const lines = [`Result of ${id}: ${result}`, '']
   const columns = [withRole && ['Role', (s) => s.role], withViewport && ['Viewport', (s) => s.viewport], ['Step', (s) => s.step],

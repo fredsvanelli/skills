@@ -281,3 +281,12 @@ test('nextStatus accepts not-applicable and no-account', () => {
   assert.equal(nextStatus('draft', ['passed', 'not-applicable', 'no-account']), 'active')
   assert.equal(nextStatus('draft', ['not-applicable', 'no-account']), 'draft')
 })
+
+test('junitMarkdown does not list no-account and not-applicable rows as missing tests', () => {
+  const row = (step, role, state) => ({ step, role, title: '', state, seen: '', tests: [] })
+  const base = { id: 'x', result: 'passed', extra: [], others: [] }
+  const quiet = junitMarkdown({ ...base, steps: [row('S01', 'editor', 'no-account'), row('S02', 'viewer', 'not-applicable')] })
+  assert.doesNotMatch(quiet, /Steps with no test/)
+  const loud = junitMarkdown({ ...base, steps: [row('S01', 'editor', 'no-account'), row('S02', 'admin', 'blocked')] })
+  assert.match(loud, /Steps with no test: S02 as admin/)
+})
