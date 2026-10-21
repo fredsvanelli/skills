@@ -356,7 +356,7 @@
 
   function runbookRow(rb) {
     const first = td(null, link(runbookHash(rb.id), 'flow', rb.flow))
-    if (rb.status && rb.status !== 'active') first.append(' ', el('span', 'muted small', rb.status))
+    if (rb.status && rb.status !== 'active') first.append(' ', badge(rb.status, rb.status))
     first.append(el('span', 'title', rb.title || '(no title)'))
     if (rb.problems.length > 0) first.append(el('span', 'problems', rb.problems.join('; ')))
 
@@ -691,8 +691,9 @@
 
   function sliceView(data, name, capabilities) {
     const groups = data.result.groups
+    const crumbs = el('div', 'crumbs', link('#/coverage', null, 'coverage'), ' / ', el('b', null, shownName(name)))
     const warnings = warningBox(data.result.warnings)
-    if (groups.length === 0) return view.replaceChildren(...warnings, el('p', 'message', `No entry point falls in the slice "${shownName(name)}".`))
+    if (groups.length === 0) return view.replaceChildren(crumbs, ...warnings, el('p', 'message', `No entry point falls in the slice "${shownName(name)}".`))
     const items = groups.flatMap((g) => (g.items ?? []).map((item) => ({ ...item, surface: g.surface ?? null })))
       .sort((a, b) => a.id.localeCompare(b.id))
     const count = (state) => items.filter((item) => item.state === state).length
@@ -720,7 +721,7 @@
       if (item.state === 'uncovered') tr.className = 'unc'
       return tr
     })
-    view.replaceChildren(...warnings, el('h3', null, shownName(name)), sub, table(['Entry point', 'State', 'Runbooks', 'Scripts'], rows))
+    view.replaceChildren(crumbs, ...warnings, el('h3', null, shownName(name)), sub, table(['Entry point', 'State', 'Runbooks', 'Scripts'], rows))
   }
 
   async function coveragePage(name, stale) {
