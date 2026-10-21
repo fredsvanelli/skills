@@ -62,3 +62,25 @@ test('roleHistory is empty outside git', (t) => {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
   assert.deepEqual(roleHistory(dir, loadConfig(dir), 'manager'), [])
 })
+
+test('roleHistory does not count review lines of a role whose name starts with this one', (t) => {
+  const dir = tmpCopy()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  git(dir, 'init', '-q')
+  git(dir, 'add', '-A')
+  git(dir, 'commit', '-q', '-m', 'one')
+  editRegistry(dir, (raw) => {
+    raw.roles.manager.permissions['billing/invoices'].push('delete')
+    raw.roles['manager-2'] = { description: 'Second manager', found: ['user'], permissions: { 'billing/*': ['view'] } }
+  })
+  const runbook = path.join(dir, 'docs/runbooks/billing/create-invoice.md')
+  fs.writeFileSync(runbook, fs.readFileSync(runbook, 'utf8').replace(
+    'status: draft\n',
+    'status: draft\nreview: [{ reason: role-permissions, role: manager-2, key: billing/*, change: key added, date: 2026-10-20 }]\n'))
+  git(dir, 'add', '-A')
+  git(dir, 'commit', '-q', '-m', 'two')
+  const [latest] = roleHistory(dir, loadConfig(dir), 'manager')
+  assert.deepEqual(latest.changes, ['billing/invoices: delete added'])
+  assert.equal(latest.marked, 0)
+  assert.equal(roleHistory(dir, loadConfig(dir), 'manager-2')[0].marked, 1)
+})

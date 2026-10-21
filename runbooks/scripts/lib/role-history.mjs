@@ -42,10 +42,11 @@ function markedCount(git, sha, dir, name) {
     return 0
   }
   const marked = new Set()
+  const own = new RegExp(`role:\\s*${name}(?![a-z0-9-])`)
   let file = null
   for (const line of diff.split('\n')) {
     if (line.startsWith('+++ ')) file = line.slice(4)
-    else if (line.startsWith('+') && file?.endsWith('.md') && line.includes('reason: role-permissions') && line.includes(`role: ${name}`)) marked.add(file)
+    else if (line.startsWith('+') && file?.endsWith('.md') && line.includes('reason: role-permissions') && own.test(line)) marked.add(file)
   }
   return marked.size
 }
