@@ -202,7 +202,7 @@ function commandMarkReview(root, config, options, ids) {
   const write = options.write === true
   if (options.clear === true) {
     const plan = planReview(root, config, ids, { clear: true, write })
-    return options.json ? json(plan) : reviewPlanMarkdown({ title: 'Clears the review key.', ...plan })
+    return options.json ? json(plan) : reviewPlanMarkdown({ title: 'Clears the review key.', write, ...plan })
   }
   const reason = options.reason
   if (typeof reason !== 'string') throw new Error(`mark-review needs --reason, one of ${REVIEW_REASONS.join(', ')}`)
@@ -213,13 +213,14 @@ function commandMarkReview(root, config, options, ids) {
   if (missing.length > 0) throw new Error(`--reason ${reason} needs ${missing.map((field) => `--${field}`).join(', ')}`)
   entry.date = dateOption(options)
   const plan = planReview(root, config, ids, { entry, write })
-  return options.json ? json(plan) : reviewPlanMarkdown({ title: `Adds a ${reason} review entry.`, ...plan })
+  return options.json ? json(plan) : reviewPlanMarkdown({ title: `Adds a ${reason} review entry.`, write, ...plan })
 }
 
 function commandEnableRoles(root, config, options) {
   requireTracking(config)
-  const plan = planEnableRoles(root, config, { date: dateOption(options), write: options.write === true })
-  return options.json ? json(plan) : reviewPlanMarkdown({ title: 'Sets roles: all and marks the runbooks for review.', ...plan })
+  const write = options.write === true
+  const plan = planEnableRoles(root, config, { date: dateOption(options), write })
+  return options.json ? json(plan) : reviewPlanMarkdown({ title: 'Sets roles: all and marks the runbooks for review.', write, ...plan })
 }
 
 const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles']

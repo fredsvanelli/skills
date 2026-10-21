@@ -156,14 +156,15 @@ export function moveToCallsMarkdown({ source, sourceRoot, runbooks, left, orphan
 }
 
 // mark-review and enable-roles: one row per runbook with its roles and review entries after the edit.
-export function reviewPlanMarkdown({ title, runbooks, skipped = [], written }) {
+export function reviewPlanMarkdown({ title, runbooks, skipped = [], written, write }) {
   const describe = (entry) => [entry.reason, entry.role, entry.key, entry.change].filter(Boolean).join(' ')
   const reviewCell = (review) => (Array.isArray(review) ? review.map(describe).join('; ') || 'none' : review ? 'adds roles-enabled' : 'unchanged')
   const lines = [title, '']
   lines.push(runbooks.length === 0 ? 'No runbook to change.' : table(['Runbook', 'Roles', 'Review after'],
     runbooks.map((rb) => [rb.id, rb.roles ?? 'unchanged', reviewCell(rb.review)])), '')
   if (skipped.length > 0) lines.push('### Skipped', '', ...bullets(skipped.map((s) => `\`${s.id}\`: ${s.reason}`)), '')
-  lines.push(written.length > 0 ? `Written: ${written.join(', ')}.` : 'Dry run: nothing written. Run again with --write to apply.')
+  if (written.length > 0) lines.push(`Written: ${written.join(', ')}.`)
+  else lines.push(write ? 'Nothing to change.' : 'Dry run: nothing written. Run again with --write to apply.')
   return `${lines.join('\n')}\n`
 }
 

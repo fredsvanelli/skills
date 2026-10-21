@@ -102,6 +102,27 @@ test('mark-review and enable-roles are dry runs without --write and refuse when 
   }
 })
 
+test('with --write and nothing to change the output says so instead of "Dry run"', (t) => {
+  const { root } = project(t)
+  const args = ['enable-roles', '--date', '2026-10-21', '--write', '--root', root]
+  const first = run(args)
+  assert.equal(first.code, 0, first.stderr)
+  assert.match(first.stdout, /Written: /)
+  const second = run(args)
+  assert.equal(second.code, 0, second.stderr)
+  assert.match(second.stdout, /Nothing to change\./)
+  assert.doesNotMatch(second.stdout, /Dry run/)
+})
+
+test('mark-review --clear --write removes the review key', (t) => {
+  const { root } = project(t)
+  run(['enable-roles', '--date', '2026-10-21', '--write', '--root', root])
+  assert.match(read(root, 'billing/issue-invoice.md'), /review:/)
+  const result = run(['mark-review', 'billing.issue-invoice', '--clear', '--write', '--root', root])
+  assert.equal(result.code, 0, result.stderr)
+  assert.doesNotMatch(read(root, 'billing/issue-invoice.md'), /review:/)
+})
+
 test('mark-review names what is missing', (t) => {
   const { root } = project(t)
   const call = (...args) => run(['mark-review', 'billing.issue-invoice', ...args, '--root', root])
