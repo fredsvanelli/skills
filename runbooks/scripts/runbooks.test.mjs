@@ -80,6 +80,9 @@ test('loadRunbooks maps frontmatter fields', () => {
     feature: 'invoices',
     tags: ['financial', 'critical'],
     roles: ['admin'],
+    rolesAll: false,
+    review: [],
+    roleOutcomes: {},
     viewports: [],
     design: {},
     covers: { entries: ['/billing/invoices', 'POST /admin/invoices'], requirements: ['REQ-1'] },
@@ -359,4 +362,87 @@ test('calls: METHOD /path of the upstream API, braces for parameters, see docs/a
   assert.deepEqual(byId['u.api'].problems, ['calls apply only to ui runbooks'])
   const noUpstream = load({ stack: 'frontend' }, { 'docs/runbooks/u/screen.md': runbook('screen', 'calls: [GET /quotes]') })
   assert.deepEqual(noUpstream['u.screen'].problems, ['calls need an upstream block in the config'])
+})
+
+const ROLES = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
+
+const roleRunbook = (dir, id) => loadRunbooks(dir, loadConfig(dir)).find((r) => r.id === id)
+
+function rolesCopy(rel, edit) {
+  const dir = tmpProject({})
+  fs.cpSync(ROLES, dir, { recursive: true })
+  const file = path.join(dir, 'docs/runbooks', rel)
+  fs.writeFileSync(file, edit(fs.readFileSync(file, 'utf8')))
+  return dir
+}
+
+test('loadRunbooks expands roles: all and reads review', () => {
+  const rb = roleRunbook(ROLES, 'billing.cancel-invoice')
+  assert.equal(rb.rolesAll, true)
+  assert.deepEqual(rb.roles, ['viewer', 'editor', 'manager', 'admin', 'anonymous'])
+  assert.deepEqual(rb.review, [{ reason: 'role-permissions', role: 'manager', key: 'billing/invoices', change: 'delete removed', date: '2026-10-14' }])
+  assert.deepEqual(rb.roleOutcomes, { anonymous: ['denied'], editor: ['hidden'], viewer: ['read-only'] })
+  assert.deepEqual(rb.problems, [])
+})
+
+test('loadRunbooks warns about As: outside the migration', () => {
+  const rb = roleRunbook(ROLES, 'billing.legacy')
+  assert.deepEqual(rb.warnings, ['S01: As: is replaced by role lines; /runbooks:update rewrites it'])
+  assert.deepEqual(rb.problems, [])
+  assert.equal(rb.rolesAll, false)
+  assert.deepEqual(rb.roles, ['admin'])
+})
+
+test('loadRunbooks checks role lines against the runbook and the surface', () => {
+  const dir = rolesCopy('billing/create-invoice.md', (text) => text
+    .replace('- anonymous: denied. 401', '- anonymous: denied. 401\n- editor: hidden.')
+    .replace('Parents: S01\nEndpoint', 'Parents: S01\nRoles: ghost\nEndpoint'))
+  const rb = roleRunbook(dir, 'billing.create-invoice')
+  assert.ok(rb.problems.includes('S01: outcome "hidden" does not apply to api steps'))
+  assert.ok(rb.problems.includes('role "ghost" is not registered'))
+  assert.ok(rb.problems.includes('S02: Roles: "ghost" is not one of the runbook\'s roles'))
+})
+
+test('loadRunbooks checks a role line against the step roles and the review entries', () => {
+  const dir = rolesCopy('billing/cancel-invoice.md', (text) => text
+    .replace('Parents: S01\nPage', 'Parents: S01\nRoles: editor\nPage')
+    .replace('review: [{', 'review: [{ reason: role-created }, { reason: bogus, date: 2026-10-14 }, { reason: roles-enabled, date: 2026-10-14 }, {')
+    .replace('- editor: hidden.', '- editor: hidden.\n- viewer: hidden.'))
+  const rb = roleRunbook(dir, 'billing.cancel-invoice')
+  assert.ok(rb.problems.includes('S02: role line "viewer" is not one of the step\'s roles'))
+  assert.ok(rb.problems.includes('review[0]: date is required'))
+  assert.ok(rb.problems.includes('review[0]: role-created needs role'))
+  assert.ok(rb.problems.includes('review[1]: reason "bogus" must be one of roles-enabled, role-permissions, role-created, role-deleted'))
+  assert.equal(rb.problems.some((p) => p.startsWith('review[2]')), false)
+})
+
+test('loadRunbooks reports a role-permissions entry without its fields', () => {
+  const dir = rolesCopy('billing/cancel-invoice.md', (text) => text.replace(', key: billing/invoices, change: delete removed', ''))
+  assert.ok(roleRunbook(dir, 'billing.cancel-invoice').problems.includes('review[0]: role-permissions needs role, key and change'))
+})
+
+test('loadRunbooks rejects roles: all and review when tracking is off', () => {
+  const dir = tmpProject({
+    [CONFIG_PATH]: '{ "version": 1, "stack": "frontend" }',
+    'docs/runbooks/a/b.md': '---\nid: a.b\ncapability: a\nstatus: draft\nroles: all\nreview: [{ reason: roles-enabled, date: 2026-10-14 }]\n---\n\n# B\n\n### S01. x\n\nAs: nobody\n- ghost: hidden.\n',
+  })
+  const rb = roleRunbook(dir, 'a.b')
+  assert.deepEqual(rb.problems, ['roles: all needs role tracking (roles.enabled)', 'review needs role tracking (roles.enabled)'])
+  assert.deepEqual(rb.warnings, [])
+  assert.equal(rb.rolesAll, false)
+})
+
+test('tracking off keeps 1.5.0 behavior', () => {
+  const runbooks = loadRunbooks(FIXTURE, loadConfig(FIXTURE))
+  assert.deepEqual(runbooks.find((r) => r.id === 'deliveries.list-deliveries').roles, ['admin', 'partner'])
+  assert.ok(runbooks.every((r) => r.rolesAll === false && r.review.length === 0))
+  // Recorded from the 1.5.0 loader before the roles change.
+  const recorded = {
+    'billing.cancel-invoice': { problems: [], warnings: [] },
+    'billing.issue-invoice': { problems: [], warnings: [] },
+    'broken.bad-frontmatter': { problems: ['frontmatter: line 2: expected , or ]'], warnings: [] },
+    'deliveries.list-deliveries': { problems: [], warnings: [] },
+    'deliveries.old-list': { problems: [], warnings: [] },
+  }
+  assert.deepEqual(Object.fromEntries(runbooks.map((r) => [r.id, { problems: r.problems, warnings: r.warnings }])), recorded)
 })

@@ -1,5 +1,6 @@
 import { loadRunbooks } from './runbooks.mjs'
 import { extractItems } from './extract.mjs'
+import { loadRoles, matrixWarnings } from './roles.mjs'
 import { computeCoverage, sliceOf } from './coverage.mjs'
 
 export function collect(root, config, listName, warnings, status = {}) {
@@ -9,8 +10,10 @@ export function collect(root, config, listName, warnings, status = {}) {
   return items.map((item) => ({ ...item, slice: sliceOf(item.file, config.slices) }))
 }
 
-export function runbookWarnings(runbooks) {
-  return runbooks.flatMap((rb) => [...rb.problems, ...rb.warnings].map((problem) => `${rb.path}: ${problem}`))
+export function runbookWarnings(runbooks, root, config) {
+  const found = runbooks.flatMap((rb) => [...rb.problems, ...rb.warnings].map((problem) => `${rb.path}: ${problem}`))
+  const registry = loadRoles(root, config)
+  return registry === null ? found : [...found, ...matrixWarnings(registry, runbooks, config.slices)]
 }
 
 export function coverageResult(root, config, filters, warnings, withItems = false) {
@@ -20,7 +23,7 @@ export function coverageResult(root, config, filters, warnings, withItems = fals
   const requirementsStatus = {}
   const entries = collect(root, config, 'entries', sourceWarnings, entriesStatus)
   const requirements = collect(root, config, 'requirements', sourceWarnings, requirementsStatus)
-  warnings.push(...sourceWarnings, ...runbookWarnings(runbooks))
+  warnings.push(...sourceWarnings, ...runbookWarnings(runbooks, root, config))
   const result = computeCoverage({
     runbooks,
     entries,

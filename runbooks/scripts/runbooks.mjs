@@ -61,7 +61,7 @@ const pick = (options, keys) =>
 
 function commandList(root, config, options, warnings) {
   const runbooks = loadRunbooks(root, config)
-  warnings.push(...runbookWarnings(runbooks))
+  warnings.push(...runbookWarnings(runbooks, root, config))
   const entries = options.path || options.affected ? collect(root, config, 'entries', warnings) : []
   const entryFiles = new Map(entries.map((entry) => [entry.id, entry.file]))
   const selected = filterRunbooks(runbooks, pick(options, ['capability', 'feature', 'tag', 'status', 'path']), entryFiles)

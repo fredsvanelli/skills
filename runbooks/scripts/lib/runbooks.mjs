@@ -5,6 +5,8 @@ import { splitFrontmatter, parseYaml } from './yaml.mjs'
 import { surfacesOf, upstreamModeOf } from './config.mjs'
 import { fixturesDir } from './fixtures.mjs'
 import { normalizeCall } from './calls.mjs'
+import { loadRoles, OUTCOMES, API_OUTCOMES, REVIEW_REASONS } from './roles.mjs'
+import { parseSteps } from './steps.mjs'
 
 const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
 
@@ -74,7 +76,97 @@ function readDesign(runbook, design, surface, system) {
   runbook.design = design
 }
 
-function readRunbook(file, rel, config, projectRoot) {
+// roles lists the runbook's roles: "all" expands to the registry, which includes anonymous.
+function readRoles(runbook, data, registry) {
+  const written = data.roles
+  if (registry === null) {
+    runbook.roles = asList(written)
+    if (written === 'all') runbook.problems.push('roles: all needs role tracking (roles.enabled)')
+    return
+  }
+  runbook.rolesAll = written === 'all' || written === undefined || written === null
+  runbook.roles = runbook.rolesAll ? [...registry.names] : asList(written)
+  if (!runbook.rolesAll) {
+    for (const role of runbook.roles) {
+      if (!registry.names.includes(role)) runbook.problems.push(`role "${role}" is not registered`)
+    }
+  }
+}
+
+const REVIEW_FIELDS = {
+  'roles-enabled': [],
+  'role-permissions': ['role', 'key', 'change'],
+  'role-created': ['role'],
+  'role-deleted': ['role'],
+}
+
+function readReview(runbook, review, registry) {
+  if (review === undefined || review === null) return
+  if (registry === null) {
+    runbook.problems.push('review needs role tracking (roles.enabled)')
+    return
+  }
+  if (!Array.isArray(review)) {
+    runbook.problems.push('review must be a list of entries')
+    return
+  }
+  review.forEach((raw, index) => {
+    const label = `review[${index}]`
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+      runbook.problems.push(`${label}: an entry needs reason and date`)
+      return
+    }
+    const entry = {}
+    for (const [key, value] of Object.entries(raw)) entry[key] = String(value)
+    if (!REVIEW_REASONS.includes(entry.reason)) {
+      runbook.problems.push(`${label}: reason "${entry.reason}" must be one of ${REVIEW_REASONS.join(', ')}`)
+    } else {
+      const needed = REVIEW_FIELDS[entry.reason]
+      if (needed.some((field) => !entry[field])) {
+        runbook.problems.push(`${label}: ${entry.reason} needs ${needed.length > 1 ? `${needed.slice(0, -1).join(', ')} and ${needed.at(-1)}` : needed[0]}`)
+      }
+    }
+    if (!entry.date) runbook.problems.push(`${label}: date is required`)
+    runbook.review.push(entry)
+  })
+}
+
+// Checks the steps against the registry and the runbook's roles; collects the outcomes each role's lines use.
+function readStepRoles(runbook, body, registry) {
+  const allowed = runbook.surface === 'api' ? API_OUTCOMES : OUTCOMES
+  const outcomes = {}
+  const unknown = new Set()
+  const unregistered = (role) => {
+    if (registry.names.includes(role) || unknown.has(role)) return
+    unknown.add(role)
+    runbook.problems.push(`role "${role}" is not registered`)
+  }
+  for (const step of parseSteps(body)) {
+    for (const role of step.roles) {
+      unregistered(role)
+      if (!runbook.roles.includes(role)) runbook.problems.push(`${step.step}: Roles: "${role}" is not one of the runbook's roles`)
+    }
+    const stepRoles = step.roles.length > 0 ? step.roles : runbook.roles
+    for (const [role, outcome] of Object.entries(step.outcomes)) {
+      unregistered(role)
+      if (registry.names.includes(role) && !stepRoles.includes(role)) {
+        runbook.problems.push(`${step.step}: role line "${role}" is not one of the step's roles`)
+      }
+      if (!allowed.includes(outcome)) {
+        runbook.problems.push(runbook.surface === 'api'
+          ? `${step.step}: outcome "${outcome}" does not apply to api steps`
+          : `${step.step}: outcome "${outcome}" must be one of ${OUTCOMES.join(', ')}`)
+      }
+      outcomes[role] = [...new Set([...(outcomes[role] ?? []), outcome])].sort()
+    }
+    if (step.as !== null && !runbook.review.some((entry) => entry.reason === 'roles-enabled')) {
+      runbook.warnings.push(`${step.step}: As: is replaced by role lines; /runbooks:update rewrites it`)
+    }
+  }
+  runbook.roleOutcomes = outcomes
+}
+
+function readRunbook(file, rel, config, projectRoot, registry) {
   const runbooksDir = config.paths.runbooks
   const stack = config.stack
   const viewports = config.viewports ?? {}
@@ -89,6 +181,9 @@ function readRunbook(file, rel, config, projectRoot) {
     feature: null,
     tags: [],
     roles: [],
+    rolesAll: false,
+    review: [],
+    roleOutcomes: {},
     viewports: [],
     design: {},
     covers: { entries: [], requirements: [] },
@@ -136,7 +231,8 @@ function readRunbook(file, rel, config, projectRoot) {
   runbook.title = data.title === null || data.title === undefined ? '' : String(data.title)
   runbook.feature = data.feature ?? null
   runbook.tags = asList(data.tags)
-  runbook.roles = asList(data.roles)
+  readRoles(runbook, data, registry)
+  readReview(runbook, data.review, registry)
   runbook.covers = { entries: asList(data.covers?.entries), requirements: asList(data.covers?.requirements) }
   readCalls(runbook, data, surface, config)
   runbook.sources = asList(data.sources)
@@ -145,13 +241,15 @@ function readRunbook(file, rel, config, projectRoot) {
   const outdated = runbook.lastRun?.outdated
   if (outdated !== undefined && typeof outdated !== 'boolean') runbook.problems.push('last_run.outdated must be true or false')
   readUpstream(runbook, data, surface, config, projectRoot)
+  if (registry !== null) readStepRoles(runbook, parts.body, registry)
   return runbook
 }
 
 export function loadRunbooks(projectRoot, config) {
   const runbooksDir = config.paths.runbooks
   const dir = path.resolve(projectRoot, runbooksDir)
+  const registry = loadRoles(projectRoot, config)
   return findFiles(dir, '**/*.md')
     .filter((rel) => rel.includes('/') && !rel.split('/').some((segment) => segment.startsWith('_')))
-    .map((rel) => readRunbook(path.join(dir, rel), rel, config, projectRoot))
+    .map((rel) => readRunbook(path.join(dir, rel), rel, config, projectRoot, registry))
 }
