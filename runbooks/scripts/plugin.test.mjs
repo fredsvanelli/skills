@@ -39,7 +39,7 @@ test('the scenarios skill is invoked by the model only', () => {
 })
 
 test('every command has a description and is user-invoked', () => {
-  for (const rel of findFiles(PLUGIN_ROOT, 'commands/*.md')) {
+  for (const rel of findFiles(PLUGIN_ROOT, 'commands/**/*.md')) {
     const parts = splitFrontmatter(fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8'))
     assert.ok(parts, `${rel} has no frontmatter`)
     const data = parseYaml(parts.yaml)
