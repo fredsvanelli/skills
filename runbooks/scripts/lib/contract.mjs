@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { resolveRef } from './schema.mjs'
 import { fixturesDir, loadFixtures, checkFixtures, serverPrefix } from './fixtures.mjs'
 import { normalizeCall } from './calls.mjs'
+import { loadRoles } from './roles.mjs'
 
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']
 // Parameter names do not change an operation: /quotes/{id} and /quotes/{quoteId} are one path.
@@ -101,10 +102,12 @@ export function changedOperations(before, after) {
 export function checkContract({ root, config, runbooks, doc }) {
   const checked = runbooks.filter((rb) => rb.surface === 'ui' && rb.status !== 'deprecated' && (rb.calls.length > 0 || rb.upstream === 'mocked'))
   const findings = []
+  // With role tracking on, @<role> fixture folders are read and checked like the others.
+  const roles = loadRoles(root, config)?.names ?? null
   for (const rb of checked) {
     const add = (kind, message) => findings.push({ runbook: rb.id, kind, message })
     if (rb.upstream === 'mocked') {
-      const { fixtures, problems } = loadFixtures(root, fixturesDir(config, rb))
+      const { fixtures, problems } = loadFixtures(root, fixturesDir(config, rb), { roles })
       for (const problem of problems) add('fixture', problem)
       // In a monorepo a mocked runbook names its endpoints in covers.entries (docs/adr/0004).
       const names = [...rb.calls, ...rb.covers.entries.map(normalizeCall).filter(Boolean)]

@@ -158,3 +158,23 @@ test('contract exits 2 without an upstream block or with a missing schema file',
   assert.equal(none.code, 2)
   assert.match(none.stderr, /^runbooks: the config has no upstream block, so there is no contract to check$/m)
 })
+
+test('with role tracking on, contract checks the requests of @<role> fixture folders', (t) => {
+  const root = front(t)
+  editJson(root, 'docs/runbooks/runbooks.config.json', (config) => ({ ...config, roles: { enabled: true } }))
+  fs.writeFileSync(path.join(root, 'docs/runbooks/roles.json'),
+    JSON.stringify({ version: 1, roles: { editor: { description: 'Edits quotes', permissions: { 'quotes/*': ['view'] } } } }))
+  const fixtures = path.join(root, 'docs/runbooks/_fixtures/quotes/list-quotes')
+  fs.mkdirSync(path.join(fixtures, '@editor'))
+  fs.writeFileSync(path.join(fixtures, '@editor/get-quotes.json'),
+    JSON.stringify({ request: { method: 'GET', path: '/quotes' }, response: { status: 200, body: [] }, source: 'hand-written: test' }))
+  assert.deepEqual(JSON.parse(run(['contract', '--strict', '--root', root, '--json']).stdout).findings, [])
+  fs.writeFileSync(path.join(fixtures, '@editor/get-lines.json'),
+    JSON.stringify({ request: { method: 'GET', path: '/quotes/q1/lines' }, response: { status: 200, body: [] }, source: 'hand-written: test' }))
+  const result = run(['contract', '--strict', '--root', root, '--json'])
+  assert.equal(result.code, 1)
+  assert.deepEqual(JSON.parse(result.stdout).findings.map((f) => f.message), [
+    'docs/runbooks/_fixtures/quotes/list-quotes/@editor/get-lines.json: requests GET /quotes/q1/lines, which no call or entry of the runbook names',
+    'docs/runbooks/_fixtures/quotes/list-quotes/@editor/get-lines.json: no operation for GET /quotes/q1/lines in the schema',
+  ])
+})
