@@ -90,6 +90,8 @@
   .title { display: block; color: var(--muted); font-size: 13px; }
   .problems { display: block; margin-top: 4px; color: var(--failed); font: 13px var(--mono); }
   .upstream { font: 14px var(--mono); white-space: nowrap; }
+  .help { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 6px; border: 1px solid currentColor; border-radius: 50%; font: 600 10px var(--mono); vertical-align: 1px; cursor: help; }
+  .help:hover, .help:focus { color: var(--fg); outline: none; }
   .date { color: var(--muted); font: 14px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .date.stale { color: var(--failed); font-weight: 600; }
   .date small { display: block; font-size: 12px; font-weight: 400; }
@@ -387,6 +389,16 @@
   }
 
   // Only ui runbooks have an upstream mode, so a page of api runbooks has no Upstream column.
+  const UPSTREAM_HELP = 'How a ui runbook reaches its upstream API.\n' +
+    'live: the run calls the real API, with test data.\n' +
+    'mocked: the plugin\'s upstream server answers with fixed responses (fixtures). The run proves what the screen shows and sends, never what the API saves, and covers no endpoint.'
+  function upstreamHeader() {
+    const help = el('span', 'help', '?')
+    help.title = UPSTREAM_HELP
+    help.tabIndex = 0
+    help.setAttribute('aria-label', UPSTREAM_HELP)
+    return el('span', null, 'Upstream', help)
+  }
   const hasUpstream = (caps) => caps.some((cap) => cap.runbooks.some((rb) => rb.upstream))
 
   function capabilitySection(cap, linked, showUpstream) {
@@ -397,7 +409,7 @@
     section.append(el('div', 'sub', parts.join(' · ')))
     section.append(cap.runbooks.length === 0
       ? el('p', 'none', 'No runbooks yet')
-      : table(['Runbook', ...(showUpstream ? ['Upstream'] : []), 'Last full run', 'Result', ''], cap.runbooks.map((rb) => runbookRow(rb, showUpstream))))
+      : table(['Runbook', ...(showUpstream ? [upstreamHeader()] : []), 'Last full run', 'Result', ''], cap.runbooks.map((rb) => runbookRow(rb, showUpstream))))
     if (cap.coverage && cap.uncovered.length > 0) {
       section.append(el('div', 'uncov', el('h4', null, 'Uncovered routes'),
         el('ul', null, ...cap.uncovered.map((entry) => el('li', null, el('code', null, entry.id), el('span', null, entry.file ?? entry.kind ?? ''))))))
