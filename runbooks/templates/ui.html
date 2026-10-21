@@ -34,6 +34,28 @@
   .layout { flex: 1; display: flex; }
   .side { width: 220px; flex-shrink: 0; border-right: 1px solid var(--line); padding: 24px 14px; }
   .side-inner { position: sticky; top: 84px; }
+  .side-toggle { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+  .side-toggle:hover, .side-toggle:focus-visible { color: var(--fg); border-color: var(--muted); outline: none; }
+  .side-toggle svg { width: 18px; height: 18px; }
+  .side-toggle .chevron { transition: transform .2s; transform-origin: 15.5px 12px; }
+  .side-toggle[aria-expanded="true"] .chevron { transform: scaleX(-1); }
+  .scrim { display: none; }
+
+  /* Tablets and phones: the sidebar becomes a drawer over the content, opened from the header. */
+  @media (max-width: 1024px) {
+    header { gap: 16px; padding: 0 16px; }
+    .side-toggle { display: inline-flex; }
+    .side { position: fixed; top: 60px; bottom: 0; left: 0; z-index: 9; width: 260px; overflow-y: auto; background: var(--bg); visibility: hidden; transform: translateX(-100%); transition: transform .2s, visibility 0s .2s; }
+    .side.open { visibility: visible; transform: none; transition: transform .2s; }
+    .side-inner { position: static; }
+    .scrim { position: fixed; inset: 60px 0 0; z-index: 8; background: rgb(0 0 0 / .5); }
+    .side.open + .scrim { display: block; }
+    main { padding: 24px 16px 48px; }
+    footer { padding: 14px 16px; }
+  }
+  @media (max-width: 480px) {
+    header nav a { padding: 0 8px; }
+  }
   .side .label { padding: 0 12px 12px; color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
   .side .item { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px; padding: 10px 12px; border-radius: 8px; color: color-mix(in srgb, var(--fg) 85%, transparent); font: 14px var(--mono); overflow-wrap: anywhere; }
   .side .item:hover { background: color-mix(in srgb, var(--panel) 70%, transparent); text-decoration: none; }
@@ -181,6 +203,9 @@
 </head>
 <body>
 <header>
+  <button class="side-toggle" id="side-toggle" type="button" aria-controls="side-panel" aria-expanded="false" aria-label="Show the sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path class="chevron" d="m14 9 3 3-3 3"/></svg>
+  </button>
   <a class="logo" href="#/runbooks"><span>❯</span> runbooks</a>
   <nav>
     <a id="menu-runbooks" href="#/runbooks">Runbooks</a>
@@ -188,7 +213,8 @@
   </nav>
 </header>
 <div class="layout">
-  <aside class="side"><div class="side-inner" id="side"></div></aside>
+  <aside class="side" id="side-panel"><div class="side-inner" id="side"></div></aside>
+  <div class="scrim" id="scrim"></div>
   <main><div class="container" id="view"></div></main>
 </div>
 <footer>created by <a href="https://fredvanelli.dev" target="_blank" rel="noopener">Fred Vanelli</a></footer>
@@ -199,6 +225,23 @@
   const NO_SLICE_ROUTE = '~none'
   const side = document.getElementById('side')
   const view = document.getElementById('view')
+
+  // Below 1024px the sidebar is a drawer. Choosing an item changes the hash, and render closes it.
+  const sidePanel = document.getElementById('side-panel')
+  const sideToggle = document.getElementById('side-toggle')
+  function setSideOpen(open) {
+    sidePanel.classList.toggle('open', open)
+    sideToggle.setAttribute('aria-expanded', String(open))
+    sideToggle.setAttribute('aria-label', open ? 'Hide the sidebar' : 'Show the sidebar')
+  }
+  sideToggle.addEventListener('click', () => setSideOpen(!sidePanel.classList.contains('open')))
+  document.getElementById('scrim').addEventListener('click', () => setSideOpen(false))
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && sidePanel.classList.contains('open')) {
+      setSideOpen(false)
+      sideToggle.focus()
+    }
+  })
 
   const enc = encodeURIComponent
   const routeName = (name) => (name === NO_SLICE ? NO_SLICE_ROUTE : enc(name))
@@ -734,6 +777,7 @@
       try { return decodeURIComponent(segment) } catch { return null }
     })
     if (parts.length === 0) return location.replace('#/runbooks')
+    setSideOpen(false)
     const [page, a, b, c] = parts
     setMenu(page === 'coverage' ? 'coverage' : 'runbooks')
     const mine = ++token
