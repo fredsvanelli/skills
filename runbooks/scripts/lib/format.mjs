@@ -29,7 +29,7 @@ export function listMarkdown(runbooks, reasons = null) {
       rb.id,
       rb.title,
       rb.feature ? `${rb.capability} / ${rb.feature}` : rb.capability,
-      rb.problems.length > 0 ? 'invalid' : rb.status,
+      [rb.problems.length > 0 ? 'invalid' : rb.status, ...(rb.review?.length > 0 ? ['review'] : [])].join(', '),
       lastRunText(rb.lastRun),
     ]
     if (reasons) row.push(reasons.get(rb.id).join('; '))
@@ -59,6 +59,10 @@ export function coverageMarkdown(result, scope) {
   if (bySurface) lines.push('An API endpoint counts as covered only through an `api` runbook; a `ui` runbook citing it does not.', '')
   lines.push('### Uncovered entry points', '', ...bullets(e.uncovered.map((i) => `\`${i.id}\`${i.file ? ` (\`${i.file}\`)` : ''}${i.citedByMocked ? `, cited, not covered (mocked: ${i.citedByMocked.join(', ')})` : ''}`)), '')
   if (r) lines.push('### Uncovered requirements', '', ...bullets(r.uncovered.map((i) => `\`${i.id}\`${i.title ? `: ${i.title}` : ''}`)), '')
+  if (result.roles) {
+    const rows = result.roles.flatMap((r) => r.keys.map((k) => [r.role, `\`${k.key}\``, k.access ? 'access' : 'no access', k.state, k.runbooks.map((id) => `\`${id}\``).join(', ')]))
+    lines.push('### Roles', '', table(['Role', 'Key', 'Access', 'State', 'Runbooks'], rows), '')
+  }
   lines.push('### Orphans', '')
   if (result.orphanChecksSkipped && result.orphanChecksSkipped.length > 0) {
     const labels = result.orphanChecksSkipped.map((kind) => (kind === 'entry' ? 'entry points' : 'requirements'))

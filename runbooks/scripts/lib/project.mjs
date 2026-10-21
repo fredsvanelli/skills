@@ -1,7 +1,7 @@
 import { loadRunbooks } from './runbooks.mjs'
 import { extractItems } from './extract.mjs'
 import { loadRoles, matrixWarnings } from './roles.mjs'
-import { computeCoverage, sliceOf } from './coverage.mjs'
+import { computeCoverage, sliceOf, roleCoverage } from './coverage.mjs'
 
 export function collect(root, config, listName, warnings, status = {}) {
   const { items, warnings: found, ran, complete } = extractItems(root, config[listName], listName)
@@ -36,6 +36,8 @@ export function coverageResult(root, config, filters, warnings, withItems = fals
     unavailable: { entries: !entriesStatus.complete, requirements: !requirementsStatus.complete },
     withItems,
   })
+  const registry = loadRoles(root, config)
+  if (registry !== null) result.roles = roleCoverage(registry, runbooks, { role: filters.role })
   result.warnings = sourceWarnings
   return result
 }

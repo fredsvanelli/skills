@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { loadConfig } from './lib/config.mjs'
 import { loadRunbooks } from './lib/runbooks.mjs'
 import { extractItems } from './lib/extract.mjs'
-import { computeCoverage, sliceOf } from './lib/coverage.mjs'
+import { computeCoverage, sliceOf, roleCoverage } from './lib/coverage.mjs'
+import { loadRoles } from './lib/roles.mjs'
 import { nextStatus } from './lib/status.mjs'
 import { coverageMarkdown } from './lib/format.mjs'
 
@@ -312,4 +313,30 @@ test('calls never cover and never make an orphan, see docs/adr/0005', () => {
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
+})
+
+test('roleCoverage counts access and proven denials', () => {
+  const root = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
+  const config = loadConfig(root)
+  const registry = loadRoles(root, config)
+  const runbooks = loadRunbooks(root, config)
+  const coverage = roleCoverage(registry, runbooks)
+  const key = (role) => coverage.find((r) => r.role === role).keys.find((k) => k.key === 'billing/invoices')
+  // viewer has no billing/invoices entry, so the lookup falls back to billing/*: [view]
+  assert.deepEqual(key('viewer'), { key: 'billing/invoices', access: true, state: 'covered', runbooks: ['billing.cancel-invoice', 'billing.create-invoice'] })
+  // anonymous has no entry at all; both runbooks prove the denial, and cancel-invoice is active
+  assert.deepEqual(key('anonymous'), { key: 'billing/invoices', access: false, state: 'covered', runbooks: ['billing.cancel-invoice', 'billing.create-invoice'] })
+  assert.deepEqual(roleCoverage(registry, runbooks, { role: 'viewer' }).map((r) => r.role), ['viewer'])
+  const keys = coverage[0].keys.map((k) => k.key)
+  assert.deepEqual(keys, [...keys].sort())
+})
+
+test('roleCoverage marks a role covered only by a draft runbook as pending', () => {
+  const root = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
+  const config = loadConfig(root)
+  const registry = loadRoles(root, config)
+  const runbooks = loadRunbooks(root, config).filter((rb) => rb.id !== 'billing.cancel-invoice')
+  const entry = roleCoverage(registry, runbooks, { role: 'viewer' })[0].keys.find((k) => k.key === 'billing/invoices')
+  assert.equal(entry.state, 'pending')
+  assert.deepEqual(entry.runbooks, ['billing.create-invoice'])
 })

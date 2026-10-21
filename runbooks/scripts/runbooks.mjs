@@ -28,10 +28,10 @@ import { todayLocal } from './lib/stale.mjs'
 export const USAGE = `Usage: runbooks.mjs <command> [options]
 
 Commands:
-  list          [--capability x] [--feature y] [--tag t] [--status s] [--path glob] [--affected [base]]
+  list          [--capability x] [--feature y] [--tag t] [--status s] [--path glob] [--role r] [--review] [--affected [base]]
   entries       [--slice name] [--path glob]
   requirements
-  coverage      [--capability x | --feature y | --path glob | --slice name]
+  coverage      [--capability x | --feature y | --path glob | --slice name | --role r]
   check         <id> [--full]
   status        --current <draft|active|deprecated> --states <s1,s2,...> [--partial]
   junit         <id> --file <junit.xml> [--waive S03,S04] maps the JUnit report of an api runbook's
@@ -79,7 +79,7 @@ function commandList(root, config, options, warnings) {
   warnings.push(...runbookWarnings(runbooks, root, config))
   const entries = options.path || options.affected ? collect(root, config, 'entries', warnings) : []
   const entryFiles = new Map(entries.map((entry) => [entry.id, entry.file]))
-  const selected = filterRunbooks(runbooks, pick(options, ['capability', 'feature', 'tag', 'status', 'path']), entryFiles)
+  const selected = filterRunbooks(runbooks, { ...pick(options, ['capability', 'feature', 'tag', 'status', 'path', 'role']), review: options.review === true }, entryFiles)
   if (!options.affected) return options.json ? json(selected) : listMarkdown(selected)
 
   const base = options.affected === true ? config.git.base : options.affected
@@ -99,7 +99,11 @@ function commandItems(root, config, options, listName, warnings) {
 }
 
 function commandCoverage(root, config, options, warnings) {
-  const filters = pick(options, ['capability', 'feature', 'path', 'slice'])
+  const filters = pick(options, ['capability', 'feature', 'path', 'slice', 'role'])
+  if (filters.role !== undefined) {
+    requireTracking(config)
+    if (!loadRoles(root, config).names.includes(filters.role)) throw new Error(`no role "${filters.role}"`)
+  }
   const result = coverageResult(root, config, filters, warnings)
   const scope = Object.entries(filters).map(([key, value]) => `${key} ${value}`).join(', ') || 'overall'
   return options.json ? json({ scope, ...result }) : coverageMarkdown(result, scope)

@@ -1,6 +1,7 @@
 import { matchesGlob } from './glob.mjs'
 import { filterRunbooks } from './filter.mjs'
 import { surfacesOf } from './config.mjs'
+import { effectivePermissions, allowedActions, keyMatches, CLOSING_OUTCOMES } from './roles.mjs'
 
 const NO_SLICE = '(no slice)'
 
@@ -188,4 +189,29 @@ export function computeCoverage({
     },
     invalid: runbooks.filter((rb) => rb.problems.length > 0).map((rb) => ({ id: rb.id, path: rb.path, problems: rb.problems })),
   }
+}
+
+// Per role, every key in any role's matrix. With access, an active runbook that matches the key and runs
+// the role covers it. Without access, the runbook must also close the role out (read-only, hidden or denied).
+export function roleCoverage(registry, runbooks, { role } = {}) {
+  const keys = [...new Set(registry.names.flatMap((name) => Object.keys(effectivePermissions(registry, name))))].sort()
+  const candidates = runbooks.filter((rb) => rb.problems.length === 0 && (rb.status === 'active' || rb.status === 'draft'))
+  return registry.names.filter((name) => !role || name === role).map((name) => ({
+    role: name,
+    keys: keys.map((key) => {
+      const [capability, feature] = key.split('/', 2)
+      const access = allowedActions(registry, name, capability, feature === '*' ? null : feature).length > 0
+      const qualifying = candidates
+        .filter((rb) =>
+          rb.roles.includes(name) && keyMatches(key, rb.capability, rb.feature) &&
+          (access || (rb.roleOutcomes[name] ?? []).some((outcome) => CLOSING_OUTCOMES.includes(outcome))))
+        .sort((a, b) => a.id.localeCompare(b.id))
+      return {
+        key,
+        access,
+        state: qualifying.some((rb) => rb.status === 'active') ? 'covered' : qualifying.length > 0 ? 'pending' : 'uncovered',
+        runbooks: qualifying.map((rb) => rb.id),
+      }
+    }),
+  }))
 }
