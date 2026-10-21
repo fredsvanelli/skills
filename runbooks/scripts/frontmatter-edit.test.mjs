@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { setListKeys } from './lib/frontmatter-edit.mjs'
+import { setListKeys, setRoleKeys } from './lib/frontmatter-edit.mjs'
 import { splitFrontmatter, parseYaml } from './lib/yaml.mjs'
 
 const doc = (yaml, body = '\n# Title\n\nBody text.\n') => `---\n${yaml}\n---\n${body}`
@@ -54,4 +54,20 @@ test('a missing covers block gets one, and a file without frontmatter throws', (
   assert.equal(setListKeys(doc('id: a.b\nstatus: active'), { 'covers.entries': ['/x'], calls: ['GET /y'] }),
     doc('id: a.b\nstatus: active\ncovers:\n  entries: [/x]\ncalls: [GET /y]'))
   assert.throws(() => setListKeys('# no frontmatter\n', { calls: ['GET /y'] }), /no frontmatter block/)
+})
+
+test('setRoleKeys writes roles and review and keeps the rest', () => {
+  const text = '---\nid: billing.x\nroles: [admin]\nstatus: draft\n---\n\n# X\n'
+  const out = setRoleKeys(text, { roles: 'all', review: [{ reason: 'roles-enabled', date: '2026-10-21' }] })
+  assert.equal(out, '---\nid: billing.x\nroles: all\nreview:\n  - { reason: roles-enabled, date: 2026-10-21 }\nstatus: draft\n---\n\n# X\n')
+  assert.equal(setRoleKeys(out, { review: [] }), '---\nid: billing.x\nroles: all\nstatus: draft\n---\n\n# X\n')
+})
+
+test('setRoleKeys quotes values that need it, orders the fields and replaces an existing review', () => {
+  const text = '---\nid: billing.x\nroles: [admin, partner]\nreview:\n  - { reason: roles-enabled, date: 2026-10-01 }\nstatus: draft\n---\n'
+  const entry = { date: '2026-10-14', change: 'delete, export removed', key: 'billing/invoices', role: 'partner', reason: 'role-permissions' }
+  const out = setRoleKeys(text, { review: [entry] })
+  assert.equal(out, '---\nid: billing.x\nroles: [admin, partner]\nreview:\n  - { reason: role-permissions, role: partner, key: billing/invoices, change: "delete, export removed", date: 2026-10-14 }\nstatus: draft\n---\n')
+  assert.deepEqual(data(out).review, [entry])
+  assert.equal(setRoleKeys(text, { roles: ['admin'] }), text.replace('[admin, partner]', '[admin]'))
 })

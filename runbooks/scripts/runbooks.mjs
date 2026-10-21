@@ -17,10 +17,12 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown } from './lib/format.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
-import { loadRoles, noAccountRoles } from './lib/roles.mjs'
+import { loadRoles, noAccountRoles, REVIEW_REASONS } from './lib/roles.mjs'
+import { planReview, planEnableRoles } from './lib/review-edit.mjs'
+import { todayLocal } from './lib/stale.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
 
@@ -44,6 +46,11 @@ Commands:
   move-to-calls [--source n] [--write] moves the endpoint ids of an upstream API in another repository
                 from covers.entries to calls (docs/adr/0005): the ids of entries[n], or without --source the
                 orphan ids shaped "METHOD /path". A dry run unless --write, which edits only those two keys
+  mark-review   <id...> --reason r [--role n] [--key k] [--change text] [--date YYYY-MM-DD] [--write]
+                adds a review entry to each runbook; r is roles-enabled, role-permissions, role-created or
+                role-deleted. <id...> --clear [--write] removes the review key. A dry run unless --write
+  enable-roles  [--date YYYY-MM-DD] [--write] sets roles: all on every runbook that is not deprecated and
+                adds a roles-enabled review entry to those that are not placeholders. A dry run unless --write
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
                 and prints its address; stop it with Ctrl+C
 
@@ -52,7 +59,7 @@ Global options:
   --config <file>  config path relative to the root (default: docs/runbooks/runbooks.config.json)
   --json           print JSON instead of Markdown
 
-Read-only, except move-to-calls --write: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
+Read-only, except move-to-calls, mark-review and enable-roles with --write: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
 contract --strict has findings, 2 on error.
 `
 
@@ -177,7 +184,45 @@ function commandMoveToCalls(root, config, options) {
   return options.json ? json(plan) : moveToCallsMarkdown(plan)
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract']
+const REVIEW_NEEDS = { 'roles-enabled': [], 'role-permissions': ['role', 'key', 'change'], 'role-created': ['role'], 'role-deleted': ['role'] }
+
+function requireTracking(config) {
+  if (!rolesEnabled(config)) throw new Error('role tracking is off; /runbooks:settings roles turns it on')
+}
+
+function dateOption(options) {
+  if (options.date === undefined) return todayLocal()
+  if (typeof options.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(options.date)) throw new Error('--date needs a date as YYYY-MM-DD')
+  return options.date
+}
+
+function commandMarkReview(root, config, options, ids) {
+  requireTracking(config)
+  if (ids.length === 0) throw new Error('mark-review needs at least one runbook id')
+  const write = options.write === true
+  if (options.clear === true) {
+    const plan = planReview(root, config, ids, { clear: true, write })
+    return options.json ? json(plan) : reviewPlanMarkdown({ title: 'Clears the review key.', ...plan })
+  }
+  const reason = options.reason
+  if (typeof reason !== 'string') throw new Error(`mark-review needs --reason, one of ${REVIEW_REASONS.join(', ')}`)
+  if (!REVIEW_REASONS.includes(reason)) throw new Error(`--reason "${reason}" must be one of ${REVIEW_REASONS.join(', ')}`)
+  const entry = { reason }
+  for (const field of ['role', 'key', 'change']) if (typeof options[field] === 'string') entry[field] = options[field]
+  const missing = REVIEW_NEEDS[reason].filter((field) => !entry[field])
+  if (missing.length > 0) throw new Error(`--reason ${reason} needs ${missing.map((field) => `--${field}`).join(', ')}`)
+  entry.date = dateOption(options)
+  const plan = planReview(root, config, ids, { entry, write })
+  return options.json ? json(plan) : reviewPlanMarkdown({ title: `Adds a ${reason} review entry.`, ...plan })
+}
+
+function commandEnableRoles(root, config, options) {
+  requireTracking(config)
+  const plan = planEnableRoles(root, config, { date: dateOption(options), write: options.write === true })
+  return options.json ? json(plan) : reviewPlanMarkdown({ title: 'Sets roles: all and marks the runbooks for review.', ...plan })
+}
+
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles']
 
 export function run(argv) {
   const stderr = []
@@ -202,6 +247,8 @@ export function run(argv) {
     else if (command === 'junit') stdout = commandJunit(root, config, options, positionals)
     else if (command === 'fixtures') stdout = commandFixtures(root, config, options, positionals)
     else if (command === 'move-to-calls') stdout = commandMoveToCalls(root, config, options)
+    else if (command === 'mark-review') stdout = commandMarkReview(root, config, options, positionals)
+    else if (command === 'enable-roles') stdout = commandEnableRoles(root, config, options)
     else stdout = commandItems(root, config, options, command, warnings)
     if (command === 'list' || command === 'coverage') {
       const copied = copiedServerWarning(root, config, VERSION)
