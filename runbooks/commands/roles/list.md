@@ -1,6 +1,6 @@
 ---
-description: List the project's roles
-argument-hint: "[name]"
+description: List the project's roles, or show one role with its effective permissions
+argument-hint: "[name] [--json]"
 disable-model-invocation: true
 ---
 
@@ -12,6 +12,34 @@ Arguments: `$ARGUMENTS`
 
 | Parameter | Use |
 |---|---|
-| `[name]` | show one role instead of the whole list |
+| `[name]` | show one role instead of the whole list: its effective permissions with the origin of each action, and its runbooks |
+| `--json` | print the rows as JSON, for scripts |
 
-Not implemented yet.
+Examples: `/runbooks:roles:list`, `/runbooks:roles:list manager`, `/runbooks:roles:list --json`.
+
+Read-only. It writes nothing and commits nothing. The registry and the matrix: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles".
+
+## 1. Check that tracking is on
+
+Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop.
+
+Done when tracking is on, or the command stopped with that message.
+
+## 2. Print
+
+- Without a name: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, or the same with `--json` when `$ARGUMENTS` has it. Print the table as the script gives it: name, description, inherits, account, runbook count, pending reviews, keys still marked `guess`, and the last results per role.
+- With a name: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>`. Print the effective permissions with the source of each row (own, inherited from a role, or overridden) and the role's runbooks. A name the registry does not have gets the list of registered roles.
+
+The script exits 2 with `role tracking is off; /runbooks:settings roles turns it on` when tracking is off. Show that message and stop.
+
+## 3. Close
+
+Below the output, say in one line each:
+
+- a role with `guess` keys: `/runbooks:roles:manage-permissions <name>` confirms or edits them;
+- a role with pending reviews: `/runbooks:list --review` lists the runbooks, and `/runbooks:update <id>` clears each one;
+- a role with no account on a `ui` project: `/runbooks:roles:update <name>` adds one.
+
+Say only the lines that apply.
+
+Done when the user has seen the rows the script printed.
