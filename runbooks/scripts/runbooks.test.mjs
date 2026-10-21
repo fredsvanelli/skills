@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { loadConfig, ConfigError, upstreamModeOf } from './lib/config.mjs'
+import { loadConfig, ConfigError, upstreamModeOf, rolesEnabled, rolesFileOf } from './lib/config.mjs'
 import { loadRunbooks } from './lib/runbooks.mjs'
 import { filterRunbooks } from './lib/filter.mjs'
 
@@ -37,6 +37,14 @@ test('loadConfig fills defaults', () => {
   assert.deepEqual(config.slices, {})
   assert.deepEqual(config.commits, { runbooks: 'ask', setup: 'ask' })
   assert.equal(config.git.base, 'main')
+})
+
+test('loadConfig reads roles.enabled', () => {
+  assert.deepEqual(loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1 }' })).roles, { enabled: false })
+  const on = loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1, "roles": { "enabled": true } }' }))
+  assert.equal(rolesEnabled(on), true)
+  assert.equal(rolesFileOf(on), 'docs/runbooks/roles.json')
+  assert.throws(() => loadConfig(tmpProject({ [CONFIG_PATH]: '{ "version": 1, "roles": { "enabled": "yes" } }' })), /roles\.enabled must be true or false/)
 })
 
 test('loadConfig explains what is wrong', () => {

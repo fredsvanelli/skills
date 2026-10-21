@@ -4,6 +4,7 @@
   "stack": "frontend",
   "tests": {},
   "paths": { "runbooks": "docs/runbooks", "evidence": ".runbooks/evidence" },
+  "roles": { "enabled": false },
   "app": { "baseUrl": "http://localhost:3000", "start": [] },
   "accounts": {},
   "uiText": [],

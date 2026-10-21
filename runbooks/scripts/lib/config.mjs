@@ -22,6 +22,7 @@ const DEFAULTS = {
   stack: 'frontend',
   tests: {},
   paths: { runbooks: 'docs/runbooks', evidence: '.runbooks/evidence', e2e: null },
+  roles: { enabled: false },
   app: { baseUrl: '', start: [] },
   accounts: {},
   uiText: [],
@@ -55,6 +56,12 @@ function validateDesign(design, stack) {
 }
 
 const UPSTREAM_MODES = ['live', 'mocked']
+
+// Roles are off unless the project turns them on, so a missing key means off.
+export const rolesEnabled = (config) => config.roles.enabled
+
+// The role registry sits beside the runbooks it describes.
+export const rolesFileOf = (config) => `${config.paths.runbooks}/roles.json`
 
 // The upstream block is absent in live projects, so a missing block means live.
 export const upstreamModeOf = (config) => config.upstream?.mode ?? 'live'
@@ -161,9 +168,10 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
   }
   if (raw.version !== 1) throw new ConfigError(`${configPath}: unsupported version ${raw.version}, expected 1`)
   const config = { ...DEFAULTS, ...raw }
-  for (const key of ['paths', 'app', 'data', 'tickets', 'git', 'commits', 'mcp']) {
+  for (const key of ['paths', 'roles', 'app', 'data', 'tickets', 'git', 'commits', 'mcp']) {
     config[key] = { ...DEFAULTS[key], ...raw[key] }
   }
+  if (typeof config.roles.enabled !== 'boolean') throw new ConfigError('roles.enabled must be true or false')
   if (!STACKS[config.stack]) throw new ConfigError(`stack must be one of ${Object.keys(STACKS).join(', ')}`)
   config.tests = { ...raw.tests }
   // Configs written before tests.ui kept the Playwright folder in paths.e2e.
