@@ -61,7 +61,7 @@ Path `<paths.runbooks>/<capability>/<flow>.md`, from `${CLAUDE_PLUGIN_ROOT}/temp
 
 - `surface`: `ui` or `api`, from the group the flow came from;
 - `title` and `Goal`: the user outcome or business operation, in the config language;
-- `roles`: the account roles the guards let in, when the code shows them; otherwise `[]`;
+- `roles`: with role tracking off, the account roles the guards let in, when the code shows them, otherwise `[]`. With role tracking on, `all`, because the placeholder template writes it and `create` decides the roles later;
 - `covers.entries` and `covers.requirements`: ids exactly as the script printed them;
 - `calls`, for a `ui` flow whose screens reach an upstream API in another repository: the operations the code calls, left out when there are none;
 - `scripts`: the candidate scripts fitted to the flow in step 2, paths relative to the project root. In a placeholder they are candidates, not adopted scripts: `create` reads them as evidence, and `to-test` asks before adopting each one;

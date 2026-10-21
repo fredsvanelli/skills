@@ -15,7 +15,8 @@ The caller passes, or the conversation already holds:
 - the flow, in one sentence;
 - its `surface` (`ui` or `api`) and, for `ui`, its viewports;
 - the entry ids it touches, from `runbooks.mjs entries --json`;
-- the requirements list, with ids, from the source.
+- the requirements list, with ids, from the source;
+- whether the project has a role registry (`roles.enabled` in the config, `roles.json`).
 
 When the entry ids are missing, stop and say so: the scan starts from them.
 
@@ -30,6 +31,8 @@ Start at each entry: the route and its page component on `ui`, the controller or
 - external calls (payment, mail, storage, third-party APIs) and what the code does when each one fails or times out;
 - the response or the screen: status codes and body fields on `api`; on `ui`, the messages, empty states, disabled controls and redirects, with their exact text from the `uiText` files.
 
+With a registry, take the roles from `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles` and read each role's effective permissions for the flow's capability and feature. Do not guess roles from the code. A role the code shows that the registry lacks is a finding in the Gaps list, not a scenario.
+
 Tests of this code are evidence, not the source: an assertion is a candidate scenario to confirm in the code.
 
 Done when every branch on the path from each entry to its result has been read.
@@ -40,9 +43,11 @@ Each branch the walk found that changes the result becomes one scenario, of one 
 
 | Kind | What it is | Examples |
 |---|---|---|
-| `happy` | the operation succeeds. One scenario per distinct successful result: by role, by input variant, by the state the data starts in | admin issues an invoice; a partner issues one for their own account only; issuing with a discount shows the discounted total |
+| `happy` | the operation succeeds. One scenario per distinct successful result: by input variant, by the state the data starts in | admin issues an invoice; a partner issues one for their own account only; issuing with a discount shows the discounted total |
 | `error` | the code rejects the request on purpose and tells the caller why | 422 with the field names; 403 for a role; 401 without a session; 404 for another account's record; 409 for an invoice already issued; a handled provider failure with its message |
 | `edge` | the operation succeeds, or fails, at a boundary the code handles in a branch of its own | an empty list; the last page; a value at its maximum length or limit; zero or a negative amount; a date across midnight or a time zone; a second submit of the same form; a record soft-deleted in another tab; the only admin removing their own role |
+
+With a registry, write one happy path per role whose effective actions allow the flow, and one `error` scenario per role that lacks them, with the outcome the code gives (`denied` or `hidden` on `ui`, 403 or 401 on `api`). Without a registry, the happy paths split by role as the code shows, as before.
 
 An edge case counts only when the code has a branch, a limit or a check for it, or when its absence breaks the flow in a way the surface shows (a double submit that creates two invoices). A boundary the code does not touch is not a scenario.
 

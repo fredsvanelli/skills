@@ -23,6 +23,8 @@ Examples: `/runbooks:audit-runbooks billing.issue-invoice`, `/runbooks:audit-run
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, and for a `ui` runbook `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 
+With role tracking on (`roles.enabled` in the config), also read the Roles sections of `references/format.md` and `references/config.md`. The role checks below apply only then.
+
 Run `git status --porcelain` now and keep the list for the commit step.
 
 ## 1. Select
@@ -68,6 +70,23 @@ For the three rows on calls, the edit is the `calls` list to write, or the fixtu
 | `scripts` is not empty, unless the runbook is a placeholder | `drift`, suggesting `/runbooks:run <id>`, which writes it |
 | every step has one test with its id in the script, and every runbook test asserts its step's Expected | `drift` |
 
+With role tracking on, two more checks run:
+
+Registry against code, once per audit, over the code the registry's `found` sources and the role signals of `setup` point at (role enums, guards, permission helpers, `accounts`). The role names and permissions come from `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`:
+
+| Check | Finding |
+|---|---|
+| a role the code defines that `roles.json` does not register | `role-missing` |
+| a registered role whose `found` sources no longer show it | `role-gone` |
+
+Runbooks against the matrix, for each runbook:
+
+| Check | Finding |
+|---|---|
+| a role line that contradicts the role's `allowedActions` for the step's key (`allowed` where the action is missing, or `denied`, `hidden` or `read-only` where it is allowed) | `role-contradiction`, with the step, the role line and the matrix entry, marked `guess` when its origin is `guess` |
+
+`role-missing` and `role-gone` belong to no runbook and are reported once. `role-contradiction` has the verdict `drift`; the two registry findings do not change a runbook's verdict.
+
 The runbook's verdict is the worst of its findings; none means `in-sync`.
 
 ## 3. Report
@@ -76,7 +95,7 @@ A table (runbook, verdict, findings count), then the findings per runbook. Print
 
 ## 4. Fix (with `--fix`)
 
-Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`. When its `last_run` is set and a fix changed a step, a precondition, `viewports` or `design`, add `outdated: true` to `last_run` and keep its other fields: the run verified the old text. A fix that touches only `sources`, `scripts` paths or a script file leaves `last_run` as it is. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbooks:update` for it.
+Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`. When its `last_run` is set and a fix changed a step, a precondition, `viewports` or `design`, add `outdated: true` to `last_run` and keep its other fields: the run verified the old text. A fix that touches only `sources`, `scripts` paths or a script file leaves `last_run` as it is. With role tracking on, `--fix` never edits `roles.json`, and it does not rewrite a role line against the matrix. A `role-missing` finding offers `/runbooks:roles:create`, a `role-gone` finding offers `/runbooks:roles:delete`, and a `role-contradiction` offers `/runbooks:update <id>` or `/runbooks:roles:manage-permissions`, because the matrix or the runbook can be the wrong side. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbooks:update` for it.
 
 ## 5. Show the fixes (with `--fix`)
 
