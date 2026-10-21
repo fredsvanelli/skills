@@ -120,7 +120,7 @@ With role tracking on, a runbook runs the same steps once per role, like viewpor
   - anonymous: denied. Redirects to /signin.
   ```
 
-- A role line for a role that is not one of the step's roles is a problem. So is a keyword outside the table below.
+- A role line for a role that is not one of the step's roles is a problem. A bullet whose keyword is not in the table below (`- status: paid`) is plain Expected text, not a role line. Role lines end at the next field line, `---` line or heading, so bullets under Not covered and Cleanup are never role lines.
 
 | Outcome | Meaning |
 |---|---|

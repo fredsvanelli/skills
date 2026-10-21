@@ -416,6 +416,23 @@ test('loadRunbooks checks a role line against the step roles and the review entr
   assert.equal(rb.problems.some((p) => p.startsWith('review[2]')), false)
 })
 
+test('loadRunbooks ignores Not covered and Cleanup bullets after the last step', () => {
+  const dir = rolesCopy('billing/cancel-invoice.md', (text) => text
+    .replace('- E-mail sent to the client.', '- persistence: mocked runbooks cannot show it.')
+    .replace('Reopen "Invoice A" in the test data.', '- data: deleted by the script.'))
+  const rb = roleRunbook(dir, 'billing.cancel-invoice')
+  assert.deepEqual(rb.problems, [])
+  assert.deepEqual(rb.roleOutcomes, { anonymous: ['denied'], editor: ['hidden'], viewer: ['read-only'] })
+})
+
+test('loadRunbooks keeps plain Expected bullets and reports an outcome line for an unregistered role', () => {
+  const dir = rolesCopy('billing/cancel-invoice.md', (text) => text
+    .replace('- editor: hidden. The row shows no "Cancel" button.', '- status: paid\n- editor: hidden. The row shows no "Cancel" button.\n- ghost: denied.'))
+  const rb = roleRunbook(dir, 'billing.cancel-invoice')
+  assert.deepEqual(rb.problems, ['role "ghost" is not registered'])
+  assert.equal(rb.roleOutcomes.status, undefined)
+})
+
 test('loadRunbooks reports a role-permissions entry without its fields', () => {
   const dir = rolesCopy('billing/cancel-invoice.md', (text) => text.replace(', key: billing/invoices, change: delete removed', ''))
   assert.ok(roleRunbook(dir, 'billing.cancel-invoice').problems.includes('review[0]: role-permissions needs role, key and change'))

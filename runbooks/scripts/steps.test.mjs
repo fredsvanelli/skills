@@ -29,3 +29,19 @@ test('role lines stop at the next field line', () => {
   const [s] = parseSteps(['### S01. A', 'Expected: ok', '- editor: allowed.', 'Notes:', '- admin: denied.'].join('\n'))
   assert.deepEqual(s.outcomes, { editor: 'allowed' })
 })
+
+test('role lines stop at a --- line and at any # heading', () => {
+  const body = [
+    '### S01. A', 'Expected: ok', '- editor: hidden.', '', '---', '',
+    '## Not covered', '', '- persistence: mocked runbooks cannot show it.', '- admin: denied requests leave no trace.', '',
+    '## Cleanup', '', '- data: deleted by the script.',
+  ].join('\n')
+  assert.deepEqual(parseSteps(body)[0].outcomes, { editor: 'hidden' })
+  const last = parseSteps(['### S01. A', 'Expected: ok', '# Notes', '- admin: denied.'].join('\n'))[0]
+  assert.deepEqual(last.outcomes, {})
+})
+
+test('a bullet in Expected is a role line only when its keyword is an outcome', () => {
+  const [s] = parseSteps(['### S01. A', 'Expected: the invoice shows:', '- status: paid', '- total: 100', '- ghost: denied.'].join('\n'))
+  assert.deepEqual(s.outcomes, { ghost: 'denied' })
+})

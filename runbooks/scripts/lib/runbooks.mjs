@@ -5,7 +5,7 @@ import { splitFrontmatter, parseYaml } from './yaml.mjs'
 import { surfacesOf, upstreamModeOf } from './config.mjs'
 import { fixturesDir } from './fixtures.mjs'
 import { normalizeCall } from './calls.mjs'
-import { loadRoles, OUTCOMES, API_OUTCOMES, REVIEW_REASONS } from './roles.mjs'
+import { loadRoles, API_OUTCOMES, REVIEW_REASONS } from './roles.mjs'
 import { parseSteps } from './steps.mjs'
 
 const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
@@ -133,7 +133,6 @@ function readReview(runbook, review, registry) {
 
 // Checks the steps against the registry and the runbook's roles; collects the outcomes each role's lines use.
 function readStepRoles(runbook, body, registry) {
-  const allowed = runbook.surface === 'api' ? API_OUTCOMES : OUTCOMES
   const outcomes = {}
   const unknown = new Set()
   const unregistered = (role) => {
@@ -152,10 +151,9 @@ function readStepRoles(runbook, body, registry) {
       if (registry.names.includes(role) && !stepRoles.includes(role)) {
         runbook.problems.push(`${step.step}: role line "${role}" is not one of the step's roles`)
       }
-      if (!allowed.includes(outcome)) {
-        runbook.problems.push(runbook.surface === 'api'
-          ? `${step.step}: outcome "${outcome}" does not apply to api steps`
-          : `${step.step}: outcome "${outcome}" must be one of ${OUTCOMES.join(', ')}`)
+      // parseSteps keeps only bullets whose keyword is one of OUTCOMES, so only the api subset needs a check.
+      if (runbook.surface === 'api' && !API_OUTCOMES.includes(outcome)) {
+        runbook.problems.push(`${step.step}: outcome "${outcome}" does not apply to api steps`)
       }
       outcomes[role] = [...new Set([...(outcomes[role] ?? []), outcome])].sort()
     }
