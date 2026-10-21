@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "language": "en",
+  "stack": "frontend",
+  "paths": { "runbooks": "docs/runbooks", "evidence": ".runbooks/evidence" },
+  "app": { "baseUrl": "http://localhost:3000", "start": ["yarn dev"] },
+  "entries": [{ "extractor": "next-app-router", "glob": "src/app/**/page.tsx" }],
+  "slices": { "quotes": ["src/app/quotes/**"] },
+  "git": { "base": "main", "protected": ["main"], "messageFormat": "docs(runbooks): {summary}" },
+  "upstream": {
+    "mode": "mocked",
+    "baseUrl": "https://api.example.com",
+    "start": ["in the API repository: yarn dev"],
+    "urlEnv": "NEXT_PUBLIC_API_URL",
+    "schema": "docs/runbooks/_contract/openapi.json"
+  }
+}

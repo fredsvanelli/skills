@@ -54,7 +54,9 @@ export function createUiServer({ root, configPath, today = todayLocal, html = ()
     if (second === 'runs' && id === undefined) return sendJson(res, 404, { error: 'not found' })
     if (second === 'runs' && third === undefined) return found(res, reportView(root, config, id))
     if (second === 'coverage' && id === undefined) {
-      return sendJson(res, 200, coverageView(root, config, url.searchParams.get('slice') ?? undefined))
+      const filters = Object.fromEntries(['capability', 'feature', 'path', 'slice']
+        .filter((key) => url.searchParams.has(key)).map((key) => [key, url.searchParams.get(key)]))
+      return sendJson(res, 200, coverageView(root, config, filters))
     }
     return sendJson(res, 404, { error: 'not found' })
   }

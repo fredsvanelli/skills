@@ -30,7 +30,7 @@ Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/coverage.md`.
 2. **Numbers.** For each scope, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" coverage <filter>` (Markdown) and `... coverage <filter> --json`. Exit code 2 stops the command; show the message.
 3. **Suggestions.** From the JSON's uncovered entries and requirements, rank at most five runbooks to write first by the rules in `coverage.md`.
 4. **Write** each report from `${CLAUDE_PLUGIN_ROOT}/templates/coverage-report.md` to `<paths.runbooks>/_coverage/<scope file name>`, with the script output pasted unchanged.
-5. **Summarize** in the chat: the report paths, entry and requirement coverage per scope, orphan and invalid runbook counts, and the top suggestions.
-6. **Close.** Offer `/runbooks:create` for the first suggestion. Nothing is committed: `_coverage/` is ignored by Git, so it stays local. End with a line that offers `/runbooks:ui` to see the coverage and the runs.
+5. **Summarize** in the chat: the report paths, entry and requirement coverage per scope, orphan and invalid runbook counts, and the top suggestions. When the script warns about an `entries` source outside the project, say that those entries belong to another repository and that `/runbooks:settings sources` moves them to `calls` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`).
+6. **Close.** Offer `/runbooks:create` for the first suggestion. Nothing is committed: `_coverage/` is ignored by Git, so it stays local. End with a line that offers `/runbooks:ui` to see the coverage and the runs. For a filtered scope, give the page address that shows the same numbers: `#/coverage?path=<glob>`, `#/coverage?feature=<y>` or `#/coverage?capability=<x>`, the value URL-encoded, and `#/coverage/<name>` for a slice.
 
 Done when every scope has its report file and the chat summary lists the same numbers.

@@ -86,7 +86,7 @@ For an `api` runbook, investigate each edited or added step as `create` does for
 - the route the user opens and the controls they use, with visible labels;
 - the roles that see the screen and the roles that must not;
 - the exact UI text of every expected result, from the `uiText` files;
-- the API endpoints the screen calls, as entry ids from `... entries --json`;
+- the API endpoints the screen calls, as entry ids from `... entries --json`, or as `calls` when that list does not have them (`create.md`, step 2);
 - the data the step needs, as a precondition. The skillset reads no database and writes no SQL.
 
 Re-check unmarked steps that share a screen with a marked one, at every viewport of the runbook: a moved control or a renamed label reaches them too.
@@ -104,6 +104,7 @@ Step numbers are ids that reports quote, so they stay fixed:
 Then:
 
 - `covers.entries` and `covers.requirements`: add the ids the new steps reach and drop the ones no step reaches any more;
+- `calls`: the same for the operations of an upstream API in another repository. An id of such an API still in `covers.entries` moves to `calls`;
 - `sources`: append the change's source;
 - `design`: the references from step 3 added or replaced, the ones of screens no step reaches any more removed, and the `Design:` lines of the steps that end on them;
 - `viewports`: the answer from step 3, when it changed; a size the config lacks goes into the config `viewports`, as in `create`;

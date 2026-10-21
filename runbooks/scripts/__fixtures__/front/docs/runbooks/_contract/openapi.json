@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Quotes API", "version": "1" },
+  "paths": {
+    "/quotes": { "get": { "responses": { "200": { "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Quote" } } } } } } } },
+    "/quotes/{id}": { "get": { "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Quote" } } } } } } },
+    "/quotes/{id}/tax-estimate": { "post": { "responses": { "200": { "content": { "application/json": { "schema": { "type": "object", "required": ["tax"], "properties": { "tax": { "type": "number" } } } } } } } } }
+  },
+  "components": { "schemas": { "Quote": { "type": "object", "required": ["id", "total"], "properties": { "id": { "type": "string" }, "total": { "type": "number" } } } } }
+}

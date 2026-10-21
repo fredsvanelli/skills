@@ -22,6 +22,7 @@ design:
 covers:
   entries: ["/billing/invoices", "POST /admin/internal/invoices"]
   requirements: ["CHE-581#AC2"]
+calls: [GET /admin/internal/clients/{id}]
 sources: ["docs/superpowers/specs/2026-09-18-CHE-581-design.md", "CHE-581"]
 scripts: []
 status: draft
@@ -42,6 +43,7 @@ last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2
 | `upstream` | `ui` only: `live` or `mocked`, how the runbook reaches its upstream API. Written only when it differs from the config `upstream.mode` (`upstream.md`, "Modes"). A mocked runbook needs `upstream.urlEnv` in the config |
 | `covers.entries` | entry ids exactly as `runbooks.mjs entries` prints them |
 | `covers.requirements` | requirement ids exactly as `runbooks.mjs requirements` prints them, or ids from the source when no requirement source is configured |
+| `calls` | `ui` only, and only when the config has `upstream`: the operations of an upstream API outside this repository that the screens reach, as `METHOD /path` with `{param}` segments, spelled as the API's OpenAPI document spells them when `upstream.schema` is set. Next.js segments (`[id]`, `[...path]`) are read as `{id}` and `{path}`. An endpoint that `runbooks.mjs entries` lists goes in `covers.entries` instead. `calls` never counts as coverage and never makes an orphan (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`) |
 | `sources` | spec paths, ticket ids, `diff <base>...<sha>`, `file <path>`, `dir <path>` and `route <entry id>` for code read as the source, `map <sha>` for a placeholder, and test files read as evidence only (tests of the code behind an entry, which cannot run the steps), that the runbook came from |
 | `scripts` | the automated tests that run this runbook's steps, written or adopted by `to-test`. Optional for `ui`; required for `api`, whose runbook runs only through it. In a placeholder, the existing tests `map` fitted to the flow, which may cover it only in part: candidates `to-test` offers to adopt |
 | `status` | `placeholder`, `draft`, `active` or `deprecated` (see Status) |

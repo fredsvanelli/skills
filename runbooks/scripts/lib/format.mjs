@@ -131,3 +131,18 @@ export function fixturesMarkdown({ id, dir, fixtures, sources, problems }) {
   lines.push('### Problems', '', ...bullets(problems))
   return `${lines.join('\n')}\n`
 }
+
+export function moveToCallsMarkdown({ source, sourceRoot, runbooks, left, orphansLeft, coverage, written }) {
+  const { before, after } = coverage
+  const lines = [
+    source === null ? 'Moves the orphan endpoint ids to calls.' : `Moves the ids of entries[${source}] (root "${sourceRoot}") to calls.`,
+    `Entry coverage: ${before.covered} of ${before.total} (${pct(before.covered, before.total)}) now, ${after.covered} of ${after.total} (${pct(after.covered, after.total)}) after.`,
+    '',
+  ]
+  lines.push(runbooks.length === 0 ? 'No runbook cites these ids.' : table(['Runbook', 'Leaves covers.entries', 'calls after'],
+    runbooks.map((rb) => [rb.id, rb.move.join(', '), rb.calls.join(', ')])), '')
+  if (left.length > 0) lines.push('### Left in place', '', ...bullets(left.map((l) => `\`${l.id}\`: ${l.ids.join(', ')}. ${l.reason}`)), '')
+  lines.push('### Orphans left for /runbooks:update', '', ...bullets(orphansLeft.map((o) => `\`${o.runbook}\` cites \`${o.ref}\``)), '')
+  lines.push(written.length > 0 ? `Written: ${written.join(', ')}.` : 'Dry run: nothing written. Run again with --write to apply.')
+  return `${lines.join('\n')}\n`
+}

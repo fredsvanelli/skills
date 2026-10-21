@@ -97,6 +97,17 @@ test('/api/coverage takes an optional slice', async (t) => {
   assert.equal((await res.json()).scope, 'billing')
 })
 
+test('/api/coverage takes the path, feature and capability filters', async (t) => {
+  const { base } = await start(t)
+  const res = await get(`${base}/api/coverage?path=${encodeURIComponent('src/**')}`)
+  assert.equal(res.status, 200)
+  const body = await res.json()
+  assert.equal(body.scope, 'path src/**')
+  assert.equal(body.result.entries.total, 6)
+  assert.equal((await (await get(`${base}/api/coverage?feature=invoices`)).json()).scope, 'feature invoices')
+  assert.equal((await (await get(`${base}/api/coverage?capability=billing`)).json()).scope, 'capability billing')
+})
+
 // fetch cannot set Host, so this uses node:http.
 function request(port, { method = 'GET', pathname = '/api/runbooks', host }) {
   return new Promise((resolve, reject) => {

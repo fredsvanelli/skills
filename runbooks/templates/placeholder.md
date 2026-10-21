@@ -9,6 +9,7 @@ roles: []
 covers:
   entries: []
   requirements: []
+# calls: []  # ui only, with an upstream API in another repository: the operations the screens reach, as METHOD /path
 sources: ["map <short sha>"]
 scripts: []
 status: placeholder

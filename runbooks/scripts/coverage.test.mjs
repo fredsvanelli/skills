@@ -290,3 +290,26 @@ test('in a fullstack stack a mocked ui runbook still covers its ui-route, not it
     fs.rmSync(tmp, { recursive: true, force: true })
   }
 })
+
+test('calls never cover and never make an orphan, see docs/adr/0005', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-calls-'))
+  const dir = path.join(tmp, 'project')
+  try {
+    fs.cpSync(FIXTURE, dir, { recursive: true })
+    fs.cpSync(path.join(FIXTURE, '../api'), path.join(tmp, 'api'), { recursive: true })
+    const configPath = path.join(dir, 'docs/runbooks/runbooks.config.json')
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    config.upstream = { mode: 'live', urlEnv: 'API_URL' }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
+    const before = coverageOf(dir)
+    const runbookPath = path.join(dir, 'docs/runbooks/billing/issue-invoice.md')
+    fs.writeFileSync(runbookPath, fs.readFileSync(runbookPath, 'utf8').replace('status: active', 'calls: [GET /admin/invoices, GET /nowhere/{id}]\nstatus: active'))
+    const after = coverageOf(dir)
+    assert.deepEqual(after.invalid, before.invalid)
+    assert.deepEqual(after.orphans, before.orphans)
+    assert.deepEqual(after.entries, before.entries)
+    assert.ok(after.entries.uncovered.some((i) => i.id === 'GET /admin/invoices'), 'a call does not cover the entry it names')
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})

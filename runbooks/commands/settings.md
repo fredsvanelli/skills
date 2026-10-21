@@ -49,7 +49,7 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `tickets` | `tickets.fetch` |
 | `git` | `git.base`, `git.protected`, `git.messageFormat` |
 | `commits` | `commits.runbooks`, `commits.setup` |
-| `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `root`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `tokenEnv`, `serverFile`. Only with `ui` |
+| `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `tokenEnv`, `serverFile`, and the obsolete `root`, which this group removes. Only with `ui` |
 | `stale` | `staleDays` |
 | `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in `.mcp.json`. Only with `ui` |
 
@@ -81,9 +81,12 @@ Some changes reach past their own key. Work out each one from the table below, a
 | `mcp.headless` or `mcp.headed` | rename the server in `.mcp.json` |
 | `upstream.mode` | list the `ui` runbooks whose effective mode changes: those with no `upstream:` in their frontmatter, whose `upstream` in the list differs from the new default. Offer `/runbooks:update <id>` for each, because `update` records or deletes the fixtures and rewrites the steps (`references/upstream.md`, Changing a runbook's mode). When the new default is `mocked`, say that endpoints then count only through `live` runbooks. When it is `live`, say that the fixtures stay on disk until `update` deletes them |
 | `upstream.serverFile` or `tests.ui.dir` changes while `tests.ui` exists and `serverFile` is set, or `upstream.mode` becomes `mocked` (or the first mocked runbook appears) while `serverFile` is null | copy `${CLAUDE_PLUGIN_ROOT}/scripts/upstream-server.mjs` to `<tests.ui.dir>/runbooks-upstream.mjs` and write that path to `upstream.serverFile`. Show the diff before overwriting an existing file. An old copy at a previous path stays in place, because the plugin deletes no project file; name it in the summary so the user can delete it. Show the framework start command again, as `setup.md` step 3 does |
+| an `entries` source with a `root` outside the project is removed, or the loader warned about one (`sources` group) | the endpoints it read belong to another repository (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" move-to-calls --source <index>` while its folder exists, else `move-to-calls` once the source is gone. Show its dry run: the ids each runbook moves to `calls`, the entry coverage before and after, and the orphans it leaves for `/runbooks:update`. On a yes, run it again with `--write` before the config loses the source, remove the `slices` globs that start with `../` in the same write, and add the runbooks to the write list. A config without `upstream` cannot hold `calls`: ask the `upstream` group first |
+| `app.start`, `upstream.start` or `data.seedHint` holds a `cd` into a folder next to this project | show it and offer an `upstream.start` hint that names the API's repository and its command instead (`setup.md` step 2) |
+| `upstream.root` is set | remove it: no command reads it |
 | `git.base` or `git.protected` | confirm each branch exists with `git rev-parse --verify` |
 
-A runbook rename goes into the `runbooks` commit, not the `setup` one.
+A runbook rename, and a move of ids to `calls`, go into the `runbooks` commit, not the `setup` one.
 
 Done when every chosen key has a new value or was kept, and every file the changes reach is on the write list.
 
@@ -110,7 +113,7 @@ Print, before any commit question:
 
 ## 6. Commit
 
-Commit the config, the agents block and `.mcp.json` by the `setup` policy, and the runbooks renamed in step 3 by the `runbooks` policy. Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
+Commit the config, the agents block and `.mcp.json` by the `setup` policy, and the runbooks renamed or moved to `calls` in step 3 by the `runbooks` policy. Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
 
 Write in the config `language`.
 

@@ -45,6 +45,7 @@ For each uncovered entry, read its code: the page and its components, the API en
 - `ui` flows, when the stack has `ui`: what a user goes through on screens (`list-deliveries`: the list page, the detail page and the endpoints they call; `issue-invoice`: the form and its POST).
 - `api` flows, when the stack has `api`: one per business operation, a write endpoint plus the reads that prove its effect (`create-invoice`: `POST /invoices` and `GET /invoices/{id}`), and one per read with logic of its own (`list-invoices`). Webhooks and internal endpoints are `api` flows too. An endpoint is uncovered here even when a `ui` runbook cites it, because only `api` runbooks cover endpoints in this stack (`references/coverage.md`, By surface).
 
+- Endpoints of an upstream API in another repository are not entries here, so they are never mapped. A `ui` placeholder lists the ones its screens reach in `calls` (`references/format.md`, the `calls` key).
 - Every uncovered entry goes into at least one placeholder. On a `frontend` stack, an entry no user flow reaches through the UI (webhook, cron, health check, internal endpoint) goes on the not-mapped list with the reason. On any stack, a health check or an endpoint with no behavior worth proving does too.
 - Every uncovered requirement goes into the placeholder of the flow it describes, or on the not-mapped list with the reason.
 - `covers` lists every entry and requirement the flow touches, including ones other runbooks already cite.
@@ -62,6 +63,7 @@ Path `<paths.runbooks>/<capability>/<flow>.md`, from `${CLAUDE_PLUGIN_ROOT}/temp
 - `title` and `Goal`: the user outcome or business operation, in the config language;
 - `roles`: the account roles the guards let in, when the code shows them; otherwise `[]`;
 - `covers.entries` and `covers.requirements`: ids exactly as the script printed them;
+- `calls`, for a `ui` flow whose screens reach an upstream API in another repository: the operations the code calls, left out when there are none;
 - `scripts`: the candidate scripts fitted to the flow in step 2, paths relative to the project root. In a placeholder they are candidates, not adopted scripts: `create` reads them as evidence, and `to-test` asks before adopting each one;
 - `sources`: `map <short sha of HEAD>`, followed by the evidence-only test files fitted to the flow.
 

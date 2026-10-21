@@ -9,7 +9,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import net from 'node:net'
 import { run } from './runbooks.mjs'
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
-import { VERSION } from './upstream-server.mjs'
+import { VERSION, createUpstreamServer } from './upstream-server.mjs'
 import { parseArgs } from './lib/args.mjs'
 import { loadConfig } from './lib/config.mjs'
 import { pct } from './lib/format.mjs'
@@ -123,6 +123,16 @@ test('help', () => {
 test('the file runs as a program', () => {
   const out = execFileSync(process.execPath, [SCRIPT, 'list', '--root', FIXTURE, '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   assert.equal(JSON.parse(out).length, 5)
+})
+
+test('list, coverage, entries and requirements print the config warnings', () => {
+  for (const command of ['list', 'coverage', 'entries', 'requirements']) {
+    const { code, stderr } = run([command, '--root', FIXTURE])
+    assert.equal(code, 0)
+    assert.match(stderr, /^warning: entries\[1\]: root "\.\.\/api" is outside the project/m, command)
+    assert.match(stderr, /^warning: slices\.billing: glob "\.\.\/api\/src\/app\/admin\/invoices\/\*\*" is outside the project/m, command)
+  }
+  assert.doesNotMatch(run(['check', 'billing.issue-invoice', '--root', FIXTURE]).stderr, /outside the project/)
 })
 
 test('coverage with a missing sibling root reports no false orphans', () => {
@@ -393,4 +403,48 @@ test('runbooks.mjs upstream exits 0 on SIGINT with a tunneled upgrade socket ope
     sockets.forEach((socket) => socket.destroy())
     api.close()
   }
+})
+
+// docs/adr/0005: in CI a front is checked out alone, and nothing it runs may need the API's repository.
+test('a front checked out alone, with no sibling folder, runs coverage, list --affected, fixtures and the upstream server', async (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ci-'))
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
+  const root = path.join(tmp, 'front')
+  fs.cpSync(fileURLToPath(new URL('./__fixtures__/front', import.meta.url)), root, { recursive: true })
+  assert.deepEqual(fs.readdirSync(tmp), ['front'])
+  const git = (...args) => execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', ...args], { cwd: root, stdio: 'pipe' })
+  git('init', '-q', '-b', 'main')
+  git('add', '.')
+  git('commit', '-qm', 'init')
+
+  const config = loadConfig(root)
+  assert.deepEqual(config.warnings, [])
+  const coverage = run(['coverage', '--root', root, '--json'])
+  assert.deepEqual([coverage.code, coverage.stderr], [0, ''])
+  const result = JSON.parse(coverage.stdout)
+  assert.deepEqual([result.orphanChecksSkipped, result.orphans, result.invalid], [[], [], []])
+  assert.deepEqual([result.entries.covered, result.entries.total], [2, 3])
+
+  git('switch', '-q', '-c', 'feature')
+  fs.appendFileSync(path.join(root, 'src/app/quotes/page.tsx'), '// changed\n')
+  const affected = run(['list', '--affected', 'main', '--root', root, '--json'])
+  assert.deepEqual([affected.code, affected.stderr], [0, ''])
+  assert.deepEqual(JSON.parse(affected.stdout).map((rb) => [rb.id, rb.reasons]), [
+    ['quotes.list-quotes', ['/quotes (src/app/quotes/page.tsx)', 'slice quotes: 1 file(s)']],
+    ['quotes.rate-table', ['slice quotes: 1 file(s)']],
+  ])
+
+  const fixtures = JSON.parse(run(['fixtures', 'quotes.list-quotes', '--root', root, '--json']).stdout)
+  assert.deepEqual([fixtures.fixtures.length, fixtures.problems], [2, []])
+
+  const { port, ...options } = upstreamOptions(root, config, {})
+  assert.equal(port, 4010)
+  const server = createUpstreamServer(options)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => new Promise((resolve) => server.close(resolve)))
+  const base = `http://127.0.0.1:${server.address().port}`
+  await fetch(`${base}/__runbooks/select`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runbook: 'quotes.list-quotes', mode: 'mocked' }) })
+  const res = await fetch(`${base}/quotes`)
+  assert.equal(res.status, 200)
+  assert.deepEqual(await res.json(), [{ id: 'q1', total: 120 }])
 })

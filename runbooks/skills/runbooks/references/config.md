@@ -41,7 +41,7 @@ One key per surface the stack allows, `tests.ui` and `tests.api`. A key for a su
 | `framework` | the test library: `playwright`, `cypress`, `jest`, `vitest`, `phpunit`, `pest`, ... `to-test` writes scripts with it |
 | `dir` | the folder new scripts go in |
 | `command` | runs scripts and writes a JUnit XML report. `{files}` is replaced by the script paths, `{junit}` by `.runbooks/junit/<run id>.xml` |
-| `root` | optional: the folder the command runs in, relative to the project root (`"../api"`), as in `entries` sources |
+| `root` | optional: the folder the command runs in, relative to the project root (`"apps/api"`), as in `entries` sources. It stays inside the project: a `root` outside it warns, and from runbooks 2.0 it is a config error (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`) |
 | `baseUrl` | optional, `api` only: set when the scripts call a running server (Playwright `request`, `cy.request`, supertest against a URL); `run` then checks it answers |
 
 ```json
@@ -49,7 +49,7 @@ One key per surface the stack allows, `tests.ui` and `tests.api`. A key for a su
 "tests": {
   "ui":  { "tech": "next", "framework": "playwright", "dir": "e2e",
            "command": "PLAYWRIGHT_JUNIT_OUTPUT_NAME={junit} npx playwright test {files} --reporter=junit" },
-  "api": { "tech": "laravel", "framework": "phpunit", "dir": "tests/Feature/Runbooks", "root": "../api",
+  "api": { "tech": "laravel", "framework": "phpunit", "dir": "tests/Feature/Runbooks", "root": "apps/api",
            "command": "php artisan test {files} --log-junit {junit}" }
 }
 ```
@@ -122,12 +122,11 @@ The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design
 |---|---|---|
 | `mode` | `live` | the project default: `live` or `mocked`. A runbook overrides it with `upstream:` in its frontmatter |
 | `baseUrl` | `""` | the upstream API's URL. `live` and `record` proxy to it, and `run` checks it answers before a live runbook |
-| `start` | `[]` | commands that start the upstream API, shown when `baseUrl` does not answer |
-| `root` | `null` | the folder of the upstream API's repo, relative to the project root (`"../api"`). In a `fullstack` stack whose `tests.api.root` is that repo, it takes the same value |
+| `start` | `[]` | commands that start the upstream API, shown when `baseUrl` does not answer. For an API in another repository, a hint that names that repository and its command (`in cheap-courier-api: yarn dev`) |
 | `urlEnv` | `""` | the env var the app reads the API URL from (`NEXT_PUBLIC_API_URL`). The app starts with it set to the upstream server. Required when `mode` is `mocked` |
 | `port` | `4010` | the upstream server's port, an integer from 1 to 65535 |
 | `fixtures` | `<paths.runbooks>/_fixtures` | the folder of the fixtures |
-| `schema` | `null` | a local OpenAPI 3 JSON file (`.json`). `run` and `fixtures` check each fixture against it. YAML files and URLs are not read |
+| `schema` | `null` | a local OpenAPI 3 JSON file (`.json`). `run` and `fixtures` check each fixture against it. YAML files and URLs are not read. For an API in another repository, the document it publishes, kept here at `docs/runbooks/_contract/openapi.json` by default (`upstream.md`, Another repository) |
 | `redactHeaders` | `[]` | header names the recorder drops, besides `set-cookie`, `authorization` and `cookie`. Case does not matter |
 | `tokenEnv` | `""` | env var holding a service token, for an upstream API without password login |
 | `serverFile` | `null` | where `setup` copied the upstream server in the project (`<tests.ui.dir>/runbooks-upstream.mjs`) |
@@ -153,7 +152,7 @@ Errors the loader raises:
 
 ## Sources
 
-Each `entries` or `requirements` item is one source. Every source accepts `root`, a folder relative to the project root (for a sibling repo: `"../api"`). Ids from a rooted source keep the root in their `file` (`../api/src/app/...`), and `slices` globs match that same path.
+Each `entries` or `requirements` item is one source. Every source accepts `root`, a folder of the project relative to its root (for a monorepo: `"apps/api"`). Ids from a rooted source keep the root in their `file` (`apps/api/src/app/...`), and `slices` globs match that same path. An API in another repository is never a source: CI checks out this repository alone, so the source would never run there (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`).
 
 | `extractor` | Fields | Produces |
 |---|---|---|
@@ -164,3 +163,10 @@ Each `entries` or `requirements` item is one source. Every source accepts `root`
 Globs support `*` (inside one folder) and `**` (any depth). `[`, `]`, `(`, `)` are literal characters.
 
 A source whose `root` does not exist is skipped with a warning; the others still count.
+
+Warnings the loader prints for paths outside the project (from runbooks 2.0 the first three are config errors):
+
+- `entries[<n>]: root "<root>" is outside the project, so its CI never reads it (docs/adr/0005). /runbooks:settings sources moves its ids to calls. ...`
+- `slices.<name>: glob "<glob>" is outside the project and never matches a change (docs/adr/0005). ...`
+- `tests.<surface>.root "<root>" is outside the project (docs/adr/0005). ...`
+- `upstream.root is no longer read (docs/adr/0005); /runbooks:settings upstream removes it`

@@ -17,7 +17,8 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown } from './lib/format.mjs'
+import { moveToCalls } from './lib/move-to-calls.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
 
@@ -35,6 +36,9 @@ Commands:
                 upstream.schema set, checks each JSON response against the OpenAPI schema
   upstream      [--port n] [--mode mocked|live|record] [--runbook id] [--step Sxx] starts the upstream
                 server from the config in the foreground and prints its address; stop it with Ctrl+C
+  move-to-calls [--source n] [--write] moves the endpoint ids of an upstream API in another repository
+                from covers.entries to calls (docs/adr/0005): the ids of entries[n], or without --source the
+                orphan ids shaped "METHOD /path". A dry run unless --write, which edits only those two keys
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
                 and prints its address; stop it with Ctrl+C
 
@@ -43,7 +47,7 @@ Global options:
   --config <file>  config path relative to the root (default: docs/runbooks/runbooks.config.json)
   --json           print JSON instead of Markdown
 
-Read-only: prints to stdout, warnings to stderr. Exit 0 on success, 2 on error.
+Read-only, except move-to-calls --write: prints to stdout, warnings to stderr. Exit 0 on success, 2 on error.
 `
 
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`
@@ -147,7 +151,14 @@ function commandFixtures(root, config, options, positionals) {
   return options.json ? json(result) : fixturesMarkdown(result)
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures']
+function commandMoveToCalls(root, config, options) {
+  const source = typeof options.source === 'string' ? options.source : undefined
+  if (options.source !== undefined && source === undefined) throw new Error('--source needs the index of an entries source')
+  const plan = moveToCalls(root, config, { source, write: options.write === true })
+  return options.json ? json(plan) : moveToCallsMarkdown(plan)
+}
+
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls']
 
 export function run(argv) {
   const stderr = []
@@ -162,13 +173,14 @@ export function run(argv) {
     }
     const root = path.resolve(typeof options.root === 'string' ? options.root : process.cwd())
     const config = loadConfig(root, typeof options.config === 'string' ? options.config : undefined)
-    const warnings = []
+    const warnings = ['list', 'coverage', 'entries', 'requirements'].includes(command) ? [...config.warnings] : []
     let stdout
     if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
     else if (command === 'junit') stdout = commandJunit(root, config, options, positionals)
     else if (command === 'fixtures') stdout = commandFixtures(root, config, options, positionals)
+    else if (command === 'move-to-calls') stdout = commandMoveToCalls(root, config, options)
     else stdout = commandItems(root, config, options, command, warnings)
     if (command === 'list' || command === 'coverage') {
       const copied = copiedServerWarning(root, config, VERSION)

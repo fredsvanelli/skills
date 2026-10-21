@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './lib/config.mjs'
 import { runbooksView, runbookView, historyView, reportView, coverageView } from './lib/explore.mjs'
+import { run } from './runbooks.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
 const TODAY = { today: '2026-10-20' }
@@ -144,12 +145,18 @@ test('runbooksView runs no requirement source', () => withProject(({ root, confi
   assert.equal(fs.existsSync(path.join(root, 'ran.txt')), false)
 }, (raw) => { raw.requirements = [{ extractor: 'command', command: 'echo ran > ran.txt; echo "[]"' }] }))
 
-test('runbooksView returns the entry-source warnings and leaves runbook problems out', () => withProject(({ root, config }) => {
+test('runbooksView returns the config and entry-source warnings and leaves runbook problems out', () => withProject(({ root, config }) => {
   const view = runbooksView(root, config, TODAY)
-  assert.equal(view.warnings.length, 1)
-  assert.match(view.warnings[0], /root "\.\.\/gone" does not exist/)
-  assert.deepEqual(runbooksView(root, { ...config, entries: config.entries.slice(0, 1) }, TODAY).warnings, [])
+  assert.deepEqual(view.warnings.slice(0, config.warnings.length), config.warnings)
+  assert.equal(view.warnings.length, config.warnings.length + 1)
+  assert.match(view.warnings.at(-1), /root "\.\.\/gone" does not exist/)
+  assert.deepEqual(runbooksView(root, { ...config, warnings: [], entries: config.entries.slice(0, 1) }, TODAY).warnings, [])
 }, (raw) => { raw.entries.push({ extractor: 'next-app-router', root: '../gone', glob: '**/page.tsx' }) }))
+
+test('coverageView returns the config warnings with the source warnings', () => withProject(({ root, config }) => {
+  assert.match(config.warnings.join('\n'), /entries\[1\]: root "\.\.\/api" is outside the project/)
+  assert.deepEqual(coverageView(root, config).result.warnings, config.warnings)
+}))
 
 test('a partial report newer than last_run leaves the row unchanged and shows in the history', () => withProject(({ root, config }) => {
   const name = '2026-10-15-1200-billing.issue-invoice.md'
@@ -167,6 +174,7 @@ test('runbookView', () => withProject(({ root, config }) => {
   const view = runbookView(root, config, 'billing.issue-invoice', TODAY)
   assert.equal(view.upstreamFromConfig, true)
   assert.equal(view.path, 'docs/runbooks/billing/issue-invoice.md')
+  assert.deepEqual(view.calls, [])
   assert.deepEqual(view.stepStates, {})
   assert.equal(view.reportOnDisk, true)
 }))
@@ -206,17 +214,32 @@ test('coverageView sums surfaces per slice and filters by slice', () => withProj
     { name: '(no slice)', covered: 0, total: 2 },
   ])
   assert.equal(view.scope, 'overall')
-  const billing = coverageView(root, config, 'billing')
+  const billing = coverageView(root, config, { slice: 'billing' })
   assert.deepEqual(ids(billing.result.entries.uncovered), ['GET /admin/invoices'])
   assert.deepEqual(billing.result.groups.map((g) => g.name), ['billing'])
-  assert.deepEqual(ids(coverageView(root, config, '(no slice)').result.entries.uncovered).sort(), ['/', '/settings'])
+  assert.deepEqual(ids(coverageView(root, config, { slice: '(no slice)' }).result.entries.uncovered).sort(), ['/', '/settings'])
 }))
 
 test('coverageView with a slice counts only that slice in result.entries', () => withProject(({ root, config }) => {
-  const { entries } = coverageView(root, config, 'billing').result
+  const { entries } = coverageView(root, config, { slice: 'billing' }).result
   assert.deepEqual({ ...entries, uncovered: ids(entries.uncovered) }, { total: 5, covered: 2, pending: 2, planned: 0, uncovered: ['GET /admin/invoices'] })
-  const none = coverageView(root, config, '(no slice)').result.entries
+  const none = coverageView(root, config, { slice: '(no slice)' }).result.entries
   assert.deepEqual([none.total, none.covered, none.pending, none.planned, none.uncovered.length], [2, 0, 0, 0, 2])
-  const nothing = coverageView(root, config, 'nope').result.entries
+  const nothing = coverageView(root, config, { slice: 'nope' }).result.entries
   assert.deepEqual(nothing, { total: 0, covered: 0, pending: 0, planned: 0, uncovered: [] })
+}))
+
+test('coverageView takes the filters of runbooks.mjs coverage and reports the same numbers', () => withProject(({ root, config }) => {
+  const totals = ({ total, covered, pending, planned, uncovered }) => ({ total, covered, pending, planned, uncovered: ids(uncovered) })
+  for (const filters of [{ path: 'src/**' }, { feature: 'invoices' }, { capability: 'billing' }]) {
+    const [key, value] = Object.entries(filters)[0]
+    const cli = JSON.parse(run(['coverage', `--${key}`, value, '--root', root, '--json']).stdout)
+    const view = coverageView(root, config, filters)
+    assert.equal(view.scope, cli.scope)
+    assert.deepEqual(totals(view.result.entries), totals(cli.entries), key)
+    assert.deepEqual(view.result.groups.map((g) => [g.name, g.covered, g.total]), cli.groups.map((g) => [g.name, g.covered, g.total]), key)
+    assert.deepEqual(view.slices, coverageView(root, config).slices, 'the side list stays overall')
+  }
+  assert.equal(coverageView(root, config, { path: 'src/**' }).result.entries.total, 6)
+  assert.equal(coverageView(root, config).result.entries.total, 9)
 }))

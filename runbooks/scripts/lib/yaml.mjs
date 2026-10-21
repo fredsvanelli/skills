@@ -13,7 +13,7 @@ export function splitFrontmatter(text) {
   return { yaml: match[1], body: match[2] }
 }
 
-function stripComment(line) {
+export function stripComment(line) {
   let quote = null
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
@@ -171,7 +171,7 @@ function parseBlock(lines, start, indent) {
   return [result, i]
 }
 
-function flowDepth(text) {
+export function flowDepth(text) {
   let depth = 0
   let quote = null
   for (const char of text) {

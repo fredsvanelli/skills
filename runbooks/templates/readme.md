@@ -9,6 +9,8 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 - `<capability>/<flow>.md`: one runbook. Its id is `<capability>.<flow>`.
 - `_runs/`: one report per execution; `/runbooks:ui` shows them. Local only: Git ignores its contents.
 - `_coverage/`: the latest coverage report, overall and per slice. Local only: Git ignores its contents.
+- `_fixtures/`: the responses `mocked` runbooks get from the upstream server, one folder per runbook.
+- `_contract/openapi.json`: when the upstream API lives in another repository, the OpenAPI document it publishes, brought in by this project's CI. Runbooks list the operations they reach in `calls`, which never count as coverage.
 - `runbooks.config.json`: project settings for the commands.
 
 ## Lifecycle

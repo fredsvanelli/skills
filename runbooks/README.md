@@ -20,6 +20,8 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 
 A `ui` runbook reaches its upstream API in one of two modes. In `live` mode, it calls the real API with test data. In `mocked` mode, the plugin's upstream server serves fixtures, and the app points at that server through the env var named in `upstream.urlEnv`. The project default is `upstream.mode` in the config, and a runbook can override it with `upstream:`. A mocked runbook proves what the screen shows and sends. It never covers an endpoint. See [upstream mode](skills/runbooks/references/upstream.md).
 
+When the upstream API lives in another repository, each repository has its own runbooks install and neither reads the other's files. The front lists the operations its screens reach in `calls`, which never count as coverage, and keeps the OpenAPI document the API publishes as `upstream.schema`. The API's install covers its endpoints. See [ADR 0005](docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md).
+
 ## Install
 
     claude plugin marketplace add fredsvanelli/skills
