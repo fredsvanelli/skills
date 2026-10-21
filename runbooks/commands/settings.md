@@ -50,7 +50,7 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `git` | `git.base`, `git.protected`, `git.messageFormat` |
 | `commits` | `commits.runbooks`, `commits.setup` |
 | `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `tokenEnv`, `serverFile`, and the obsolete `root`, which this group removes. Only with `ui` |
-| `roles` | `roles.enabled`. Turns role tracking on with the flow of `setup.md`; it does not turn it off |
+| `roles` | `roles.enabled`. Turns role tracking on with the flow of `setup.md`; it does not turn it off. When tracking is already on, choosing the group shows the current value and changes nothing |
 | `stale` | `staleDays` |
 | `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in `.mcp.json`. Only with `ui` |
 
@@ -79,7 +79,7 @@ Some changes reach past their own key. Work out each one from the table below, a
 | a viewport renamed or removed | list the runbooks that cite it in `viewports`, in a `Viewports:` line or in a `design` key `<name>.<viewport>`; offer to apply the rename to them in the same write |
 | an account role renamed or removed | list the runbooks that cite it in `roles` or `As:`; offer to apply the rename to them in the same write. With tracking on, point to `/runbooks:roles:update` (rename) and `/runbooks:roles:delete` (remove), which update the registry, the runbooks and the fixtures together, and change nothing here |
 | `roles.enabled` becomes true | run the role flow of `setup.md`: step 1 (role sources), the "Track roles?" follow-up questions of step 2 (found roles, then the matrix), and the Roles bullet of step 3 (write `roles.json` and the config, make every `accounts` key a role, `enable-roles` dry run, then `--write` after a yes). Add `roles.json` to the write list for the `setup` commit and the changed runbooks for the `runbooks` commit |
-| `roles.enabled` becomes false | refuse and write nothing for this key: "This version does not support turning role tracking off." Keep `roles.json` and the runbooks as they are |
+| `roles.enabled` becomes false, including a user who picks `roles` while tracking is on and asks to turn it off | refuse and write nothing for this key: "This version does not support turning role tracking off." Keep `roles.json` and the runbooks as they are |
 | `mcp.secretsFile` or `paths.evidence` | rewrite the arguments of the two Playwright servers in `.mcp.json`; confirm the secrets file is ignored with `git check-ignore -q <file>`, and stop when it is not. A new `paths.evidence` must be ignored too |
 | `mcp.headless` or `mcp.headed` | rename the server in `.mcp.json` |
 | `upstream.mode` | list the `ui` runbooks whose effective mode changes: those with no `upstream:` in their frontmatter, whose `upstream` in the list differs from the new default. Offer `/runbooks:update <id>` for each, because `update` records or deletes the fixtures and rewrites the steps (`references/upstream.md`, Changing a runbook's mode). When the new default is `mocked`, say that endpoints then count only through `live` runbooks. When it is `live`, say that the fixtures stay on disk until `update` deletes them |
