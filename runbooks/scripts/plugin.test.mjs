@@ -59,6 +59,8 @@ test('templates parse', () => {
   assert.equal(parseYaml(placeholder.yaml).status, 'placeholder')
 })
 
+const ROLES_COMMANDS = ['create', 'delete', 'list', 'manage-permissions', 'update']
+
 test('all thirteen commands exist and none is a stub', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/*.md').map((rel) => path.basename(rel, '.md'))
   assert.deepEqual(commands, ['audit-runbooks', 'check', 'coverage', 'create', 'list', 'map', 'run', 'settings', 'setup', 'to-test', 'ui', 'update', 'upgrade'])
@@ -69,12 +71,25 @@ test('all thirteen commands exist and none is a stub', () => {
   }
 })
 
+test('all five roles commands exist and none is a stub', () => {
+  const commands = findFiles(PLUGIN_ROOT, 'commands/roles/*.md').map((rel) => path.basename(rel, '.md'))
+  assert.deepEqual(commands, ROLES_COMMANDS)
+  for (const name of commands) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, `commands/roles/${name}.md`), 'utf8')
+    assert.doesNotMatch(text, /Not implemented yet/, `roles/${name}.md is still a stub`)
+    assert.match(text, /^## Parameters$/m, `roles/${name}.md explains its parameters`)
+  }
+})
+
 test('every command is listed in the skill table and in both READMEs', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/*.md').map((rel) => path.basename(rel, '.md'))
   for (const doc of ['skills/runbooks/SKILL.md', 'README.md', 'templates/readme.md']) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, doc), 'utf8')
     for (const name of commands) {
       assert.match(text, new RegExp(`/runbooks:${name}\\b`), `${doc} lists ${name}`)
+    }
+    for (const name of ROLES_COMMANDS) {
+      assert.match(text, new RegExp(`/runbooks:roles:${name}\\b`), `${doc} lists roles:${name}`)
     }
   }
 })

@@ -26,6 +26,11 @@ Each command file holds the full procedure. When the user asks for one of these 
 | measure coverage | `/runbooks:coverage` | `${CLAUDE_PLUGIN_ROOT}/commands/coverage.md` |
 | open a local page with capabilities, runbooks, run history and coverage | `/runbooks:ui` | `${CLAUDE_PLUGIN_ROOT}/commands/ui.md` |
 | update the installed runbooks plugin to its latest version | `/runbooks:upgrade` | `${CLAUDE_PLUGIN_ROOT}/commands/upgrade.md` |
+| register a new role with its parents, account and permissions | `/runbooks:roles:create` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/create.md` |
+| change a role's description, parents or account, or rename it | `/runbooks:roles:update` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/update.md` |
+| remove a role from the registry, the config and the runbooks that cite it | `/runbooks:roles:delete` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/delete.md` |
+| list the roles, or show one with its effective permissions | `/runbooks:roles:list` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/list.md` |
+| change what a role may do on each capability/feature key and mark the affected runbooks for review | `/runbooks:roles:manage-permissions` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/manage-permissions.md` |
 
 Before calling feature work done, run `list --affected` and then `run` on what it returns.
 

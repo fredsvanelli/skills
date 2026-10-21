@@ -17,6 +17,13 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:coverage` | coverage report, overall or per capability, feature, slice or path |
 | `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
 | `/runbooks:upgrade` | updates the installed plugin to the latest version from its marketplace |
+| `/runbooks:roles:create` | registers a role with its parents, account and permissions |
+| `/runbooks:roles:update` | changes a role's description, parents or account, or renames it |
+| `/runbooks:roles:delete` | removes a role from the registry, the config and the runbooks that cite it |
+| `/runbooks:roles:list` | lists the roles, or shows one with its effective permissions |
+| `/runbooks:roles:manage-permissions` | changes what a role may do on each capability/feature key and marks the runbooks the change reaches for review |
+
+With `roles.enabled` on, the project keeps a role registry in `roles.json` inside the runbooks folder. A runbook lists the roles it covers, or `roles: all` for every registered role, and each run, script and audit pass then repeats once per role, with the expected outcome per action (`allowed`, `read-only`, `hidden`, `denied` or `partial`). Steps that do not apply to a role, or a role without a test account, get their own states instead of failing. Changing a role or its permissions marks the runbooks it reaches with a `review` reason, so the next audit looks at them again. With the option off, everything behaves as before. Setup and settings turn it on. See Roles in [config](skills/runbooks/references/config.md) and in [format](skills/runbooks/references/format.md).
 
 A `ui` runbook reaches its upstream API in one of two modes. In `live` mode, it calls the real API with test data. In `mocked` mode, the plugin's upstream server serves fixtures, and the app points at that server through the env var named in `upstream.urlEnv`. The project default is `upstream.mode` in the config, and a runbook can override it with `upstream:`. A mocked runbook proves what the screen shows and sends. It never covers an endpoint. See [upstream mode](skills/runbooks/references/upstream.md).
 

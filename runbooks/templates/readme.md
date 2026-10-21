@@ -38,3 +38,8 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 | `/runbooks:settings` | changes part of the config, such as the test library, the design reference or the commit policy |
 | `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
 | `/runbooks:upgrade` | updates the installed plugin to its latest version |
+| `/runbooks:roles:create` | registers a role with its parents, account and permissions |
+| `/runbooks:roles:update` | changes a role's description, parents or account, or renames it |
+| `/runbooks:roles:delete` | removes a role from the registry, the config and the runbooks that cite it |
+| `/runbooks:roles:list` | lists the roles, or shows one with its effective permissions |
+| `/runbooks:roles:manage-permissions` | changes what a role may do on each capability/feature key and marks the runbooks the change reaches for review |
