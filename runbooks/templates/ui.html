@@ -16,7 +16,7 @@
     --sans: 'Geist', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  body { display: flex; flex-direction: column; margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
   ::selection { background: color-mix(in srgb, var(--accent) 40%, transparent); }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -31,7 +31,7 @@
   header nav a:hover { color: var(--fg); text-decoration: none; }
   header nav a.on { color: var(--fg); border-bottom-color: var(--accent); }
 
-  .layout { display: flex; min-height: calc(100vh - 60px); }
+  .layout { flex: 1; display: flex; }
   .side { width: 220px; flex-shrink: 0; border-right: 1px solid var(--line); padding: 24px 14px; }
   .side-inner { position: sticky; top: 84px; }
   .side .label { padding: 0 12px 12px; color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
@@ -176,6 +176,9 @@
   input[type=search] { display: block; width: 100%; max-width: 340px; margin-bottom: 12px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); font: 14px var(--mono); outline: none; }
   input[type=search]::placeholder { color: var(--muted); }
   input[type=search]:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+
+  footer { padding: 14px 28px; border-top: 1px solid var(--line); text-align: right; color: var(--muted); font: 13px var(--mono); opacity: .7; }
+  footer a { color: inherit; }
 </style>
 </head>
 <body>
@@ -190,6 +193,7 @@
   <aside class="side"><div class="side-inner" id="side"></div></aside>
   <main><div class="container" id="view"></div></main>
 </div>
+<footer>created by <a href="https://fredvanelli.dev" target="_blank" rel="noopener">Fred Vanelli</a></footer>
 <script>
   // Every value from the server goes through textContent, except the fields that renderMarkdown
   // already escaped on the server: html, actions, request, expected and sectionsHtml (see setHtml).
