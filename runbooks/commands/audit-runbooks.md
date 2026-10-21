@@ -77,7 +77,7 @@ Registry against code, once per audit, over the code the registry's `found` sour
 | Check | Finding |
 |---|---|
 | a role the code defines that `roles.json` does not register | `role-missing` |
-| a registered role whose `found` sources no longer show it | `role-gone` |
+| a registered role whose `found` sources no longer show it. Never `anonymous`, which is built in and has no `found` sources | `role-gone` |
 
 Runbooks against the matrix, for each runbook:
 

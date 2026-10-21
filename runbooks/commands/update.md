@@ -117,7 +117,7 @@ Then:
 - `calls`: the same for the operations of an upstream API in another repository. An id of such an API still in `covers.entries` moves to `calls`;
 - `sources`: append the change's source;
 - `design`: the references from step 3 added or replaced, the ones of screens no step reaches any more removed, and the `Design:` lines of the steps that end on them;
-- `roles`, with role tracking on: `all` when the frontmatter has an old account list (`[admin]`) or none. The role lines and `Roles:` lines from step 3 are written in each step, and each `As:` line they replace is removed;
+- `roles`, with role tracking on: `all` when the frontmatter has no `roles`. An explicit list such as `[admin]` is not turned into `all` on its own: ask with `AskUserQuestion` whether it is a deliberate subset, keep it on a yes and convert it to `all` only on a no. The role lines and `Roles:` lines from step 3 are written in each step, and each `As:` line they replace is removed;
 - `review`, with role tracking on: ask with `AskUserQuestion`, per role, whether the Expected lines written or kept are right. Once the user confirms every role, clear the key with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id> --clear` as a dry run, show what it would do, ask, and then run it again with `--write`. When the user confirms only some roles, the key stays and the summary names the roles still to confirm. Clearing `review` never touches `last_run.outdated`, which follows the last bullet of this list;
 - `viewports`: the answer from step 3, when it changed; a size the config lacks goes into the config `viewports`, as in `create`;
 - "Not covered": add what the surface cannot show about the change, and remove what a step now proves;

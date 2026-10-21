@@ -43,7 +43,7 @@ Slice and path filters apply to entries only; requirements have no file to slice
 
 ## Report
 
-`_coverage/overall.md` without a filter; `_coverage/<scope>.md` with one, where scope is `capability-x`, `feature-y`, `slice-x`, or `path-` plus the glob with every character outside `[a-z0-9]` turned into `-`. Each report is overwritten and stays local: `_coverage/` is ignored by Git.
+`_coverage/overall.md` without a filter; `_coverage/<scope>.md` with one, where scope is `capability-x`, `feature-y`, `slice-x`, `role-r` (role tracking on, `--role r`), or `path-` plus the glob with every character outside `[a-z0-9]` turned into `-`. Each report is overwritten and stays local: `_coverage/` is ignored by Git.
 
 The report has two parts, kept apart:
 
