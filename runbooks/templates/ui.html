@@ -80,8 +80,7 @@
   td { padding: 18px 20px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); vertical-align: middle; }
   tbody tr:last-child td { border-bottom: 0; }
   tbody tr.link { cursor: pointer; }
-  tbody tr.link:hover td, tbody tr.sel td { background: color-mix(in srgb, var(--fg) 5%, transparent); }
-  tbody tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  tbody tr.link:hover td { background: color-mix(in srgb, var(--fg) 5%, transparent); }
   tr.stale td, tr.unc td { background: color-mix(in srgb, var(--failed) 10%, transparent); }
   tr.stale td:first-child, tr.unc td:first-child { box-shadow: inset 3px 0 0 var(--failed); }
   tr.stale.link:hover td { background: color-mix(in srgb, var(--failed) 14%, transparent); }
@@ -159,16 +158,11 @@
   .step .exp { padding: 10px 14px; border-radius: 8px; background: color-mix(in srgb, var(--fg) 4%, transparent); font-size: 14px; }
   .step .exp .block-label { display: block; margin-bottom: 2px; }
 
-  .split { display: flex; gap: 24px; align-items: flex-start; }
-  .split > .runs { flex: 1; min-width: 0; }
-  .split td { padding: 14px 16px; font: 14px var(--mono); white-space: nowrap; }
-  .split td .muted { font-size: 13px; }
-  .drawer { width: 52%; flex-shrink: 0; padding: 22px 22px 28px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
-  .drawer .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .drawer .close { color: var(--muted); font: 16px var(--mono); }
-  .drawer .close:hover { color: var(--fg); text-decoration: none; }
+  .runs td { padding: 14px 16px; font: 14px var(--mono); white-space: nowrap; }
+  .runs td .muted { font-size: 13px; }
+  .report { padding: 22px 22px 28px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
   .report-sections { overflow-x: auto; }
-  .drawer td, .drawer th { padding: 10px 12px; }
+  .report td, .report th { padding: 10px 12px; }
   .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin: 14px 0 20px; color: var(--muted); font: 13px var(--mono); }
   .meta b { color: var(--fg); font-weight: 500; }
 
@@ -433,10 +427,11 @@
 
   // Runbook detail
 
-  function detailHeader(rb, tab, staleDays) {
+  function detailHeader(rb, tab, staleDays, reportName) {
     const capability = capabilityOf(rb.id)
     const crumbs = el('div', 'crumbs', link(`#/runbooks/${routeName(capability)}`, null, capability), ' / ')
-    if (tab === 'history') crumbs.append(link(runbookHash(rb.id), null, rb.flow), ' / ', el('b', null, 'history'))
+    if (reportName) crumbs.append(link(runbookHash(rb.id), null, rb.flow), ' / ', link(runbookHash(rb.id, 'history'), null, 'history'), ' / ', el('b', null, runStamp(reportName).run))
+    else if (tab === 'history') crumbs.append(link(runbookHash(rb.id), null, rb.flow), ' / ', el('b', null, 'history'))
     else crumbs.append(el('b', null, rb.flow))
 
     const badges = el('div', 'badges')
@@ -543,21 +538,16 @@
         result,
       )
       tr.className = 'link'
-      tr.dataset.name = run.name
       tr.addEventListener('click', () => { location.hash = reportHash(rb.id, run.name) })
       return tr
     })
-    const list = el('div', 'runs', runs.length === 0
+    return el('div', 'runs', runs.length === 0
       ? el('p', 'none', 'No runs on this machine yet.')
       : table(['Date', 'Commit', 'Result'], rows))
-    return { list, rows }
   }
 
-  function reportPanel(rb, report) {
+  function reportPanel(report) {
     const stamp = runStamp(report.name)
-    const close = link(runbookHash(rb.id, 'history'), 'close', '✕')
-    close.title = 'Close the report'
-    close.setAttribute('aria-label', 'Close the report')
     const meta = el('div', 'meta', el('span', null, report.result ? badge(report.result, stateClass(report.result)) : el('span', null, 'no result')))
     if (report.partial) meta.append(el('span', null, 'partial'))
     const field = (label, value) => el('span', null, `${label} `, el('b', null, value ?? '-'))
@@ -568,59 +558,26 @@
     const body = report.sectionsHtml
       ? setHtml(el('div', 'prose report-sections'), report.sectionsHtml)
       : el('p', 'none', 'This report has no step table and no sections.')
-    return [el('div', 'top', el('h3', null, `Run ${stamp.run}`), close), meta, body]
+    return el('div', 'report', el('h3', null, `Run ${stamp.run}`), meta, body)
   }
 
-  // The history view stays on screen while the hash only changes the selected report.
-  let history = null
-
   async function runbookPage(id, tab, reportName, stale) {
-    if (tab === 'history' && history?.id === id) return history.select(reportName)
-    history = null
-    const [list, detail, runs] = await Promise.all([
+    const [list, detail, runs, report] = await Promise.all([
       settled(api('/api/runbooks')),
       settled(api(`/api/runbook/${enc(id)}`)),
-      settled(tab === 'history' ? api(`/api/runbook/${enc(id)}/runs`) : null),
+      settled(tab === 'history' && !reportName ? api(`/api/runbook/${enc(id)}/runs`) : null),
+      settled(reportName ? api(`/api/runs/${enc(reportName)}`) : null),
     ])
     if (stale()) return
     if (list.value) capabilitiesSide(list.value, capabilityOf(id))
     else side.replaceChildren()
-    const failed = [detail, runs, list].find((r) => r.error)
-    if (failed) return showError(failed.error)
+    const failed = [detail, runs, report, list].find((r) => r.error)
+    if (failed) return showError(failed.error, view, failed === report ? 'Could not load this report' : undefined)
     const rb = detail.value
-    const header = detailHeader(rb, tab, list.value.staleDays)
-    if (tab === 'runbook') {
-      view.replaceChildren(...header, metadataPanel(rb), ...bodyNodes(rb))
-      return
-    }
-
-    const { list: runsList, rows } = historyList(rb, runs.value)
-    const drawer = el('div', 'drawer')
-    drawer.hidden = true
-    const split = el('div', 'split', runsList, drawer)
-    const count = runs.value.runs.length
-    view.replaceChildren(...header, el('div', 'sub', `${plural(count, 'run')} on this machine`), split)
-
-    let panelToken = 0
-    const select = async (name) => {
-      for (const tr of rows) tr.className = `link${tr.dataset.name === name ? ' sel' : ''}`
-      const mine = ++panelToken
-      if (!name) {
-        drawer.hidden = true
-        drawer.replaceChildren()
-        return
-      }
-      drawer.hidden = false
-      drawer.replaceChildren(el('p', 'message', 'Loading the report…'))
-      try {
-        const report = await api(`/api/runs/${enc(name)}`)
-        if (mine === panelToken) drawer.replaceChildren(...reportPanel(rb, report))
-      } catch (error) {
-        if (mine === panelToken) showError(error, drawer, 'Could not load this report')
-      }
-    }
-    history = { id, select }
-    await select(reportName)
+    const header = detailHeader(rb, tab, list.value.staleDays, reportName)
+    if (tab === 'runbook') view.replaceChildren(...header, metadataPanel(rb), ...bodyNodes(rb))
+    else if (reportName) view.replaceChildren(...header, reportPanel(report.value))
+    else view.replaceChildren(...header, el('div', 'sub', `${plural(runs.value.runs.length, 'run')} on this machine`), historyList(rb, runs.value))
   }
 
   // Coverage page
@@ -781,23 +738,17 @@
     setMenu(page === 'coverage' ? 'coverage' : 'runbooks')
     const mine = ++token
     const stale = () => mine !== token
-    const isHistory = page === 'runbook' && a && b === 'history' && parts.length <= 4
-    if (!isHistory) history = null
-    const scroll = !(isHistory && history?.id === a)
     try {
       if (parts.includes(null) || parts.includes('')) notFound()
       else if (page === 'runbooks' && parts.length <= 2) await runbooksPage(a === undefined ? null : dataName(a), stale)
       else if (page === 'runbook' && a && parts.length === 2) await runbookPage(a, 'runbook', null, stale)
-      else if (isHistory) await runbookPage(a, 'history', c ?? null, stale)
+      else if (page === 'runbook' && a && b === 'history' && parts.length <= 4) await runbookPage(a, 'history', c ?? null, stale)
       else if (page === 'coverage' && parts.length <= 2) await coveragePage(a === undefined ? null : dataName(a), stale)
       else notFound()
     } catch (error) {
-      if (!stale()) {
-        history = null
-        showError(error)
-      }
+      if (!stale()) showError(error)
     }
-    if (scroll && !stale()) window.scrollTo(0, 0)
+    if (!stale()) window.scrollTo(0, 0)
   }
   window.addEventListener('hashchange', render)
   render()
