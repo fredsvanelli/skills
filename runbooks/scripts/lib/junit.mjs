@@ -1,32 +1,11 @@
 // Maps a JUnit XML report onto a runbook's steps; see docs/adr/0001.
 
-const STEP_HEADING = /^###\s+(S\d+)\.\s*(.*)$/
-const PARENTS_LINE = /^Parents:\s*(.*)$/
-const VIEWPORTS_LINE = /^Viewports:\s*(.*)$/
 const VIEWPORT_IN_NAME = /@\s*([a-z0-9][a-z0-9-]*)\s*$/i
 // S01 at the start of a word or after "test"/"test_": "S01 creates", "test_s01_creates", "testS01Creates".
 const STEP_IN_NAME = /(?:^|[^A-Za-z0-9]|test_?)(S\d{2,})(?![0-9])/i
 const BLOCKING = ['failed', 'blocked', 'blocked-by-parent']
 
-const nameList = (text) => text.split(',').map((p) => p.trim().replace(/`/g, '')).filter((p) => p && p !== 'none')
-
-export function parseSteps(body) {
-  const steps = []
-  for (const line of body.split('\n')) {
-    const heading = line.match(STEP_HEADING)
-    if (heading) {
-      steps.push({ step: heading[1], title: heading[2].trim(), parents: [], viewports: [] })
-      continue
-    }
-    const parents = line.match(PARENTS_LINE)
-    if (parents && steps.length > 0) {
-      steps.at(-1).parents = nameList(parents[1])
-    }
-    const viewports = line.match(VIEWPORTS_LINE)
-    if (viewports && steps.length > 0) steps.at(-1).viewports = nameList(viewports[1])
-  }
-  return steps
-}
+export { parseSteps } from './steps.mjs'
 
 const decode = (text) =>
   text
