@@ -190,10 +190,11 @@ test('upstreamOptions resolves the config and the flags', () => {
     port: 4321,
     mode: 'mocked',
     runbook: null,
+    role: null,
     step: null,
   })
-  const flags = upstreamOptions(dir, config, { port: '0', mode: 'record', runbook: 'billing.issue', step: 'S02' })
-  assert.deepEqual([flags.port, flags.mode, flags.runbook, flags.step], [0, 'record', 'billing.issue', 'S02'])
+  const flags = upstreamOptions(dir, config, { port: '0', mode: 'record', runbook: 'billing.issue', role: 'editor', step: 'S02' })
+  assert.deepEqual([flags.port, flags.mode, flags.runbook, flags.role, flags.step], [0, 'record', 'billing.issue', 'editor', 'S02'])
 })
 
 test('upstreamOptions rejects bad flags and a missing upstream block', () => {
@@ -202,6 +203,8 @@ test('upstreamOptions rejects bad flags and a missing upstream block', () => {
   assert.throws(() => upstreamOptions(dir, config, { port: '70000' }), /--port/)
   assert.throws(() => upstreamOptions(dir, config, { port: 'abc' }), /--port/)
   assert.throws(() => upstreamOptions(dir, config, { mode: 'fake' }), /--mode/)
+  assert.throws(() => upstreamOptions(dir, config, { role: 'Bad Role' }), /--role/)
+  assert.throws(() => upstreamOptions(dir, config, { role: true }), /--role/)
   const none = upstreamProject(null)
   assert.throws(() => upstreamOptions(none, configOf(none), {}), /the config has no upstream block\. Run \/runbooks:setup/)
 })

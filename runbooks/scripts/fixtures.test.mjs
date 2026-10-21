@@ -113,3 +113,26 @@ test('checkFixtures resolves $ref on responses and path items', () => {
   assert.deepEqual(checkFixtures([fx('a', '/a'), fx('b', '/b')], doc),
     ['a: body.code: expected integer, got string', 'b: body.code: expected integer, got string'])
 })
+
+test('loadFixtures reads @role folders at the runbook level and inside steps', () => {
+  const root = tmp({
+    'f/me.json': fixture('GET', '/me', 200, {}),
+    'f/@viewer/me.json': fixture('GET', '/me', 200, {}),
+    'f/S02/@viewer/me.json': fixture('GET', '/me', 200, {}),
+  })
+  const { fixtures, problems } = loadFixtures(root, 'f', { roles: ['anonymous', 'viewer'] })
+  assert.deepEqual(problems, [])
+  assert.deepEqual(fixtures.map((x) => [x.file, x.step, x.role]), [
+    ['f/me.json', null, null],
+    ['f/@viewer/me.json', null, 'viewer'],
+    ['f/S02/@viewer/me.json', 'S02', 'viewer'],
+  ])
+})
+
+test('loadFixtures reports role folders without tracking and unregistered roles', () => {
+  const root = tmp({ 'f/@editor/me.json': fixture('GET', '/me', 200, {}), 'f/S01/@ghost/me.json': fixture('GET', '/me', 200, {}) })
+  assert.deepEqual(loadFixtures(root, 'f').problems, ['f/@editor: role folders need role tracking', 'f/S01/@ghost: role folders need role tracking'])
+  const { fixtures, problems } = loadFixtures(root, 'f', { roles: ['anonymous', 'editor'] })
+  assert.deepEqual(problems, ['f/S01/@ghost: role ghost is not registered'])
+  assert.equal(fixtures.length, 1)
+})

@@ -10,14 +10,17 @@ export function fixturesDir(config, runbook) {
 }
 
 const STEP_DIR = /^S\d+$/
+const ROLE_DIR = /^@[a-z0-9][a-z0-9-]*$/
 
 // Reads every fixture file of a runbook: .json files in its folder (step null) and in S<nn> subfolders.
-export function loadFixtures(root, dir) {
+// An @<role> folder, at the runbook level or inside S<nn>, holds the fixtures of that role. With roles null
+// (role tracking off) a role folder is a problem; otherwise its role must be one of roles.
+export function loadFixtures(root, dir, { roles = null } = {}) {
   const fixtures = []
   const problems = []
   const base = path.resolve(root, dir)
   if (!fs.existsSync(base)) return { fixtures, problems }
-  const readDir = (folder, step) => {
+  const readDir = (folder, step, role = null) => {
     for (const name of fs.readdirSync(path.join(base, folder)).sort()) {
       if (!name.endsWith('.json')) continue
       const file = [dir.replace(/\/+$/, ''), folder, name].filter(Boolean).join('/')
@@ -36,15 +39,32 @@ export function loadFixtures(root, dir) {
         problems.push(`${file}: missing ${missing.join(', ')}`)
         continue
       }
-      fixtures.push({ file, step, request: data.request, response: data.response, source: data.source })
+      fixtures.push({ file, step, role, request: data.request, response: data.response, source: data.source })
+    }
+  }
+  const label = (folder) => `${dir.replace(/\/+$/, '')}/${folder}`
+  // Reads the @<role> folders directly inside parent ('' for the runbook level), for the given step.
+  const readRoles = (parent, step) => {
+    const entries = fs.readdirSync(path.join(base, parent), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !entry.name.startsWith('@')) continue
+      const folder = parent ? `${parent}/${entry.name}` : entry.name
+      const role = entry.name.slice(1)
+      if (!ROLE_DIR.test(entry.name)) problems.push(`${label(folder)}: not a role folder`)
+      else if (roles === null) problems.push(`${label(folder)}: role folders need role tracking`)
+      else if (!roles.includes(role)) problems.push(`${label(folder)}: role ${role} is not registered`)
+      else readDir(folder, step, role)
     }
   }
   const entries = fs.readdirSync(base, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
   readDir('', null)
+  readRoles('', null)
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    if (STEP_DIR.test(entry.name)) readDir(entry.name, entry.name)
-    else problems.push(`${dir.replace(/\/+$/, '')}/${entry.name}: not a step folder`)
+    if (!entry.isDirectory() || entry.name.startsWith('@')) continue
+    if (STEP_DIR.test(entry.name)) {
+      readDir(entry.name, entry.name)
+      readRoles(entry.name, entry.name)
+    } else problems.push(`${label(entry.name)}: not a step folder`)
   }
   return { fixtures, problems }
 }

@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { ROLE_NAME } from './roles.mjs'
+
 const MODES = ['mocked', 'live', 'record']
 
 // Turns the config's upstream block and the CLI flags into the options of createUpstreamServer, plus the port.
@@ -16,6 +18,9 @@ export function upstreamOptions(root, config, options) {
   }
   const mode = options.mode ?? upstream.mode
   if (!MODES.includes(mode)) throw new Error(`--mode must be one of ${MODES.join(', ')}`)
+  if (options.role !== undefined && !(typeof options.role === 'string' && ROLE_NAME.test(options.role))) {
+    throw new Error('--role must be a role name like editor')
+  }
   return {
     fixturesRoot: path.resolve(root, upstream.fixtures),
     target: upstream.baseUrl,
@@ -23,6 +28,7 @@ export function upstreamOptions(root, config, options) {
     port,
     mode,
     runbook: typeof options.runbook === 'string' ? options.runbook : null,
+    role: options.role ?? null,
     step: typeof options.step === 'string' ? options.step : null,
   }
 }
