@@ -10,3 +10,5 @@ ADR 0002 lets a `ui` runbook in a `frontend` stack cover the endpoints it cites.
 ## Consequences
 
 In a `frontend` stack whose default upstream mode is `mocked`, the endpoints from a sibling repo are covered only by `live` `ui` runbooks. `setup` says so when it recommends `mocked`, and the first `coverage` after a project switches to `mocked` shows endpoint coverage drop.
+
+For an upstream API in another repository, ADR 0005 replaces this: the front lists those endpoints in `calls`, and they are covered only in the API's own install.
