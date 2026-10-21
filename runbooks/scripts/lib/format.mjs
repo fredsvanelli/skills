@@ -123,7 +123,9 @@ export function junitMarkdown({ id, steps, result, extra, others }) {
   lines.push(`States: ${steps.map((s) => s.state).join(',')}`, '')
   if (missing.length > 0) lines.push(`Steps with no test: ${missing.join(', ')}`)
   if (duplicates.length > 0) lines.push(`Steps with more than one test: ${duplicates.join(', ')}`)
-  if (extra.length > 0) lines.push(`Tests for steps the runbook does not have: ${extra.map((e) => `${e.step} (${e.test})`).join('; ')}`)
+  if (extra.some((e) => e.reason)) {
+    lines.push(`Tests that match no step to run: ${extra.map((e) => `${e.step} (${e.test}): ${e.reason}`).join('; ')}`)
+  } else if (extra.length > 0) lines.push(`Tests for steps the runbook does not have: ${extra.map((e) => `${e.step} (${e.test})`).join('; ')}`)
   if (others.length > 0) {
     lines.push('', '### Other tests in the file', '', ...others.map((o) => `- ${o.name}: ${o.outcome}${o.seen ? `, ${o.seen}` : ''}`))
   }

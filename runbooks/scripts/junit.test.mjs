@@ -290,3 +290,30 @@ test('junitMarkdown does not list no-account and not-applicable rows as missing 
   const loud = junitMarkdown({ ...base, steps: [row('S01', 'editor', 'no-account'), row('S02', 'admin', 'blocked')] })
   assert.match(loud, /Steps with no test: S02 as admin/)
 })
+
+test('with roles, each extra test names why it maps to no row', () => {
+  const steps = parseSteps(`${ROLE_BODY}\n### S04. Approves\n\nParents: none\nRoles: admin\n`)
+  const cases = parseJunit(xmlOf([
+    'S01 lists as admin', 'S02 cancels as admin', 'S03 reloads as admin', 'S04 approves as admin', 'S01 lists as viewer',
+    'S01 lists', 'S01 lists as ghost', 'S01 lists as editor', 'S02 cancels as viewer', 'S04 approves as viewer', 'S09 other as admin',
+  ]))
+  const { extra } = stepStates(steps, cases, { roles: ['admin', 'viewer', 'editor'], noAccount: ['editor'] })
+  assert.deepEqual(extra.map((e) => [e.test, e.reason]), [
+    ['S01 lists', 'no " as <role>" suffix'],
+    ['S01 lists as ghost', 'ghost is not one of the runbook\'s roles'],
+    ['S01 lists as editor', 'editor has no account'],
+    ['S04 approves as viewer', 'S04 does not run for viewer'],
+    ['S09 other as admin', 'the runbook has no S09'],
+    ['S02 cancels as viewer', 'S02 is not-applicable for viewer'],
+  ])
+  const vp = stepStates(steps, parseJunit(xmlOf(['S01 lists as admin', 'S01 lists as admin @ tablet'])), { roles: ['admin'], viewports: ['desktop'] })
+  assert.deepEqual(vp.extra.map((e) => e.reason), ['no " @ <viewport>" suffix', 'tablet is not one of the runbook\'s viewports'])
+})
+
+test('junitMarkdown names the reason of each extra test with roles, and keeps the 1.5.0 line without them', () => {
+  const steps = parseSteps(ROLE_BODY)
+  const roles = stepStates(steps, parseJunit(xmlOf(['S01 lists as admin', 'S01 lists'])), { roles: ['admin'] })
+  assert.match(junitMarkdown({ id: 'x', ...roles }), /^Tests that match no step to run: S01 \(S01 lists\): no " as <role>" suffix$/m)
+  const plain = junitMarkdown({ id: 'x', ...stepStates(parseSteps(BODY), parseJunit(XML)) })
+  assert.match(plain, /^Tests for steps the runbook does not have: S06 \(S06 jest failure\); S07 \(S07 phpunit failure\); S09 \(S09 something else\)$/m)
+})

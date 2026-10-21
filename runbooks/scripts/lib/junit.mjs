@@ -121,17 +121,29 @@ export function stepStates(steps, cases, { waived = [], viewports = [], roles = 
     const { roles: only } = stepOf(step)
     return only.length === 0 || only.includes(role)
   }
-  const extraEntry = (step, role, viewport, test) =>
-    ({ step, ...(withRoles ? { role } : {}), ...(multi ? { viewport } : {}), test })
+  // With roles, each entry says why the test maps to no row; without them entries keep their 1.5.0 shape.
+  const extraEntry = (step, role, viewport, test, reason) =>
+    ({ step, ...(withRoles ? { role } : {}), ...(multi ? { viewport } : {}), test, ...(withRoles ? { reason } : {}) })
+  // Why a test of a known step maps to no row, or null when it maps to one.
+  const mismatch = (testCase, step, role, viewport) => {
+    if (withRoles && !role) {
+      const written = testCase.name.match(ROLE_IN_NAME)?.[1].toLowerCase()
+      return written ? `${written} is not one of the runbook's roles` : 'no " as <role>" suffix'
+    }
+    if (withRoles && noAccount.includes(role)) return `${role} has no account`
+    if (withRoles && !runsFor(step, role)) return `${step} does not run for ${role}`
+    if (multi && !viewport) return 'no " @ <viewport>" suffix'
+    if (multi && !viewports.includes(viewport)) return `${viewport} is not one of the runbook's viewports`
+    if (multi && !runsAt(step, viewport)) return `${step} does not run at ${viewport}`
+    return null
+  }
   for (const testCase of cases) {
     const step = stepOfTest(testCase)
     const viewport = multi ? viewportOfTest(testCase) : null
     const role = withRoles ? roleOfTest(testCase, roles) : null
-    const entry = () => extraEntry(step, role, viewport, testCase.name)
+    const reason = !step ? null : !known.has(step) ? `the runbook has no ${step}` : mismatch(testCase, step, role, viewport)
     if (!step) others.push(testCase)
-    else if (!known.has(step)) extra.push(entry())
-    else if (withRoles && (!role || noAccount.includes(role) || !runsFor(step, role))) extra.push(entry())
-    else if (multi && (!viewports.includes(viewport) || !runsAt(step, viewport))) extra.push(entry())
+    else if (reason) extra.push(extraEntry(step, role, viewport, testCase.name, reason))
     else byKey.set(keyOf(role, viewport, step), [...(byKey.get(keyOf(role, viewport, step)) ?? []), testCase])
   }
 
@@ -143,7 +155,7 @@ export function stepStates(steps, cases, { waived = [], viewports = [], roles = 
       const context = { role, noAccount: withRoles && noAccount.includes(role) }
       for (const { step, ...rest } of resolveRows(active, testsOf, waived, context)) {
         if (rest.state === 'not-applicable') {
-          for (const test of testsOf(step)) extra.push(extraEntry(step, role, viewport, test.name))
+          for (const test of testsOf(step)) extra.push(extraEntry(step, role, viewport, test.name, `${step} is not-applicable for ${role}`))
         }
         rows.push({ step, ...(withRoles ? { role } : {}), ...(multi ? { viewport } : {}), ...rest })
       }
