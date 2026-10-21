@@ -197,7 +197,7 @@ A step depends on another when the parent's failure invalidates the child's resu
 - The tree has no cycles.
 - With `viewports`, the tree runs once per viewport, in the frontmatter order. Each step runs only at the viewports its `Viewports:` line allows, and its parents must run at each of them. A parent's state counts only for its children at the same viewport.
 - With role tracking on, the tree runs once per role of the runbook, and inside each role once per viewport. Each step runs only for the roles its `Roles:` line allows. A parent's state counts only for its children of the same role and viewport.
-- A parent that passes with the outcome `denied`, `hidden` or `read-only` for a role closes the branch for that role: its children are `not-applicable` for that role, because their action is not available either. The children still run for the roles whose parent was `allowed` or `partial`.
+- A parent that passes with the outcome `denied`, `hidden` or `read-only` for a role closes the branch for that role: its children are `not-applicable` for that role, because their action is not available either. A `not-applicable` parent makes its children `not-applicable` for that role too, all the way down the branch. A parent that is `failed`, `blocked` or `blocked-by-parent` still makes the child `blocked-by-parent`, and that rule wins when both apply. The children still run for the roles whose parent was `allowed` or `partial`.
 
 ## Step states
 
@@ -208,9 +208,9 @@ Only run reports hold step states. With `viewports`, a step has one state per vi
 | `passed` | the expected result appeared |
 | `failed` | something else appeared; record what was seen, quoting the screen |
 | `blocked` | something outside the product is missing: data, an account, an integration; record what |
-| `blocked-by-parent` | a parent is not `passed` in this run; the step is not executed |
+| `blocked-by-parent` | a parent is not `passed` in this run; the step is not executed. With role tracking on, a `not-applicable` parent gives `not-applicable` instead |
 | `waived` | the user chose to skip it; record the reason in their words. On `api`, only when asked before the run: the test still runs, and its outcome is ignored |
-| `not-applicable` | role tracking on: a parent ended with `denied`, `hidden` or `read-only` for this role, so the step has nothing to do. It is neither a failure nor a block |
+| `not-applicable` | role tracking on: a parent ended with `denied`, `hidden` or `read-only` for this role, or is `not-applicable` for it, so the step has nothing to do. It is neither a failure nor a block |
 | `no-account` | role tracking on, `ui` only: the role has no entry in the config `accounts`, or its env var names are missing from `mcp.secretsFile`. Every step of that role's pass gets this state. The role stays in the runbook's `roles`. `anonymous` never gets it, and `api` runs never get it, because a script authenticates through the project's test helper |
 
 ## Placeholders

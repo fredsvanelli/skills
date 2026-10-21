@@ -53,7 +53,7 @@ With role tracking on (`config.md`, Roles), a runbook runs its steps once per ro
 - **`no-account`.** A `ui` role with no `accounts` entry, or whose env var names are missing from `mcp.secretsFile`, gets `no-account` for every step of its pass. The other roles still run, and the state does not make the run `blocked`. `anonymous` never gets it, and `api` runs never get it. Before the first step, `run` lists the roles that have no account.
 - **`--role editor,viewer`.** Runs only those roles. Like `--steps`, it makes the run partial: `status`, `last_run` and `review` stay unchanged.
 - **Review warning.** A runbook with a `review` entry runs anyway. `run` warns before the first step that its Expected may be out of date.
-- **States.** The state of a step is kept per step, role and viewport. A step that follows a `denied`, `hidden` or `read-only` outcome of its parent is `not-applicable` for that role, and the agent does not run it.
+- **States.** The state of a step is kept per step, role and viewport. A step that follows a `denied`, `hidden` or `read-only` outcome of its parent, or a parent that is `not-applicable`, is `not-applicable` for that role, all the way down the branch, and the agent does not run it. A parent that is `failed`, `blocked` or `blocked-by-parent` still makes the step `blocked-by-parent` (`format.md`, Dependency tree).
 - **Mocked runbooks.** Before each pass, `run` selects the role on the upstream server (`upstream.md`, "Control routes"), so the role's session and its 403s come from the `@<role>` fixtures.
 
 ## Design
@@ -102,7 +102,7 @@ Needs Node 20.12+ (`process.loadEnvFile`). Write `.runbooks/tmp/<run id>.mjs` us
 - with viewports, one browser context per viewport, sized as in "Viewports", running every block of that pass;
 - one block per step in run order, each wrapped in try/catch, saving a screenshot to `<paths.evidence>/<run id>/<step>.png` (`<run id>/<viewport>/<step>.png` with viewports) and printing one JSON line `{ "step", "viewport", "seen", "ok", "requestCount", "unmatched" }`, with `viewport` null when the runbook has none;
 - when the upstream server runs, before each step's block a `POST` of `{ step }` with `content-type: application/json` to `<RUNBOOKS_UPSTREAM_URL>/__runbooks/select` (the script posts `{ runbook, mode }` once before the first step, with the runbook's `upstream` mode), and at the end of the block, from `GET /__runbooks/state`, the number of entries in `requests` (`requestCount`) and the `unmatched` list in that step's JSON line (`[]` when none). Every select clears the request log, so only the counts read per step are valid. The agent applies the unmatched rule of `run.md`, step 4, to that list: a step with an entry is `blocked`, naming the request. A step skipped as `blocked-by-parent` has no count, and the rule ignores it. When every other step reports `requestCount` 0, the app points elsewhere: show `<urlEnv>=http://127.0.0.1:<port> <app.start>`, treat the results as not trustworthy and stop;
-- skip a step whose parent did not pass at the same viewport and print it as `blocked-by-parent`.
+- skip a step whose parent did not pass at the same viewport and print it as `blocked-by-parent`. With role tracking on, apply the parent rules of `run.md`, step 4, item 1, per role: a step after a closing outcome or a `not-applicable` parent is printed as `not-applicable`.
 
 Run it with `node .runbooks/tmp/<run id>.mjs`, read the JSON lines, and set the states from them. Delete the script after the report is written.
 
