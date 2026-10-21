@@ -184,7 +184,7 @@ Rules for what is saved:
 - With a role selected, the file goes in that role's folder (`@<role>/`) inside the folder it would use otherwise, the runbook's or the current step's. Without a role, it goes in the runbook's or the step's folder. A run records each role's pass under its own folder.
 - Each file is named from the method, the path and a hash of the query, and holds `request`, `response` and `source` (`recorded <date> from <upstream.baseUrl origin>`).
 - `set-cookie`, `authorization`, `cookie` and every header in `upstream.redactHeaders` are dropped, whatever the case. Transport headers (`content-length`, `content-encoding`, `transfer-encoding`, `connection`, `keep-alive`) are dropped too, and so are `vary` and every `access-control-*` header, because the server sends its own CORS headers in `mocked` mode.
-- A request that already has an equal fixture for the selected role writes nothing. A response that differs is saved in the current step's folder.
+- An equal fixture that the selected role would be served (in its role folder, the step folder or the runbook level) means nothing is written. A response that differs is saved in the current step's folder.
 - A `text/event-stream` response streams to the app and is not recorded.
 - With no runbook selected, nothing is written.
 - `request.query` holds the full query, so remove volatile keys such as a cache-buster (`_t`) from the file by hand. Otherwise the fixture never matches again.

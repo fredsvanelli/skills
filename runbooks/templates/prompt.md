@@ -13,6 +13,7 @@ Preconditions:
 <preconditions from the runbook>
 
 Steps:
+<With role tracking, leave out the steps that are not-applicable for this role, because a parent closed their branch. They are not in the reply.>
 <for each step, in run order:
 S01. <title>
 Parents: <parents>

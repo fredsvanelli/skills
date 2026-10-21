@@ -124,7 +124,7 @@ The report's `mode` is `test` and its `executor` is "the project's test command"
 
 Load the browser skill for Claude in Chrome when one is listed, then use the `mcp__claude-in-chrome__*` tools in a new tab.
 
-- Ask the user to sign in with the runbook's role before the first step, and again when the role changes.
+- Ask the user to sign in with the runbook's role before the first step, and again when the role changes. With role tracking on, a runbook has one pass per role, so the user signs in as each role in turn ("Roles" above).
 - Act only on URLs that start with `app.baseUrl`. A step that leads elsewhere is `blocked` with the URL recorded.
 - Screenshots go to `paths.evidence/<run id>/` when the tools can save them; otherwise describe the screen in the report.
 
