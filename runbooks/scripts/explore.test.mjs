@@ -122,6 +122,16 @@ test('deliveries: 30 days is not stale, outdated never makes it stale, deprecate
   assert.equal(row(runbooksView(root, { ...config, staleDays: 29 }, TODAY), 'deliveries.list-deliveries').stale, true)
 }))
 
+test('each row carries the effective upstream mode', () => withProject(({ root, config }) => {
+  const view = runbooksView(root, config, TODAY)
+  assert.equal(row(view, 'billing.cancel-invoice').upstream, 'live')
+  assert.equal(row(view, 'billing.issue-invoice').upstream, 'mocked')
+}, (raw, root) => {
+  raw.upstream = { mode: 'live', urlEnv: 'API_URL' }
+  const file = path.join(root, 'docs/runbooks/billing/issue-invoice.md')
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('status: active', 'upstream: mocked\nstatus: active'))
+}))
+
 test('a broken runbook lists its problems and has no coverage', () => withProject(({ root, config }) => {
   const broken = capability(runbooksView(root, config, TODAY), 'broken')
   assert.equal(broken.coverage, null)
