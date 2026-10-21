@@ -433,6 +433,13 @@ test('loadRunbooks keeps plain Expected bullets and reports an outcome line for 
   assert.equal(rb.roleOutcomes.status, undefined)
 })
 
+test('loadRunbooks reports an empty roles list when tracking is on', () => {
+  const dir = rolesCopy('billing/legacy.md', (text) => text.replace('roles: [admin]', 'roles: []'))
+  const rb = roleRunbook(dir, 'billing.legacy')
+  assert.deepEqual(rb.problems, ['roles must list at least one role, or be all'])
+  assert.deepEqual(rb.roles, [])
+})
+
 test('loadRunbooks reports a role-permissions entry without its fields', () => {
   const dir = rolesCopy('billing/cancel-invoice.md', (text) => text.replace(', key: billing/invoices, change: delete removed', ''))
   assert.ok(roleRunbook(dir, 'billing.cancel-invoice').problems.includes('review[0]: role-permissions needs role, key and change'))

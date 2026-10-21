@@ -9,7 +9,14 @@ export const OUTCOMES = ['allowed', 'read-only', 'hidden', 'denied', 'partial']
 export const API_OUTCOMES = ['allowed', 'denied', 'partial']
 export const CLOSING_OUTCOMES = ['read-only', 'hidden', 'denied']
 export const ORIGINS = ['code', 'contract', 'guess']
-export const REVIEW_REASONS = ['roles-enabled', 'role-permissions', 'role-created', 'role-deleted']
+// Each review reason and the fields an entry with that reason needs besides reason and date.
+export const REVIEW_FIELDS = {
+  'roles-enabled': [],
+  'role-permissions': ['role', 'key', 'change'],
+  'role-created': ['role'],
+  'role-deleted': ['role'],
+}
+export const REVIEW_REASONS = Object.keys(REVIEW_FIELDS)
 export const ROLE_NAME = /^[a-z0-9][a-z0-9-]*$/
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -39,7 +46,7 @@ function parseRole(name, entry, actions) {
     }
   }
   for (const [key, origin] of Object.entries(origins)) {
-    if (!(key in permissions)) throw new RolesError(`${name}: origins key "${key}" is not in permissions`)
+    if (!Object.hasOwn(permissions, key)) throw new RolesError(`${name}: origins key "${key}" is not in permissions`)
     if (!ORIGINS.includes(origin)) throw new RolesError(`${name}: origin "${origin}" for "${key}" must be one of ${ORIGINS.join(', ')}`)
   }
   return {
@@ -77,19 +84,19 @@ export function parseRoles(raw, { accounts } = {}) {
   }
   const roles = {}
   for (const [name, entry] of Object.entries(entries)) roles[name] = parseRole(name, entry, actions)
-  if (!roles.anonymous) {
+  if (!Object.hasOwn(roles, 'anonymous')) {
     roles.anonymous = { name: 'anonymous', description: 'No session', inherits: [], found: [], permissions: {}, origins: {} }
   }
   if (roles.anonymous.inherits.length > 0) throw new RolesError('anonymous inherits nothing')
   for (const role of Object.values(roles)) {
     for (const parent of role.inherits) {
-      if (!roles[parent]) throw new RolesError(`${role.name} inherits "${parent}", which is not a registered role`)
+      if (!Object.hasOwn(roles, parent)) throw new RolesError(`${role.name} inherits "${parent}", which is not a registered role`)
     }
   }
   checkCycles(roles)
   for (const account of Object.keys(accounts ?? {})) {
     if (account === 'anonymous') throw new RolesError('accounts.anonymous is not allowed, because anonymous has no session')
-    if (!roles[account]) throw new RolesError(`accounts.${account} is not a registered role`)
+    if (!Object.hasOwn(roles, account)) throw new RolesError(`accounts.${account} is not a registered role`)
   }
   return { version: 1, actions, names: Object.keys(roles), roles }
 }
@@ -175,7 +182,7 @@ export function heirsOf(registry, name) {
 // Roles a ui runbook runs as that have no login in the config. API runbooks need no account.
 export function noAccountRoles(config, runbook) {
   if (runbook.surface !== 'ui' || !Array.isArray(runbook.roles)) return []
-  return runbook.roles.filter((role) => role !== 'anonymous' && !(role in (config.accounts ?? {})))
+  return runbook.roles.filter((role) => role !== 'anonymous' && !Object.hasOwn(config.accounts ?? {}, role))
 }
 
 // Catches typos: a key that matches no runbook and no slice.

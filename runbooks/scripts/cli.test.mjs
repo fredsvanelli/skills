@@ -487,6 +487,11 @@ test('roles lists the roles, shows one, and needs tracking on', () => {
   const unknown = run(['roles', 'x', '--root', ROLES])
   assert.equal(unknown.code, 2)
   assert.match(unknown.stderr, /no role "x"/)
+  for (const args of [['constructor'], ['--citing', 'hasOwnProperty'], ['--affected', '--role', 'toString', '--key', 'billing/*']]) {
+    const inherited = run(['roles', ...args, '--root', ROLES])
+    assert.equal(inherited.code, 2, args.join(' '))
+    assert.match(inherited.stderr, new RegExp(`no role "${args.at(-1) === 'billing/*' ? 'toString' : args.at(-1)}"`))
+  }
   const off = run(['roles', '--root', FIXTURE])
   assert.equal(off.code, 2)
   assert.match(off.stderr, /role tracking is off; \/runbooks:settings roles turns it on/)

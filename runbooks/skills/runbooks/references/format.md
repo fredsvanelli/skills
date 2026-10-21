@@ -110,7 +110,7 @@ Number steps `S01`, `S02`, and keep numbers stable: a removed step leaves a gap.
 
 With role tracking on, a runbook runs the same steps once per role, like viewports, and each step states what each role should see. The registry, its keys and its inheritance: `config.md`, "Roles".
 
-- `roles` lists the roles that run the runbook, or `all` for every registered role, `anonymous` included. A role outside the registry is a problem.
+- `roles` lists the roles that run the runbook, or `all` for every registered role, `anonymous` included. An empty list (`roles: []`) or a role outside the registry is a problem.
 - `Roles:` is an optional line on a step, like `Viewports:`. It limits the step to some of the runbook's roles (`Roles: editor, manager`). Missing means every role of the runbook. A role in `Roles:` that the runbook does not run is a problem.
 - `Expected:` holds the result common to all roles. After it come one line per role whose behavior differs, each starting with the role name and an outcome keyword:
 

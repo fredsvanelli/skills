@@ -14,7 +14,7 @@ function matrixAt(git, rev, file, name) {
   }
   try {
     const registry = parseRoles(JSON.parse(text))
-    return registry.roles[name] ? effectivePermissions(registry, name) : {}
+    return registry.names.includes(name) ? effectivePermissions(registry, name) : {}
   } catch {
     return null
   }
@@ -66,7 +66,8 @@ export function roleHistory(root, config, name, { limit = 50 } = {}) {
     const after = matrixAt(git, commit, file, name)
     const before = matrixAt(git, `${commit}^`, file, name)
     if (after === null) continue
-    // The first commit has no parent, so the role starts from nothing.
+    // A parent revision whose registry does not parse gives nothing to compare with. A first commit has no
+    // parent, and matrixAt reads it as an empty matrix, so the role starts from nothing.
     if (before === null) continue
     const changes = diffMatrices(before, after)
     if (changes.length === 0) continue

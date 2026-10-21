@@ -185,6 +185,7 @@ test('/api/roles and /api/role/<name> serve the registry', async (t) => {
   assert.equal(manager.status, 200)
   assert.equal((await manager.json()).name, 'manager')
   assert.equal((await get(`${base}/api/role/ghost`)).status, 404)
+  assert.equal((await get(`${base}/api/role/constructor`)).status, 404)
   const coverage = await (await get(`${base}/api/coverage?role=viewer`)).json()
   assert.deepEqual(coverage.result.roles.map((r) => r.role), ['viewer'])
 })

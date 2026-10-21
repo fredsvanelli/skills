@@ -5,7 +5,7 @@ import { splitFrontmatter, parseYaml } from './yaml.mjs'
 import { surfacesOf, upstreamModeOf } from './config.mjs'
 import { fixturesDir } from './fixtures.mjs'
 import { normalizeCall } from './calls.mjs'
-import { loadRoles, API_OUTCOMES, REVIEW_REASONS } from './roles.mjs'
+import { loadRoles, API_OUTCOMES, REVIEW_REASONS, REVIEW_FIELDS } from './roles.mjs'
 import { parseSteps } from './steps.mjs'
 
 const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
@@ -86,18 +86,12 @@ function readRoles(runbook, data, registry) {
   }
   runbook.rolesAll = written === 'all' || written === undefined || written === null
   runbook.roles = runbook.rolesAll ? [...registry.names] : asList(written)
+  if (!runbook.rolesAll && runbook.roles.length === 0) runbook.problems.push('roles must list at least one role, or be all')
   if (!runbook.rolesAll) {
     for (const role of runbook.roles) {
       if (!registry.names.includes(role)) runbook.problems.push(`role "${role}" is not registered`)
     }
   }
-}
-
-const REVIEW_FIELDS = {
-  'roles-enabled': [],
-  'role-permissions': ['role', 'key', 'change'],
-  'role-created': ['role'],
-  'role-deleted': ['role'],
 }
 
 function readReview(runbook, review, registry) {

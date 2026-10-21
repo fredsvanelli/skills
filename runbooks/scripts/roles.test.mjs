@@ -63,6 +63,9 @@ test('parseRoles explains a broken registry', () => {
   assert.throws(() => parseRoles({ version: 1, roles: { a: { permissions: { 'billing/*': ['view'] }, origins: { 'billing/x': 'guess' } } } }), /a: origins key "billing\/x" is not in permissions/)
   assert.throws(() => parseRoles({ version: 1, roles: { a: { permissions: { 'billing/*': ['view'] }, origins: { 'billing/*': 'hunch' } } } }), /a: origin "hunch" for "billing\/\*" must be one of code, contract, guess/)
   assert.throws(() => parseRoles({ version: 2, roles: {} }), /unsupported version 2, expected 1/)
+  assert.throws(() => parseRoles({ version: 1, roles: { a: { inherits: ['constructor'] } } }), /a inherits "constructor", which is not a registered role/)
+  assert.throws(() => parseRoles({ version: 1, roles: {} }, { accounts: { constructor: {} } }), /accounts\.constructor is not a registered role/)
+  assert.throws(() => parseRoles({ version: 1, roles: { a: { permissions: {}, origins: { toString: 'guess' } } } }), /a: origins key "toString" is not in permissions/)
 })
 
 test('loadRoles is null when tracking is off and names the file on errors', () => {
@@ -79,6 +82,7 @@ test('noAccountRoles skips anonymous and api runbooks', () => {
   const config = loadConfig(FIXTURE)
   assert.deepEqual(noAccountRoles(config, { surface: 'ui', roles: ['admin', 'viewer', 'anonymous'] }), ['viewer'])
   assert.deepEqual(noAccountRoles(config, { surface: 'api', roles: ['viewer'] }), [])
+  assert.deepEqual(noAccountRoles(config, { surface: 'ui', roles: ['constructor'] }), ['constructor'])
 })
 
 test('matrixWarnings flags keys that match no runbook or slice', () => {

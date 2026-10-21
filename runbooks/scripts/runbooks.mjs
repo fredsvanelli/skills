@@ -21,7 +21,7 @@ import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMark
 import { roleRows, roleDetail, affectedByChange, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
-import { loadRoles, noAccountRoles, REVIEW_REASONS } from './lib/roles.mjs'
+import { loadRoles, noAccountRoles, REVIEW_REASONS, REVIEW_FIELDS } from './lib/roles.mjs'
 import { planReview, planEnableRoles } from './lib/review-edit.mjs'
 import { todayLocal } from './lib/stale.mjs'
 
@@ -194,8 +194,6 @@ function commandMoveToCalls(root, config, options) {
   return options.json ? json(plan) : moveToCallsMarkdown(plan)
 }
 
-const REVIEW_NEEDS = { 'roles-enabled': [], 'role-permissions': ['role', 'key', 'change'], 'role-created': ['role'], 'role-deleted': ['role'] }
-
 function requireTracking(config) {
   if (!rolesEnabled(config)) throw new Error('role tracking is off; /runbooks:settings roles turns it on')
 }
@@ -219,7 +217,7 @@ function commandMarkReview(root, config, options, ids) {
   if (!REVIEW_REASONS.includes(reason)) throw new Error(`--reason "${reason}" must be one of ${REVIEW_REASONS.join(', ')}`)
   const entry = { reason }
   for (const field of ['role', 'key', 'change']) if (typeof options[field] === 'string') entry[field] = options[field]
-  const missing = REVIEW_NEEDS[reason].filter((field) => !entry[field])
+  const missing = REVIEW_FIELDS[reason].filter((field) => !entry[field])
   if (missing.length > 0) throw new Error(`--reason ${reason} needs ${missing.map((field) => `--${field}`).join(', ')}`)
   entry.date = dateOption(options)
   const plan = planReview(root, config, ids, { entry, write })
@@ -238,7 +236,7 @@ function commandRoles(root, config, options, positionals) {
   const registry = loadRoles(root, config)
   const runbooks = loadRunbooks(root, config)
   const known = (name) => {
-    if (!registry.roles[name]) throw new Error(`no role "${name}"`)
+    if (!registry.names.includes(name)) throw new Error(`no role "${name}"`)
     return name
   }
   if (options.affected === true) {

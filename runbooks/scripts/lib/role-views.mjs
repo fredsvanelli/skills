@@ -44,7 +44,7 @@ function roleRow(root, config, registry, runbooks, reports, name) {
     const enabled = rb.roles.includes(name) ? rb.review.filter((entry) => entry.reason === 'roles-enabled').length : 0
     return sum + named + enabled
   }, 0)
-  const account = config.accounts?.[name]
+  const account = Object.hasOwn(config.accounts ?? {}, name) ? config.accounts[name] : null
   return {
     name,
     description: role.description,
@@ -77,7 +77,7 @@ function viewportStates(report, name) {
 }
 
 export function roleDetail(root, config, registry, runbooks, name) {
-  if (!registry.roles[name]) return null
+  if (!registry.names.includes(name)) return null
   const reports = reportsOf(root, config, runbooks)
   const row = roleRow(root, config, registry, runbooks, reports, name)
   const runbooksOf = live(runbooks).filter((rb) => rb.roles.includes(name)).map((rb) => {
@@ -115,7 +115,7 @@ export function citingRole(root, registry, runbooks, name) {
     const parts = splitFrontmatter(fs.readFileSync(path.resolve(root, rb.path), 'utf8'))
     const steps = parts ? parseSteps(parts.body) : []
     if (steps.some((step) => step.roles.includes(name))) places.push('Roles:')
-    if (steps.some((step) => name in step.outcomes)) places.push('role line')
+    if (steps.some((step) => Object.hasOwn(step.outcomes, name))) places.push('role line')
     if (steps.some((step) => step.as === name)) places.push('As:')
     if ((rb.review || []).some((entry) => entry.role === name)) places.push('review')
     if (places.length > 0) cited.push({ id: rb.id, path: rb.path, places })

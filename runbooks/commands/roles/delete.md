@@ -40,7 +40,7 @@ Done when the user has seen the runbooks and the heirs.
 Skip this step when the role has no heirs. Otherwise ask with `AskUserQuestion`, before anything is written, one question for all heirs:
 
 - Copy: the goal is that no heir's effective matrix changes. Before any write, run `roles <heir>` for each heir. For each key the heir inherited through the deleted role, write the heir's current effective actions for that key as its own entry, because an own entry replaces every inherited one (`config.md`). Leave keys that came only from other parents alone. The heir's own entries stay.
-- Drop: the heirs lose what they inherited from the role. For each key where an heir's effective actions shrink, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <heir> --key <key>` and collect the runbooks. They get `review` with `role-deleted` in step 6.
+- Drop: the heirs lose what they inherited from the role. For each key where an heir's effective actions shrink, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <heir> --key <key>` and collect the runbooks. They get `review` with `role-deleted` in step 5.
 
 Both answers remove the role from every heir's `inherits`. A copied entry has no `origins` entry, because the copy is the user's decision.
 
