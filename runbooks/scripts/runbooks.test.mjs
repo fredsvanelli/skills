@@ -75,6 +75,7 @@ test('loadRunbooks maps frontmatter fields', () => {
     viewports: [],
     design: {},
     covers: { entries: ['/billing/invoices', 'POST /admin/invoices'], requirements: ['REQ-1'] },
+    calls: [],
     sources: ['docs/specs/billing.md'],
     scripts: ['e2e/billing/issue-invoice.runbook.spec.ts'],
     status: 'active',
@@ -283,7 +284,7 @@ test('loadConfig fills upstream defaults', () => {
   const dir = tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, upstream: { mode: 'mocked', urlEnv: 'NEXT_PUBLIC_API_URL' } }) })
   const { upstream } = loadConfig(dir)
   assert.deepEqual(upstream, {
-    mode: 'mocked', baseUrl: '', start: [], root: null, urlEnv: 'NEXT_PUBLIC_API_URL', port: 4010,
+    mode: 'mocked', baseUrl: '', start: [], urlEnv: 'NEXT_PUBLIC_API_URL', port: 4010,
     fixtures: 'docs/runbooks/_fixtures', schema: null, redactHeaders: [], tokenEnv: '', serverFile: null,
   })
 })
@@ -303,4 +304,51 @@ test('loadConfig rejects an upstream block that is not an object', () => {
     const dir = tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, upstream }) })
     assert.throws(() => loadConfig(dir), /upstream must be an object/)
   }
+})
+
+test('loadConfig warns about paths outside the project, see docs/adr/0005', () => {
+  const load = (config) => loadConfig(tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, ...config }) })).warnings
+  assert.deepEqual(load({}), [])
+  assert.deepEqual(load({
+    stack: 'fullstack',
+    entries: [
+      { extractor: 'next-app-router', glob: 'src/app/**/page.tsx' },
+      { extractor: 'next-app-router', root: 'apps/api', glob: 'src/app/**/route.ts' },
+      { extractor: 'next-app-router', root: '../api', glob: 'src/app/**/route.ts' },
+    ],
+    slices: { billing: ['src/app/billing/**', 'apps/api/src/app/invoices/**', '../api/src/app/invoices/**'] },
+    tests: { ui: { framework: 'playwright', dir: 'e2e' }, api: { framework: 'jest', dir: 'test', root: '../api' } },
+    upstream: { mode: 'live', root: '../api' },
+  }), [
+    'entries[2]: root "../api" is outside the project, so its CI never reads it (docs/adr/0005). /runbooks:settings sources moves its ids to calls. From runbooks 2.0 it is a config error',
+    'slices.billing: glob "../api/src/app/invoices/**" is outside the project and never matches a change (docs/adr/0005). From runbooks 2.0 it is a config error',
+    'tests.api.root "../api" is outside the project (docs/adr/0005). From runbooks 2.0 it is a config error',
+    'upstream.root is no longer read (docs/adr/0005); /runbooks:settings upstream removes it',
+  ])
+})
+
+test('calls: METHOD /path of the upstream API, braces for parameters, see docs/adr/0005', () => {
+  const runbook = (id, extra) => `---\nid: u.${id}\ncapability: u\nstatus: active\n${extra}\n---\n`
+  const load = (config, files) => {
+    const dir = tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, ...config }), ...files })
+    return Object.fromEntries(loadRunbooks(dir, loadConfig(dir)).map((rb) => [rb.id, rb]))
+  }
+  const upstream = { mode: 'live', urlEnv: 'API_URL' }
+  const byId = load({ stack: 'fullstack', upstream }, {
+    'docs/runbooks/u/screen.md': runbook('screen', 'calls: [GET /quotes/[id], "POST /quotes", GET /quotes/{id}, GET /files/[...path]]'),
+    'docs/runbooks/u/none.md': runbook('none', ''),
+    'docs/runbooks/u/bad.md': runbook('bad', 'calls: [/quotes, fetch /x, GET quotes]'),
+    'docs/runbooks/u/api.md': runbook('api', 'surface: api\ncalls: [GET /quotes]'),
+  })
+  assert.deepEqual(byId['u.screen'].calls, ['GET /quotes/{id}', 'POST /quotes', 'GET /files/{path}'])
+  assert.deepEqual(byId['u.screen'].problems, [])
+  assert.deepEqual(byId['u.none'].calls, [])
+  assert.deepEqual(byId['u.bad'].problems, [
+    'call "/quotes" must be "METHOD /path"',
+    'call "fetch /x" must be "METHOD /path"',
+    'call "GET quotes" must be "METHOD /path"',
+  ])
+  assert.deepEqual(byId['u.api'].problems, ['calls apply only to ui runbooks'])
+  const noUpstream = load({ stack: 'frontend' }, { 'docs/runbooks/u/screen.md': runbook('screen', 'calls: [GET /quotes]') })
+  assert.deepEqual(noUpstream['u.screen'].problems, ['calls need an upstream block in the config'])
 })

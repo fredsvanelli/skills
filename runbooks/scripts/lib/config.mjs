@@ -116,6 +116,35 @@ function validateSource(listName, source, index) {
   }
 }
 
+// A path outside the project lives in another repository, which this one's CI never checks out; see docs/adr/0005.
+export function isOutside(projectRoot, rel) {
+  const relative = path.relative(projectRoot, path.resolve(projectRoot, rel))
+  return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
+}
+
+const UNTIL_2 = 'From runbooks 2.0 it is a config error'
+
+function pathWarnings(projectRoot, config) {
+  const warnings = []
+  config.entries.forEach((source, index) => {
+    if (source.root && isOutside(projectRoot, source.root)) {
+      warnings.push(`entries[${index}]: root "${source.root}" is outside the project, so its CI never reads it (docs/adr/0005). /runbooks:settings sources moves its ids to calls. ${UNTIL_2}`)
+    }
+  })
+  for (const [name, globs] of Object.entries(config.slices)) {
+    for (const glob of globs.filter((g) => isOutside(projectRoot, g))) {
+      warnings.push(`slices.${name}: glob "${glob}" is outside the project and never matches a change (docs/adr/0005). ${UNTIL_2}`)
+    }
+  }
+  for (const [surface, block] of Object.entries(config.tests)) {
+    if (block?.root && isOutside(projectRoot, block.root)) {
+      warnings.push(`tests.${surface}.root "${block.root}" is outside the project (docs/adr/0005). ${UNTIL_2}`)
+    }
+  }
+  if (config.upstream?.root != null) warnings.push('upstream.root is no longer read (docs/adr/0005); /runbooks:settings upstream removes it')
+  return warnings
+}
+
 export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
   const file = path.resolve(projectRoot, configPath)
   if (!fs.existsSync(file)) {
@@ -147,7 +176,7 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
   if (raw.upstream != null) {
     checkUpstreamShape(raw.upstream)
     config.upstream = {
-      mode: 'live', baseUrl: '', start: [], root: null, urlEnv: '', port: 4010,
+      mode: 'live', baseUrl: '', start: [], urlEnv: '', port: 4010,
       fixtures: `${config.paths.runbooks}/_fixtures`, schema: null, redactHeaders: [], tokenEnv: '', serverFile: null,
       ...raw.upstream,
     }
@@ -159,5 +188,6 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
       throw new ConfigError(`commits.${type} must be one of ${COMMIT_POLICIES.join(', ')}`)
     }
   }
+  config.warnings = pathWarnings(projectRoot, config)
   return config
 }

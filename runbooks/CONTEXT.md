@@ -40,8 +40,16 @@ What a project exposes to runbooks: `frontend` (only `ui` runbooks), `backend` (
 _Avoid_: project type
 
 **Upstream API**:
-The API that the screens of a `ui` runbook call. It is not the `api` surface: a `ui` runbook only depends on it, and an `api` runbook is the one that verifies it.
+The API that the screens of a `ui` runbook call. It is not the `api` surface: a `ui` runbook only depends on it, and an `api` runbook is the one that verifies it. It may be a folder of the same repository or live in another repository, which then has its own runbooks install.
 _Avoid_: backend, API, server
+
+**Call**:
+An operation of an upstream API in another repository that a `ui` runbook's screens reach, written `METHOD /path` in its `calls`. A call is never an entry: it does not count as coverage and never makes an orphan.
+_Avoid_: dependency, endpoint reference
+
+**Contract**:
+The OpenAPI document an upstream API in another repository publishes, kept in the front as `upstream.schema`. It is the only thing the two repositories share.
+_Avoid_: spec, interface
 
 **Upstream mode**:
 How a `ui` runbook reaches its upstream API: `live` (the real API, holding test data) or `mocked` (fixed responses served in its place). The project has a default and a runbook may override it. A `mocked` runbook runs in the browser like any `ui` runbook, and proves what the screen shows and sends, never what the API saves.

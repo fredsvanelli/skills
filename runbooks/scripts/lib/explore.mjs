@@ -45,10 +45,10 @@ const sumGroups = (groups, name) => {
 }
 
 // Entry points only: the Runbooks page never runs a requirement source. The warnings are the
-// entry sources' own; runbook problems already show on each row.
+// config's and the entry sources' own; runbook problems already show on each row.
 function entryCoverage(root, config, runbooks) {
   const status = {}
-  const warnings = []
+  const warnings = [...(config.warnings ?? [])]
   const entries = collect(root, config, 'entries', warnings, status)
   const result = computeCoverage({
     runbooks,
@@ -118,6 +118,7 @@ export function runbookView(root, config, id, { today }) {
     viewports: rb.viewports.map((vp) => ({ name: vp, width: config.viewports[vp]?.width ?? null, height: config.viewports[vp]?.height ?? null })),
     upstreamFromConfig: rb.surface === 'ui' && (data.upstream === undefined || data.upstream === null),
     covers: rb.covers,
+    calls: rb.calls,
     scripts: rb.scripts,
     sources: rb.sources,
     design: rb.design,
@@ -162,11 +163,22 @@ export function reportView(root, config, name) {
   }
 }
 
-export function coverageView(root, config, slice) {
-  const result = coverageResult(root, config, {}, [], true)
+const SCOPE_KEYS = ['capability', 'feature', 'path', 'slice']
+
+// filters takes the keys of runbooks.mjs coverage. The side list of slices always shows the overall numbers.
+export function coverageView(root, config, filters = {}) {
+  const withWarnings = (result) => ({ ...result, warnings: [...(config.warnings ?? []), ...result.warnings] })
+  const result = withWarnings(coverageResult(root, config, {}, [], true))
   const names = new Set([...Object.keys(config.slices), ...result.groups.map((group) => group.name)])
   const slices = [...names].map((name) => ({ name, ...(sumGroups(result.groups, name) ?? { covered: 0, total: 0 }) })).sort(byName)
-  if (slice === undefined) return { slices, scope: 'overall', result }
+  const keys = SCOPE_KEYS.filter((key) => typeof filters[key] === 'string')
+  if (keys.length === 0) return { slices, scope: 'overall', result }
+  if (keys.length > 1 || keys[0] !== 'slice') {
+    const picked = Object.fromEntries(keys.map((key) => [key, filters[key]]))
+    const scope = keys.map((key) => `${key} ${picked[key]}`).join(', ')
+    return { slices, scope, filters: picked, result: withWarnings(coverageResult(root, config, picked, [], true)) }
+  }
+  const slice = filters.slice
   // The counts come from the slice's own groups, so they agree with its uncovered list.
   const groups = result.groups.filter((group) => group.name === slice)
   const count = (field) => groups.reduce((n, group) => n + group[field], 0)

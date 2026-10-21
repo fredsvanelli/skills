@@ -340,8 +340,10 @@
   }
   const showMessage = (text) => view.replaceChildren(el('p', 'message', text))
   // A source that did not run leaves its items out, so the counts below it are short. Spread into replaceChildren.
+  // A skipped or failed source leaves its items out of the numbers; the config's own warnings do not.
+  const sourceDidNotRun = (warning) => / source skipped$|: command failed: /.test(warning)
   const warningBox = (warnings) => (warnings?.length > 0
-    ? [el('div', 'warn', el('b', null, 'Some sources did not run; the numbers below leave out their items'),
+    ? [el('div', 'warn', el('b', null, warnings.some(sourceDidNotRun) ? 'Some sources did not run; the numbers below leave out their items' : 'Config warnings'),
       el('ul', null, ...warnings.map((warning) => el('li', null, warning))))]
     : [])
 
@@ -518,6 +520,8 @@
     if (rb.upstream) add('Upstream', rb.upstream, rb.upstreamFromConfig ? el('span', 'muted', ' (config default)') : null)
     const covers = [...(rb.covers?.entries ?? []), ...(rb.covers?.requirements ?? [])]
     if (covers.length > 0) add('Covers', covers.join(' · '))
+    // Calls reach the upstream API and never count as coverage (docs/adr/0005).
+    if (rb.calls?.length > 0) add('Calls', rb.calls.join(' · '))
     add('Scripts', ...lines(rb.scripts))
     add('Sources', ...lines(rb.sources))
     const design = Object.entries(rb.design ?? {})
@@ -694,9 +698,11 @@
 
     const uncoveredHeading = el('h4', null, 'Uncovered')
     if (uncovered.length > 0) uncoveredHeading.append(el('span', 'c', String(uncovered.length)))
+    const scoped = data.scope !== 'overall'
     view.replaceChildren(
+      ...(scoped ? [el('div', 'crumbs', link('#/coverage', null, 'coverage'), ' / ', el('b', null, data.scope))] : []),
       ...warningBox(result.warnings),
-      el('h3', null, 'overall'),
+      el('h3', null, data.scope),
       el('div', 'sub', sub.join(' · ')),
       el('div', 'stats',
         stat('Entry points', pct(e.covered, e.total), `${e.covered} of ${e.total} covered · ${e.pending} pending · ${e.planned} planned`),
@@ -748,9 +754,11 @@
     view.replaceChildren(crumbs, ...warnings, el('h3', null, shownName(name)), sub, table(['Entry point', 'State', 'Runbooks', 'Scripts'], rows))
   }
 
-  async function coveragePage(name, stale) {
+  // filters holds the query of #/coverage?path=<glob> (or feature, capability): the scopes of /runbooks:coverage.
+  async function coveragePage(name, stale, filters) {
+    const query = name === null ? filters.toString() : `slice=${enc(name)}`
     const [coverage, list] = await Promise.all([
-      settled(api(name === null ? '/api/coverage' : `/api/coverage?slice=${enc(name)}`)),
+      settled(api(query === '' ? '/api/coverage' : `/api/coverage?${query}`)),
       settled(name === null ? null : api('/api/runbooks')),
     ])
     if (stale()) return
@@ -758,7 +766,7 @@
       side.replaceChildren()
       return showError(coverage.error)
     }
-    slicesSide(coverage.value, name)
+    slicesSide(coverage.value, name === null && query !== '' ? undefined : name)
     if (name === null) overallView(coverage.value)
     else sliceView(coverage.value, name, list.value?.capabilities)
   }
@@ -772,7 +780,10 @@
 
   let token = 0
   async function render() {
-    const raw = location.hash.replace(/^#\/?/, '').replace(/\/$/, '')
+    const [hashPath, hashQuery = ''] = location.hash.replace(/^#\/?/, '').split('?')
+    const raw = hashPath.replace(/\/$/, '')
+    const filters = new URLSearchParams(hashQuery)
+    for (const key of [...filters.keys()]) if (!['capability', 'feature', 'path'].includes(key)) filters.delete(key)
     const parts = raw === '' ? [] : raw.split('/').map((segment) => {
       try { return decodeURIComponent(segment) } catch { return null }
     })
@@ -787,7 +798,7 @@
       else if (page === 'runbooks' && parts.length <= 2) await runbooksPage(a === undefined ? null : dataName(a), stale)
       else if (page === 'runbook' && a && parts.length === 2) await runbookPage(a, 'runbook', null, stale)
       else if (page === 'runbook' && a && b === 'history' && parts.length <= 4) await runbookPage(a, 'history', c ?? null, stale)
-      else if (page === 'coverage' && parts.length <= 2) await coveragePage(a === undefined ? null : dataName(a), stale)
+      else if (page === 'coverage' && parts.length <= 2) await coveragePage(a === undefined ? null : dataName(a), stale, filters)
       else notFound()
     } catch (error) {
       if (!stale()) showError(error)

@@ -54,7 +54,7 @@ Done when every behavior the source promises, or the code of a `file`, `dir` or 
 
 ## 2. Map requirements to entries and existing runbooks
 
-1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" entries --json`: map each requirement to the entry ids it touches. With `file`, `dir` and `route`, start from the entries step 1 found and add the ones the code calls (the endpoints a screen calls, the reads that prove a write).
+1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" entries --json`: map each requirement to the entry ids it touches. With `file`, `dir` and `route`, start from the entries step 1 found and add the ones the code calls (the endpoints a screen calls, the reads that prove a write). An endpoint of the upstream API that `entries --json` does not list lives in another repository: it goes in the runbook's `calls`, as `METHOD /path` with `{param}` segments and spelled as `upstream.schema` spells it when the config sets one, never in `covers.entries` (`references/format.md`, the `calls` key).
 2. `... requirements --json`: when the config has requirement sources, use their ids.
 3. `... list --json`: find runbooks whose `covers.entries` or `covers.requirements` overlap, or whose title names the same flow. When a `draft` or `active` one covers the same flow, ask whether to update it instead of creating another; to update, stop here and follow `${CLAUDE_PLUGIN_ROOT}/commands/update.md` with the same source.
 4. Whatever the source, look for a `placeholder` of the same flow: it is the file this runbook fills. With `--from placeholder <id>`, it is that one. With one match, fill it and name it in the summary. With several, ask with `AskUserQuestion` which one to fill, or whether to write a new runbook.
@@ -88,7 +88,7 @@ For each `ui` flow:
 - the roles that see the screen and the roles that must not (route guards, navigation config, permission helpers);
 - the exact UI text of every expected result, from the `uiText` files;
 - new migrations or config the flow needs, which become preconditions;
-- the API endpoints the screen calls, as entry ids, so `covers.entries` lists them too;
+- the API endpoints the screen calls: as entry ids in `covers.entries` when `entries --json` lists them, else as `calls` (step 2);
 - with viewports, what changes at each one, from the responsive classes and media queries: a control hidden or moved (a menu behind a button, a table shown as cards), a text that differs. A step whose actions or Expected differ by viewport becomes one step per variant, each with a `Viewports:` line.
 
 Design references, for each `ui` flow, when the config has `design`. For each screen the flow shows, find its design at each of the runbook's viewports:
@@ -121,6 +121,7 @@ Path `<paths.runbooks>/<capability>/<flow>.md`. Start from `${CLAUDE_PLUGIN_ROOT
 - `upstream` from step 2, item 7, only when it differs from the config `upstream.mode`;
 - `status: draft`, `last_run: null`;
 - `covers.entries` and `covers.requirements` copied from the script output in step 2;
+- `calls` from steps 2 and 3, for a `ui` runbook whose screens reach an upstream API in another repository, left out when there are none;
 - `sources`: the spec path, the ticket id, `diff <base>...<short sha>`, `file <path>`, `dir <path>`, or `route <entry id>`.
 
 When filling a placeholder, rewrite that file and keep its path, `id`, `capability`, `surface` and `scripts` (the candidates `to-test` will offer to adopt). Its `sources` keep `map <sha>`, with this run's source appended. Its `covers` become what the steps reach. A placeholder entry or requirement that no step reaches is dropped and listed in the summary; when no other runbook cites it, the next `/runbooks:map` maps it again.

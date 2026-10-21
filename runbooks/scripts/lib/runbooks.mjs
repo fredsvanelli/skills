@@ -4,6 +4,7 @@ import { findFiles } from './glob.mjs'
 import { splitFrontmatter, parseYaml } from './yaml.mjs'
 import { surfacesOf, upstreamModeOf } from './config.mjs'
 import { fixturesDir } from './fixtures.mjs'
+import { normalizeCall } from './calls.mjs'
 
 const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
 
@@ -39,6 +40,19 @@ function readUpstream(runbook, data, surface, config, projectRoot) {
   if (runbook.status !== 'placeholder' && !hasFixtures(projectRoot, dir)) {
     runbook.warnings.push(`mocked runbook has no fixtures in ${dir}`)
   }
+}
+
+// calls lists the upstream API operations the screens reach, as the upstream spells them; see docs/adr/0005.
+function readCalls(runbook, data, surface, config) {
+  const calls = []
+  for (const raw of asList(data.calls)) {
+    const call = normalizeCall(raw)
+    if (call === null) runbook.problems.push(`call "${raw}" must be "METHOD /path"`)
+    else if (!calls.includes(call)) calls.push(call)
+  }
+  if (calls.length > 0 && surface !== 'ui') runbook.problems.push('calls apply only to ui runbooks')
+  else if (calls.length > 0 && !config.upstream) runbook.problems.push('calls need an upstream block in the config')
+  runbook.calls = calls
 }
 
 // design maps a name to a frame link or a file; "<name>.<viewport>" is the variant used at that viewport.
@@ -78,6 +92,7 @@ function readRunbook(file, rel, config, projectRoot) {
     viewports: [],
     design: {},
     covers: { entries: [], requirements: [] },
+    calls: [],
     sources: [],
     scripts: [],
     status: null,
@@ -123,6 +138,7 @@ function readRunbook(file, rel, config, projectRoot) {
   runbook.tags = asList(data.tags)
   runbook.roles = asList(data.roles)
   runbook.covers = { entries: asList(data.covers?.entries), requirements: asList(data.covers?.requirements) }
+  readCalls(runbook, data, surface, config)
   runbook.sources = asList(data.sources)
   runbook.scripts = asList(data.scripts)
   runbook.lastRun = data.last_run ?? null

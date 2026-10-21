@@ -12,6 +12,7 @@ design: {}  # with a design system in the config, one line per screen, indented:
 covers:
   entries: []
   requirements: []
+# calls: []  # only with an upstream API in another repository: the operations the screens reach, as METHOD /path
 sources: []
 scripts: []
 status: draft

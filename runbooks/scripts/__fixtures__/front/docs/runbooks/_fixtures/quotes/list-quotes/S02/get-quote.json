@@ -1,0 +1,5 @@
+{
+  "request": { "method": "GET", "path": "/quotes/q1" },
+  "response": { "status": 200, "body": { "id": "q1", "total": 120 } },
+  "source": "recorded 2026-10-20 from https://api.example.com"
+}

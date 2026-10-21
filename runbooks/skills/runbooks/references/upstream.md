@@ -19,12 +19,22 @@ A mocked runbook proves what the screen shows and the request the screen sends. 
 
 ### Live runbooks
 
-The upstream API runs locally from a sibling repo (`upstream.root` and `upstream.start`) or remotely (`upstream.baseUrl` only). Before the first step of a live runbook, `run` checks that `upstream.baseUrl` answers and shows `upstream.start` when it does not.
+The upstream API answers at `upstream.baseUrl`, started locally by its own repository or deployed. Before the first step of a live runbook, `run` checks that `upstream.baseUrl` answers and shows `upstream.start` when it does not.
 
 - A script creates its precondition data through the upstream API (Playwright `request`, `cy.request`) when the API has the endpoint, else through the upstream seed command. It never relies on data that already sits in the environment. Browser runs keep UI setup steps or `data.seedHint`.
 - A script authenticates to the upstream API with the `accounts` of the role a precondition names. `upstream.tokenEnv` names a service token env var for an API without password login.
 - Each run appends a unique suffix to the data it creates. Scripts read it from `RUNBOOKS_RUN_ID`. Expected quotes only the fixed part of a value, and Cleanup deletes through the API what the run created.
 - Error scenarios of the upstream API (a 500, a timeout) cannot happen in a live runbook. They go in a second, mocked runbook named `<flow>-upstream-errors`.
+
+### Another repository
+
+When the upstream API lives in another repository, that repository has its own runbooks install, and neither reads the other's files (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`):
+
+- Its endpoints are not entries of this project. A `ui` runbook lists the operations its screens reach in `calls`, as `METHOD /path` with `{param}` segments (`format.md`, the `calls` key). `calls` never counts as coverage and never makes an orphan; the API's own install covers its endpoints through `api` runbooks.
+- The contract is the OpenAPI 3 JSON document the API publishes, kept in this repository at `upstream.schema` (`docs/runbooks/_contract/openapi.json` by default). The plugin fetches nothing: a job in this project's CI brings each new version in, from the API's release, artifact or package, and opens a pull request with it. In that pull request, `runbooks.mjs fixtures <id>` for each mocked runbook lists the fixtures the new version no longer matches.
+- `upstream.start` is a hint that names the API's repository and its command. No key points to a folder next to this project, because CI checks out this repository alone.
+
+A project set up before this rule may still read the API through an `entries` source with a `root` outside the project. The loader warns about it, and `/runbooks:settings sources` moves its ids to `calls` with `runbooks.mjs move-to-calls`.
 
 ### Changing a runbook's mode
 

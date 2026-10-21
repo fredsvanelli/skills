@@ -41,6 +41,8 @@ Run `claude plugin list --json` again and read the new `version` of each install
 
 When a version changed, offer `/runbooks:setup` after the restart: running it again is safe, and it brings the project's config and folders in line with what the new version expects. When the config has `upstream.serverFile`, say that `/runbooks:setup` also refreshes the copied upstream server at that path, which `list` and `coverage` warn about when its version differs from the plugin's. `upgrade` itself still copies nothing.
 
+When `runbooks.mjs list` warns that an `entries` source or a `slices` glob is outside the project, say that the endpoints of an API in another repository no longer count here, and that `/runbooks:setup` or `/runbooks:settings sources` moves them to `calls` with a dry run first (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). From runbooks 2.0 such a path is a config error.
+
 When the project's config has no `stack` (written before stacks existed), say that `setup` now asks for it, along with a test library per surface, and migrates `paths.e2e` to `tests.ui.dir`. Choosing `backend` or `fullstack` adds `api` runbooks, and from then on endpoints count as covered only through `api` runbooks, so endpoint coverage drops on the next `/runbooks:coverage` (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/coverage.md`, By surface).
 
 Done when every install that applies here has been updated or reported as up to date, and the user knows a restart is needed.
