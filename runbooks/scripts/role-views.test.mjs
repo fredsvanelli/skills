@@ -1,8 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './lib/config.mjs'
-import { loadRoles } from './lib/roles.mjs'
+import { loadRoles, parseRoles } from './lib/roles.mjs'
 import { loadRunbooks } from './lib/runbooks.mjs'
 import { roleResult, roleRows, roleDetail, affectedByChange, citingRole } from './lib/role-views.mjs'
 
@@ -67,6 +69,14 @@ test('roleDetail lists effective permissions and per-viewport states', () => {
   const viewer = roleDetail(ROLES, config, registry, runbooks, 'viewer')
   assert.deepEqual(viewer.runbooksOf.find((r) => r.id === 'billing.cancel-invoice').outcomes, ['read-only'])
   assert.equal(roleDetail(ROLES, config, registry, runbooks, 'nobody'), null)
+})
+
+test('roleDetail handles a role named like an Object key', () => {
+  const raw = JSON.parse(fs.readFileSync(path.join(ROLES, 'docs/runbooks/roles.json'), 'utf8'))
+  const withConstructor = parseRoles({ ...raw, roles: { ...raw.roles, constructor: { description: 'Edge case' } } })
+  const all = runbooks.map((rb) => ({ ...rb, roles: [...rb.roles, 'constructor'] }))
+  const detail = roleDetail(ROLES, config, withConstructor, all, 'constructor')
+  assert.deepEqual(detail.runbooksOf.find((r) => r.id === 'billing.cancel-invoice').outcomes, ['allowed'])
 })
 
 test('citingRole lists places and heirs', () => {

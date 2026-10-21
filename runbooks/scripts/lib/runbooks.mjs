@@ -149,7 +149,8 @@ function readStepRoles(runbook, body, registry) {
       if (runbook.surface === 'api' && !API_OUTCOMES.includes(outcome)) {
         runbook.problems.push(`${step.step}: outcome "${outcome}" does not apply to api steps`)
       }
-      outcomes[role] = [...new Set([...(outcomes[role] ?? []), outcome])].sort()
+      const seen = Object.hasOwn(outcomes, role) ? outcomes[role] : []
+      outcomes[role] = [...new Set([...seen, outcome])].sort()
     }
     if (step.as !== null && !runbook.review.some((entry) => entry.reason === 'roles-enabled')) {
       runbook.warnings.push(`${step.step}: As: is replaced by role lines; /runbooks:update rewrites it`)

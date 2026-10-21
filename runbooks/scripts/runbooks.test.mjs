@@ -433,6 +433,14 @@ test('loadRunbooks keeps plain Expected bullets and reports an outcome line for 
   assert.equal(rb.roleOutcomes.status, undefined)
 })
 
+test('loadRunbooks reads a role line named like an Object key without crashing', () => {
+  const dir = rolesCopy('billing/cancel-invoice.md', (text) => text.replace('- editor: hidden.', '- editor: hidden.\n- constructor: denied.'))
+  const rb = roleRunbook(dir, 'billing.cancel-invoice')
+  assert.deepEqual(rb.problems, ['role "constructor" is not registered'])
+  assert.ok(Object.hasOwn(rb.roleOutcomes, 'constructor'))
+  assert.deepEqual(rb.roleOutcomes.constructor, ['denied'])
+})
+
 test('loadRunbooks reports an empty roles list when tracking is on', () => {
   const dir = rolesCopy('billing/legacy.md', (text) => text.replace('roles: [admin]', 'roles: []'))
   const rb = roleRunbook(dir, 'billing.legacy')

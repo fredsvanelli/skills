@@ -81,7 +81,7 @@ export function roleDetail(root, config, registry, runbooks, name) {
   const reports = reportsOf(root, config, runbooks)
   const row = roleRow(root, config, registry, runbooks, reports, name)
   const runbooksOf = live(runbooks).filter((rb) => rb.roles.includes(name)).map((rb) => {
-    const outcomes = rb.roleOutcomes?.[name]
+    const outcomes = rb.roleOutcomes && Object.hasOwn(rb.roleOutcomes, name) ? rb.roleOutcomes[name] : null
     return {
       id: rb.id,
       title: rb.title,

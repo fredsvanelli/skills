@@ -8,7 +8,7 @@ import { loadConfig } from './lib/config.mjs'
 import { loadRunbooks } from './lib/runbooks.mjs'
 import { extractItems } from './lib/extract.mjs'
 import { computeCoverage, sliceOf, roleCoverage } from './lib/coverage.mjs'
-import { loadRoles } from './lib/roles.mjs'
+import { loadRoles, parseRoles } from './lib/roles.mjs'
 import { nextStatus } from './lib/status.mjs'
 import { coverageMarkdown } from './lib/format.mjs'
 
@@ -329,6 +329,16 @@ test('roleCoverage counts access and proven denials', () => {
   assert.deepEqual(roleCoverage(registry, runbooks, { role: 'viewer' }).map((r) => r.role), ['viewer'])
   const keys = coverage[0].keys.map((k) => k.key)
   assert.deepEqual(keys, [...keys].sort())
+})
+
+test('roleCoverage handles a role named like an Object key', () => {
+  const root = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
+  const config = loadConfig(root)
+  const raw = JSON.parse(fs.readFileSync(path.join(root, 'docs/runbooks/roles.json'), 'utf8'))
+  const registry = parseRoles({ ...raw, roles: { ...raw.roles, constructor: { description: 'Edge case' } } })
+  const runbooks = loadRunbooks(root, config).map((rb) => ({ ...rb, roles: [...rb.roles, 'constructor'] }))
+  const role = roleCoverage(registry, runbooks, { role: 'constructor' })[0]
+  assert.deepEqual(role.keys.find((k) => k.key === 'billing/invoices'), { key: 'billing/invoices', access: false, state: 'uncovered', runbooks: [] })
 })
 
 test('roleCoverage marks a role covered only by a draft runbook as pending', () => {

@@ -204,7 +204,7 @@ export function roleCoverage(registry, runbooks, { role } = {}) {
       const qualifying = candidates
         .filter((rb) =>
           rb.roles.includes(name) && keyMatches(key, rb.capability, rb.feature) &&
-          (access || (rb.roleOutcomes[name] ?? []).some((outcome) => CLOSING_OUTCOMES.includes(outcome))))
+          (access || (Object.hasOwn(rb.roleOutcomes, name) ? rb.roleOutcomes[name] : []).some((outcome) => CLOSING_OUTCOMES.includes(outcome))))
         .sort((a, b) => a.id.localeCompare(b.id))
       return {
         key,
