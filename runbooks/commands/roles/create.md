@@ -55,9 +55,11 @@ Done when both files are written and the script shows the role.
 
 ## 5. Mark the runbooks
 
-For each key in the role's effective matrix, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <name> --key <key>`. Merge the runbooks of the groups into one list and show it. When the list is empty, say so and go to step 6.
+Every runbook with `roles: all` now runs the new role, whatever keys the role has. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep the runbooks with `rolesAll` true whose `status` is neither `deprecated` nor `placeholder`. For each key in the role's effective matrix, also run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <name> --key <key>`, to tell which of them the role has a key for. When the list is empty, say so and go to step 6.
 
-Ask with `AskUserQuestion`: mark all with `role-created`, mark none, or pick some. On "pick some", ask which runbooks, multi-select in rounds of four. Then run, for the chosen ids:
+Show the list, one line per runbook, with its key when the role has one. Explain that each runbook runs the new role as `allowed`, so the role is held to the common Expected, until its Expected has a line for the role. A runbook under a key the role lacks will most likely need a `denied` or `hidden` line.
+
+Ask with `AskUserQuestion`: mark all with `role-created` (Recommended, the default), pick some, or mark none. On "pick some", ask which runbooks, multi-select in rounds of four. Then run, for the chosen ids:
 
 `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-created --role <name>`
 
@@ -71,7 +73,7 @@ Print, before any commit question:
 
 - the role with its description, parents, account variable names and own permissions;
 - the effective matrix from `roles <name>`;
-- the runbooks marked, and the number left unmarked;
+- the runbooks marked, and the `roles: all` runbooks left unmarked, which run the role as `allowed` until their Expected has a line for it;
 - when the role has no account: that `ui` runs give it `no-account`.
 
 Done when the user has seen this summary.
