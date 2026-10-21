@@ -40,6 +40,13 @@ Collect without asking:
 - An existing config: its `stack`, and `paths.e2e`, which step 3 migrates to `tests.ui.dir`. Also what ADR 0005 moves out, for step 3: an `entries` source or a `tests.<surface>.root` outside the project root, a `slices` glob that starts with `../`, `upstream.root`, and `app.start`, `upstream.start` or `data.seedHint` commands that `cd` into a folder next to this one. `runbooks.mjs entries` prints a warning for each of the first four. A project set up before the plugin was renamed from `runbook` to `runbooks` has `docs/runbooks/runbook.config.json` instead; read that one, and step 3 migrates it.
 - Slices: one slice per top-level feature folder of the UI routes, named after the folder, plus the matching API folders when the API is a folder of this repository. Without UI routes (a `backend` candidate), one slice per feature folder of the endpoints, named after it, merging the same feature across route prefixes (`admin/internal/invoices/**`, `admin/partner/invoices/**` and `v1/invoices/**` form the slice `invoices`). Endpoints above any feature folder (`GET /`, `GET /v1`, `GET /admin/me`) stay without a slice; list them in step 4.
 
+- Role sources, read only when the user says yes to "Track roles?" in step 2, and only inside this repository (never a folder next to the project, ADR 0005):
+  - the code: role enums and constants, guards, middleware, policies, permission helpers, seeds and i18n role labels. A `backend` stack skips the sources that exist only in screens;
+  - `upstream.schema`, when set: `securitySchemes` scopes, per-operation `security`, documented 403 responses and `x-` role extensions;
+  - the existing `accounts` keys, the `roles` lists of the runbooks and their `As:` lines.
+
+  For each role keep its name (kebab-case), where it came from (`file:line`, `contract: <what>`), the actions the sources tie to each `capability/feature`, and how sure the source is: `code`, `contract` or `guess`. Details of the registry: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, Roles.
+
 Done when every key in `config.md` has a detected value or sits on the question list for step 2.
 
 ## 2. Ask the open questions
@@ -48,7 +55,12 @@ Ask with `AskUserQuestion`, each question with your recommended value. `AskUserQ
 
 **Stack, always asked:** `stack` (`frontend`, `backend`, `fullstack`), recommending the detected candidate. When the answer adds `api` to an existing `ui` project, say that endpoint coverage will drop on the next `/runbooks:coverage`, because endpoints then count only through `api` runbooks (`references/coverage.md`, By surface).
 
-**Design reference, right after the stack, when it has `ui`:** ask whether the project has a design system the screens follow. Options: Figma, Claude Design, Adobe XD, Local files, recommending what detection found. The question names what detection found, or says it found nothing, and says the user can answer "none" or name another tool (Penpot, Sketch, Framer, ...) under "Other". With an existing `design`, recommend keeping it.
+**Track roles, right after the stack, for every stack:** ask "Track roles?", recommending no when detection found no role source and no `accounts`, and yes otherwise. It joins the round that asks the stack when that round has room, and otherwise opens the next round. With an existing `roles.enabled` true, ask nothing: tracking stays on, and running setup again only refreshes what it wrote. On a no, `roles.enabled` stays false, the role questions below are skipped and nothing else about roles changes. On a yes, ask in the round after it:
+
+1. Show a table of the roles step 1 found, with the `found` source of each, and ask with `AskUserQuestion`, multi-select, which are right. The user adds roles by name under "Other". `anonymous` is built in and is not listed.
+2. Show the matrix the scanner deduced, one row per role and `capability/feature` key with its actions, each entry marked `code`, `contract` or `guess`. Ask whether to accept it or leave it for `/runbooks:roles:manage-permissions`. Leaving it writes every role with an empty `permissions`.
+
+**Design reference, right after the stack (and the roles question), when it has `ui`:** ask whether the project has a design system the screens follow. Options: Figma, Claude Design, Adobe XD, Local files, recommending what detection found. The question names what detection found, or says it found nothing, and says the user can answer "none" or name another tool (Penpot, Sketch, Framer, ...) under "Other". With an existing `design`, recommend keeping it.
 
 Then offer to connect it, in the next round:
 
@@ -105,6 +117,7 @@ A `backend` stack skips every browser question.
 | `docs/runbooks/_coverage/.gitignore` | two lines, `*` and `!.gitignore`: the folder is tracked, the reports in it stay local |
 | `.gitignore` | add `.runbooks/` when missing |
 | agents block | `${CLAUDE_PLUGIN_ROOT}/templates/agents-block.md`, with `${CLAUDE_PLUGIN_ROOT}/templates/api-practices.md` filled in when the stack has `api` |
+| `docs/runbooks/roles.json` (when tracking roles) | the roles the user confirmed in step 2, with `description`, `found`, `permissions` and `origins`, `"version": 1` (`config.md`, Roles) |
 | `.mcp.json` (when approved and the stack has `ui`) | `${CLAUDE_PLUGIN_ROOT}/templates/mcp-servers.json`, plus the design server from step 2 (`${CLAUDE_PLUGIN_ROOT}/templates/design-servers.json` for Figma) |
 
 - Rename from `runbook`: when step 1 found `docs/runbooks/runbook.config.json`, move it with `git mv` to `runbooks.config.json`. In the config, `paths.evidence` `.runbook/evidence` becomes `.runbooks/evidence`, and `mcp.headless`/`mcp.headed` `runbook-playwright`/`runbook-playwright-headed` become `runbooks-playwright`/`runbooks-playwright-headed`. Rename those two servers in `.mcp.json` too, replace `.runbook/` with `.runbooks/` in the root `.gitignore`, replace the `<!-- runbook:start -->` and `<!-- runbook:end -->` markers with the new ones, and replace `runbook@<marketplace>` with `runbooks@<marketplace>` in `enabledPlugins`. Move a local `.runbook/` folder to `.runbooks/`.
@@ -118,6 +131,12 @@ A `backend` stack skips every browser question.
   - The server holds one state for every client, so every test suite whose app points at it runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. Mocked scripts post `{ runbook, mode: 'mocked', step }` in `beforeEach` and `{ runbook: null, mode: 'live' }` in `afterAll`; live `ui` scripts post nothing (`references/upstream.md`, "Scripts").
 - Agents block: when one of `AGENTS.md` and `CLAUDE.md` is a symlink to the other, write once to the real file. Otherwise prefer `AGENTS.md` when it exists, else `CLAUDE.md`. Replace the text between `<!-- runbooks:start -->` and `<!-- runbooks:end -->` when the markers exist; otherwise append the block at the end of the file.
 - API scripts checklist: when the stack has `api`, replace the `<!-- api-scripts: ... -->` line of the block with `api-practices.md`, every placeholder filled with what this project does, citing the helper and its path, from the tests read in step 1. When the project has no `api` tests yet, fill it with the usual practice of the chosen `tech` and `framework` and say so in the summary. Without `api`, delete the line. Cover how scripts are written only; the project's own conventions for backend code are not this block's business.
+- Roles: when the user said yes, write in this order, and stop at the first failure:
+  1. `roles.json` and the config with `roles.enabled` true. Each role gets the `found` sources and the `origins` of the matrix entries it kept. Make every key of `accounts` a registered role: a key that is not one is added to `roles.json` with `found: ["accounts"]` and an empty `permissions`, because the loader rejects an `accounts` key that is not a role. `accounts.anonymous` is removed, because `anonymous` has no session.
+  2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" enable-roles` as a dry run. It refuses while tracking is off, which is why the config comes first. Show what it would do: the runbooks that get `roles: all` (the old `roles` list is replaced) and a `review` entry with `roles-enabled`. Ask whether to apply.
+  3. On a yes, run it again with `--write` and add the changed runbooks to the write list. The user then runs `/runbooks:update` on each to write the per-role Expected lines (`format.md`, Roles). On a no, tracking stays on and the runbooks stay as they are, which `list` reports as problems until `enable-roles --write` runs.
+
+  The config and `roles.json` go into the `setup` commit, the runbook edits into the `runbooks` commit (`commits.md`).
 - Test command: when `tests.<surface>.command` is set and the framework is installed, run it once with `{files}` set to one existing test of that surface (or an empty run when there is none) and `{junit}` set to `.runbooks/junit/setup.xml`, and confirm the file appears. Fix the command until it does.
 - Design server: write the chosen template to `mcpServers` under the name `figma`, or the other tool's server under its name, and set `design.mcp` to that name. For Framelink, replace `<version>` with what `npm view figma-developer-mcp version` prints. A token stays in the user's environment: `.mcp.json` holds only `${NAME}`.
 - `.mcp.json`: merge the two servers into `mcpServers`, keeping every existing server. Replace `<mcp.secretsFile>` and `<paths.evidence>`. Confirm the secrets file is ignored with `git check-ignore -q <file>`; when it is not, stop and tell the user, because the MCP server would read a tracked file.
@@ -141,11 +160,12 @@ Print the summary in the conversation before any commit question:
 - the upstream mode and the URL env var (`upstream.urlEnv`), or that no `upstream` block was written and the runbooks stay `live`;
 - when the server was copied: its path (`upstream.serverFile`) and how the framework starts it. Say nothing about a copy when none was made;
 - when the stack now has `api` and had not before: endpoint coverage drops on the next `/runbooks:coverage`, and why;
+- when the user turned role tracking on: the roles registered and the matrix entries marked `guess`, how many runbooks got `roles: all` and a `review` with `roles-enabled`, and that `/runbooks:list --review` lists them; offer it. Say that `/runbooks:update <id>` writes the per-role lines and clears the review;
 - when step 3 moved ids to `calls`: the runbooks changed, the entry coverage before and after from `move-to-calls`, and that the API's own install now owns the coverage of its endpoints.
 
 ## 5. Commit
 
-Commit by the `setup` policy. Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
+Commit by the `setup` policy, and the runbooks changed by `enable-roles` or `move-to-calls` by the `runbooks` policy. Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
 
 ## 6. Close
 

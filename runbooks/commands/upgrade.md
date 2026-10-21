@@ -45,4 +45,6 @@ When `runbooks.mjs list` warns that an `entries` source or a `slices` glob is ou
 
 When the project's config has no `stack` (written before stacks existed), say that `setup` now asks for it, along with a test library per surface, and migrates `paths.e2e` to `tests.ui.dir`. Choosing `backend` or `fullstack` adds `api` runbooks, and from then on endpoints count as covered only through `api` runbooks, so endpoint coverage drops on the next `/runbooks:coverage` (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/coverage.md`, By surface).
 
+When a version changed and the project's config has no `roles` key, say that this version can track roles per runbook, and that `/runbooks:setup` or `/runbooks:settings roles` turns it on. Until then nothing changes: with `roles.enabled` false or missing, every command behaves as before (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, Roles).
+
 Done when every install that applies here has been updated or reported as up to date, and the user knows a restart is needed.

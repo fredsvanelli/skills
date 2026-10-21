@@ -12,7 +12,7 @@ Arguments: `$ARGUMENTS`
 
 | Parameter | Use |
 |---|---|
-| `[group ...]` | optional: the groups to change, by the names in the table of step 2 (`design`, `commits`). Without it, the command shows the current settings and asks what to change |
+| `[group ...]` | optional: the groups to change, by the names in the table of step 2 (`design`, `commits`, `roles`). Without it, the command shows the current settings and asks what to change |
 
 Examples: `/runbooks:settings`, `/runbooks:settings design`, `/runbooks:settings stack tests`.
 
@@ -43,13 +43,14 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `tests` | `tests.<surface>`: `tech`, `framework`, `dir`, `command`, `root`, `baseUrl` |
 | `design` | `design`, and its server in `.mcp.json`. Only with `ui` |
 | `app` | `app.baseUrl`, `app.start`, `uiText`, `data.seedHint` |
-| `accounts` | `accounts.<role>`. Only with `ui` |
+| `accounts` | `accounts.<role>`. Only with `ui`. With tracking on, each key must be a registered role |
 | `viewports` | `viewports.<name>`. Only with `ui` |
 | `sources` | `entries`, `requirements`, `slices` |
 | `tickets` | `tickets.fetch` |
 | `git` | `git.base`, `git.protected`, `git.messageFormat` |
 | `commits` | `commits.runbooks`, `commits.setup` |
 | `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `tokenEnv`, `serverFile`, and the obsolete `root`, which this group removes. Only with `ui` |
+| `roles` | `roles.enabled`. Turns role tracking on with the flow of `setup.md`; it does not turn it off |
 | `stale` | `staleDays` |
 | `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in `.mcp.json`. Only with `ui` |
 
@@ -76,7 +77,9 @@ Some changes reach past their own key. Work out each one from the table below, a
 | `design.system` or `design.mcp` | write or replace the design server in `.mcp.json` from `${CLAUDE_PLUGIN_ROOT}/templates/design-servers.json` (`setup.md` step 3); offer to remove the old server when no other key names it. List the runbooks with `design` references: references of the old system no longer open, and `/runbooks:update` relinks them |
 | `design` becomes `null` | list the runbooks with `design` references: they become invalid until `/runbooks:update` removes them |
 | a viewport renamed or removed | list the runbooks that cite it in `viewports`, in a `Viewports:` line or in a `design` key `<name>.<viewport>`; offer to apply the rename to them in the same write |
-| an account role renamed or removed | list the runbooks that cite it in `roles` or `As:`; offer to apply the rename to them in the same write |
+| an account role renamed or removed | list the runbooks that cite it in `roles` or `As:`; offer to apply the rename to them in the same write. With tracking on, point to `/runbooks:roles:update` (rename) and `/runbooks:roles:delete` (remove), which update the registry, the runbooks and the fixtures together, and change nothing here |
+| `roles.enabled` becomes true | run the role flow of `setup.md`: step 1 (role sources), the "Track roles?" follow-up questions of step 2 (found roles, then the matrix), and the Roles bullet of step 3 (write `roles.json` and the config, make every `accounts` key a role, `enable-roles` dry run, then `--write` after a yes). Add `roles.json` to the write list for the `setup` commit and the changed runbooks for the `runbooks` commit |
+| `roles.enabled` becomes false | refuse and write nothing for this key: "This version does not support turning role tracking off." Keep `roles.json` and the runbooks as they are |
 | `mcp.secretsFile` or `paths.evidence` | rewrite the arguments of the two Playwright servers in `.mcp.json`; confirm the secrets file is ignored with `git check-ignore -q <file>`, and stop when it is not. A new `paths.evidence` must be ignored too |
 | `mcp.headless` or `mcp.headed` | rename the server in `.mcp.json` |
 | `upstream.mode` | list the `ui` runbooks whose effective mode changes: those with no `upstream:` in their frontmatter, whose `upstream` in the list differs from the new default. Offer `/runbooks:update <id>` for each, because `update` records or deletes the fixtures and rewrites the steps (`references/upstream.md`, Changing a runbook's mode). When the new default is `mocked`, say that endpoints then count only through `live` runbooks. When it is `live`, say that the fixtures stay on disk until `update` deletes them |
@@ -86,7 +89,7 @@ Some changes reach past their own key. Work out each one from the table below, a
 | `upstream.root` is set | remove it: no command reads it |
 | `git.base` or `git.protected` | confirm each branch exists with `git rev-parse --verify` |
 
-A runbook rename, and a move of ids to `calls`, go into the `runbooks` commit, not the `setup` one.
+A runbook rename, a move of ids to `calls` and the `enable-roles` edits go into the `runbooks` commit, not the `setup` one.
 
 Done when every chosen key has a new value or was kept, and every file the changes reach is on the write list.
 
@@ -113,7 +116,7 @@ Print, before any commit question:
 
 ## 6. Commit
 
-Commit the config, the agents block and `.mcp.json` by the `setup` policy, and the runbooks renamed or moved to `calls` in step 3 by the `runbooks` policy. Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
+Commit the config, the agents block and `.mcp.json` by the `setup` policy, and the runbooks renamed, moved to `calls` or changed by `enable-roles` in step 3 by the `runbooks` policy. Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
 
 Write in the config `language`.
 
