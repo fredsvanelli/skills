@@ -30,6 +30,7 @@
   header nav a { display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-weight: 500; font-size: 14px; border-bottom: 2px solid transparent; }
   header nav a:hover { color: var(--fg); text-decoration: none; }
   header nav a.on { color: var(--fg); border-bottom-color: var(--accent); }
+  header nav a[hidden] { display: none; }
 
   .layout { flex: 1; display: flex; }
   .side { width: 220px; flex-shrink: 0; border-right: 1px solid var(--line); padding: 24px 14px; }
@@ -54,7 +55,10 @@
     footer { padding: 14px 16px; }
   }
   @media (max-width: 480px) {
-    header nav a { padding: 0 8px; }
+    header { gap: 8px; }
+    header .logo { white-space: nowrap; }
+    header nav { gap: 2px; }
+    header nav a { padding: 0 6px; font-size: 13px; }
   }
   .side .label { padding: 0 12px 12px; color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
   .side .item { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px; padding: 10px 12px; border-radius: 8px; color: color-mix(in srgb, var(--fg) 85%, transparent); font: 14px var(--mono); overflow-wrap: anywhere; }
@@ -134,6 +138,20 @@
   .critical { --c: var(--accent); }
   .partial { margin-left: 8px; color: var(--muted); font: 12px var(--mono); }
 
+  /* Roles: a permission cell is muted when inherited and warning-coloured when the role overrides its parent. */
+  .perm { font: 13px var(--mono); white-space: nowrap; }
+  .perm.inherited { color: var(--muted); }
+  .perm.overridden { color: var(--blocked); }
+  .legend { margin: 10px 0 16px; color: var(--muted); font: 12px var(--mono); }
+  details.matrix { margin-top: 40px; }
+  details.matrix > summary { margin-bottom: 12px; color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; cursor: pointer; }
+  details.matrix > summary:hover { color: var(--fg); }
+  .warn p { margin: 8px 0 0; font: 13px var(--mono); overflow-wrap: anywhere; }
+  .role-grid td { padding: 12px 16px; }
+  .role-grid td:first-child { min-width: 180px; }
+  .role-grid .badges { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .role-grid .badge + .badge { margin-left: 0; }
+
   .uncov ul { margin: 0; padding: 0; list-style: none; border: 1px dashed color-mix(in srgb, var(--failed) 45%, transparent); border-radius: 10px; }
   .uncov li { display: flex; justify-content: space-between; gap: 20px; padding: 14px 20px; border-bottom: 1px dashed color-mix(in srgb, var(--line) 80%, transparent); font: 14px var(--mono); }
   .uncov li:last-child { border-bottom: 0; }
@@ -196,6 +214,8 @@
   input[type=search] { display: block; width: 100%; max-width: 340px; margin-bottom: 12px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); font: 14px var(--mono); outline: none; }
   input[type=search]::placeholder { color: var(--muted); }
   input[type=search]:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+  select { display: block; max-width: 100%; margin-bottom: 12px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); font: 14px var(--mono); outline: none; }
+  select:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
 
   footer { padding: 14px 28px; border-top: 1px solid var(--line); text-align: right; color: var(--muted); font: 13px var(--mono); opacity: .7; }
   footer a { color: inherit; }
@@ -210,6 +230,7 @@
   <nav>
     <a id="menu-runbooks" href="#/runbooks">Runbooks</a>
     <a id="menu-coverage" href="#/coverage">Coverage</a>
+    <a id="menu-roles" href="#/roles" hidden>Roles</a>
   </nav>
 </header>
 <div class="layout">
@@ -253,6 +274,7 @@
   const pct = (part, total) => (total === 0 ? 'n/a' : `${Math.round((part / total) * 1000) / 10}%`)
   const roundPct = (part, total) => (total === 0 ? null : Math.round((part / total) * 100))
   const ageText = (age) => (age === null || age === undefined ? 'never run' : age === 0 ? 'today' : `${plural(age, 'day')} ago`)
+  const REVIEW_HELP = 'A role change marked this runbook for review'
   const capabilityOf = (id) => (id.includes('.') ? id.slice(0, id.indexOf('.')) : id)
   // A report name starts with <YYYY-MM-DD-HHMM>; that prefix is the run's date and time.
   const runStamp = (name) => {
@@ -350,6 +372,17 @@
   function setMenu(page) {
     document.getElementById('menu-runbooks').className = page === 'runbooks' ? 'on' : ''
     document.getElementById('menu-coverage').className = page === 'coverage' ? 'on' : ''
+    document.getElementById('menu-roles').className = page === 'roles' ? 'on' : ''
+  }
+
+  // /api/roles, fetched once per page load and again on each Roles page. The Roles link shows only with tracking on.
+  let rolesCache = null
+  function rolesData(fresh = false) {
+    if (fresh || !rolesCache) {
+      rolesCache = api('/api/roles')
+      rolesCache.then((data) => { document.getElementById('menu-roles').hidden = !data?.enabled }, () => {})
+    }
+    return rolesCache
   }
 
   // Sidebars
@@ -414,6 +447,7 @@
     const result = td('nowrap')
     if (rb.result) result.append(badge(rb.result, stateClass(rb.result)))
     if (rb.outdated) result.append(badge('outdated', null, 'The runbook changed after this run'))
+    if (rb.review) result.append(badge('review', 'pending', REVIEW_HELP))
     if (rb.problems.length > 0) result.append(badge('invalid', 'invalid'))
     if (!result.firstChild) result.append(el('span', 'muted', '-'))
 
@@ -487,6 +521,7 @@
     else badges.append(badge('never run', rb.stale ? 'failed' : null))
     if (rb.stale && rb.date) badges.append(badge(`no run in ${staleDays}+ days`, 'stale-badge'))
     if (rb.outdated) badges.append(badge('outdated', null, 'The runbook changed after this run'))
+    if (rb.review?.length > 0) badges.append(badge('review', 'pending', REVIEW_HELP))
     if (rb.problems.length > 0) badges.append(badge('invalid', 'invalid'))
 
     const tabs = el('div', 'tabs',
@@ -509,7 +544,8 @@
     }
     const lines = (list) => (list.length === 0 ? [] : [el('div', 'lines-list', ...list.map((item) => el('div', null, item)))])
     if (rb.feature) add('Feature', rb.feature)
-    if (rb.roles.length > 0) add('Roles', rb.roles.join(', '))
+    if (rb.rolesAll) add('Roles', 'all', rb.roles.length > 0 ? el('span', 'muted', ` (${rb.roles.join(', ')})`) : null)
+    else if (rb.roles.length > 0) add('Roles', rb.roles.join(', '))
     if (rb.viewports.length > 0) {
       add('Viewports', ...joined(rb.viewports.map((vp) => {
         const node = el('span', null, vp.name)
@@ -546,11 +582,15 @@
     return el('div', 'panel', dl)
   }
 
-  function stepCard(step, states) {
+  const stateText = (state) => (state === 'not-applicable' ? 'n/a' : state)
+  const stateBadge = (s) => badge(s.viewport ? `${s.viewport} ${stateText(s.state)}` : stateText(s.state), stateClass(s.state), s.state === 'not-applicable' ? 'not-applicable' : null)
+
+  // With roles, the per-role grid above the steps holds the states, so the cards show none.
+  function stepCard(step, states, withBadges = true) {
     const failed = states.some((s) => s.state === 'failed')
-    const badges = el('span', 'badges', ...states.map((s) => badge(s.viewport ? `${s.viewport} ${s.state}` : s.state, stateClass(s.state))))
+    const badges = el('span', 'badges', ...states.map(stateBadge))
     const card = el('div', `step${failed ? ' has-failed' : ''}`,
-      el('div', 'h', el('b', null, el('span', null, step.step), step.title), states.length > 0 ? badges : null))
+      el('div', 'h', el('b', null, el('span', null, step.step), step.title), withBadges && states.length > 0 ? badges : null))
     if (step.fields.length > 0) {
       card.append(el('div', 'lines', ...step.fields.map((field) => el('span', null, `${field.name} `, el('i', null, field.value || '-')))))
     }
@@ -560,6 +600,31 @@
     return card
   }
 
+  // The last run as a grid of steps by role, one badge per viewport in each cell. Columns follow the runbook's roles.
+  function roleGrid(rb) {
+    const seen = Object.values(rb.stepStates).flat().map((s) => s.role ?? '-')
+    const roles = [...new Set([...rb.roles.filter((name) => seen.includes(name)), ...seen])]
+    const titles = new Map(rb.body.steps.map((step) => [step.step, step.title]))
+    const rows = Object.entries(rb.stepStates).map(([step, states]) => row(
+      td(null, el('span', 'mono', step), titles.has(step) ? el('span', 'title', titles.get(step)) : null),
+      ...roles.map((name) => {
+        const cell = states.filter((s) => (s.role ?? '-') === name)
+        return td(null, cell.length > 0 ? el('span', 'badges', ...cell.map(stateBadge)) : el('span', 'muted', '-'))
+      }),
+    ))
+    const header = ['Step', ...roles.map((name) => (name === '-' ? 'no role' : link(`#/roles/${enc(name)}`, null, name)))]
+    return [el('div', 'role-grid', table(header, rows)), el('p', 'legend', 'Last run by role and viewport. n/a is not-applicable: a parent step was denied or hidden for that role.')]
+  }
+
+  // A role change marked this runbook; /runbooks:update clears the entries once the role lines are confirmed.
+  function reviewBanner(rb) {
+    if (!(rb.review?.length > 0)) return []
+    const entries = rb.review.map((entry) => el('li', null,
+      [entry.reason, entry.role && `role ${entry.role}`, entry.key && `key ${entry.key}`, entry.change, entry.date].filter(Boolean).join(' · ')))
+    return [el('div', 'warn', el('b', null, 'Pending review'), el('ul', null, ...entries),
+      el('p', null, 'Check the role lines, then run ', el('code', null, `/runbooks:update ${rb.id}`), '.'))]
+  }
+
   function bodyNodes(rb) {
     const { sections, steps } = rb.body
     if (sections.length === 0 && steps.length === 0) return [el('h4', null, 'Body'), el('p', 'none', 'This runbook has no sections yet.')]
@@ -567,7 +632,9 @@
     if (steps.length > 0) {
       // Steps go right after Preconditions (or Goal when there are no Preconditions), as in the runbook template.
       const anchor = ['Preconditions', 'Goal'].map((name) => sections.findIndex((s) => s.heading === name)).find((index) => index >= 0)
-      const stepsBlock = [el('h4', null, 'Steps'), ...steps.map((step) => stepCard(step, rb.stepStates[step.step] ?? []))]
+      const byRole = Object.values(rb.stepStates).some((states) => states.some((s) => s.role))
+      const stepsBlock = [el('h4', null, 'Steps'), ...(byRole ? roleGrid(rb) : []),
+        ...steps.map((step) => stepCard(step, rb.stepStates[step.step] ?? [], !byRole))]
       blocks.splice(anchor === undefined ? 0 : anchor + 1, 0, stepsBlock)
     }
     return blocks.flat()
@@ -622,7 +689,7 @@
     if (failed) return showError(failed.error, view, failed === report ? 'Could not load this report' : undefined)
     const rb = detail.value
     const header = detailHeader(rb, tab, list.value.staleDays, reportName)
-    if (tab === 'runbook') view.replaceChildren(...header, metadataPanel(rb), ...bodyNodes(rb))
+    if (tab === 'runbook') view.replaceChildren(...header, ...reviewBanner(rb), metadataPanel(rb), ...bodyNodes(rb))
     else if (reportName) view.replaceChildren(...header, reportPanel(report.value))
     else view.replaceChildren(...header, el('div', 'sub', `${plural(runs.value.runs.length, 'run')} on this machine`), historyList(rb, runs.value))
   }
@@ -659,7 +726,44 @@
     return [input, tableNode, empty]
   }
 
-  function overallView(data) {
+  // The matrix keys per role. The select keeps the other filters and sets #/coverage?role=<name>.
+  function roleCoverageNodes(result, filters, roleNames) {
+    if (!result.roles) return []
+    const selected = filters.get('role')
+    const names = roleNames ?? result.roles.map((entry) => entry.role)
+    const select = el('select', null, el('option', null, 'all roles'), ...names.map((name) => el('option', null, name)))
+    select.options[0].value = ''
+    select.value = names.includes(selected) ? selected : ''
+    select.setAttribute('aria-label', 'Show one role')
+    select.addEventListener('change', () => {
+      const next = new URLSearchParams(filters)
+      if (select.value) next.set('role', select.value)
+      else next.delete('role')
+      const query = next.toString()
+      location.hash = query === '' ? '#/coverage' : `#/coverage?${query}`
+    })
+    const rows = result.roles.flatMap((entry) => entry.keys.map((key) => {
+      const runbooks = key.runbooks.length === 0
+        ? el('span', 'muted', '-')
+        : el('div', 'lines-list', ...key.runbooks.map((id) => el('div', null, link(runbookHash(id), 'rbid', id))))
+      const tr = row(
+        td('mono', link(`#/roles/${enc(entry.role)}`, null, entry.role)),
+        td('mono', key.key),
+        td(key.access ? 'small' : 'muted small', key.access ? 'has access' : 'no access'),
+        td(null, badge(key.state, key.state)),
+        td(null, runbooks),
+      )
+      if (key.state === 'uncovered') tr.className = 'unc'
+      return tr
+    }))
+    return [
+      el('h4', null, 'By role'),
+      select,
+      rows.length === 0 ? el('p', 'none', selected ? `No role named "${selected}".` : 'No permission keys in roles.json.') : table(['Role', 'Key', 'Access', 'State', 'Runbooks'], rows),
+    ]
+  }
+
+  function overallView(data, filters, roleNames) {
     const result = data.result
     const e = result.entries
     const r = result.requirements
@@ -710,6 +814,7 @@
           : stat('Requirements', '-', result.requirementsNote ?? 'no requirement source configured'),
         stat('Runbooks', String(rb.active), `active · ${rb.draft} draft · ${rb.placeholder} placeholder`),
         stat('With a script', String(rb.automated), `of ${rb.active} active`)),
+      ...roleCoverageNodes(result, filters, roleNames),
       el('h4', null, 'By slice'),
       sliceRows.length === 0 ? el('p', 'none', 'No entry points found.') : table(['Slice', ...(withSurface ? ['Surface'] : []), 'Covered', 'Pending', 'Planned', 'Total', 'Coverage'], sliceRows),
       uncoveredHeading,
@@ -757,18 +862,214 @@
   // filters holds the query of #/coverage?path=<glob> (or feature, capability): the scopes of /runbooks:coverage.
   async function coveragePage(name, stale, filters) {
     const query = name === null ? filters.toString() : `slice=${enc(name)}`
-    const [coverage, list] = await Promise.all([
+    const [coverage, list, roles] = await Promise.all([
       settled(api(query === '' ? '/api/coverage' : `/api/coverage?${query}`)),
       settled(name === null ? null : api('/api/runbooks')),
+      settled(name === null && filters.has('role') ? rolesData() : null),
     ])
     if (stale()) return
     if (coverage.error) {
       side.replaceChildren()
       return showError(coverage.error)
     }
-    slicesSide(coverage.value, name === null && query !== '' ? undefined : name)
-    if (name === null) overallView(coverage.value)
+    // The role filter narrows only the role table, so the overall item stays selected under it.
+    const scoped = [...filters.keys()].some((key) => key !== 'role')
+    slicesSide(coverage.value, name === null && scoped ? undefined : name)
+    // With a role picked, result.roles holds that role only; the select lists every role from /api/roles.
+    if (name === null) overallView(coverage.value, filters, roles.value?.rows?.map((r) => r.name))
     else sliceView(coverage.value, name, list.value?.capabilities)
+  }
+
+  // Roles pages
+
+  const BASE_ACTIONS = ['view', 'create', 'edit', 'delete']
+  const BASE_INITIALS = { view: 'V', create: 'C', edit: 'E', delete: 'X' }
+  const roleHash = (name) => `#/roles/${enc(name)}`
+  const ROLES_OFF = 'Role tracking is off. Turn it on with /runbooks:settings roles.'
+
+  function rolesSide(data, selected) {
+    const item = (href, name, count, on) =>
+      link(href, `item${on ? ' on' : ''}`, el('span', null, name), el('span', `n${count === 0 ? ' ok' : ''}`, String(count)))
+    side.replaceChildren(
+      el('div', 'label', 'Roles'),
+      item('#/roles', 'all', data.counters.reviews, selected === null),
+      el('hr'),
+      ...data.rows.map((r) => item(roleHash(r.name), r.name, r.reviews, selected === r.name)),
+    )
+  }
+
+  // V C E X for the base actions, a dot for a missing one, then the first letter of each extra action.
+  function permCell(entry) {
+    if (!entry) return td('muted', '-')
+    const extra = entry.actions.filter((action) => !BASE_ACTIONS.includes(action))
+    const text = [...BASE_ACTIONS.map((action) => (entry.actions.includes(action) ? BASE_INITIALS[action] : '·')),
+      ...extra.map((action) => action.charAt(0).toUpperCase())].join(' ')
+    const cell = td(`perm ${entry.source}`, text)
+    cell.title = `${entry.actions.join(', ')} (${entry.source})`
+    return cell
+  }
+
+  // anonymous never signs in, so it needs no account.
+  function accountNode(r) {
+    if (r.account) return el('div', 'lines-list mono nowrap', el('div', null, r.account.emailEnv), el('div', null, r.account.passwordEnv))
+    return r.name === 'anonymous' ? el('span', 'muted', 'not needed') : badge('no account', 'failed')
+  }
+
+  function resultBadges(results) {
+    const parts = [['passed', 'passed'], ['failed', 'failed'], ['blocked', 'blocked'], ['no-account', null]]
+      .filter(([key]) => results[key] > 0)
+      .map(([key, className]) => badge(`${results[key]} ${key}`, className))
+    if (results.never > 0) parts.push(el('span', 'muted small', `${results.never} never run`))
+    return parts.length === 0 ? [el('span', 'muted', '-')] : parts
+  }
+
+  const inheritsNodes = (names) => (names.length === 0 ? [el('span', 'muted', '-')] : joined(names.map((name) => link(roleHash(name), null, name)), ', '))
+
+  function roleRowNode(r) {
+    const first = td(null, link(roleHash(r.name), 'flow', r.name))
+    if (r.description) first.append(el('span', 'title', r.description))
+    const tr = row(
+      first,
+      td('mono', ...inheritsNodes(r.inherits)),
+      td('small', accountNode(r)),
+      td('num', String(r.runbooks)),
+      td(null, r.reviews > 0 ? badge(String(r.reviews), 'pending') : el('span', 'muted', '0')),
+      td(null, el('div', 'badges', ...resultBadges(r.results))),
+    )
+    tr.className = 'link'
+    tr.addEventListener('click', (event) => {
+      if (event.target.closest('a')) return
+      location.hash = roleHash(r.name)
+    })
+    return tr
+  }
+
+  function matrixSection(matrix) {
+    const rows = matrix.keys.map((key) => row(td('mono nowrap', key), ...matrix.roles.map((r) => permCell(r.cells[key]))))
+    const header = ['Key', ...matrix.roles.map((r) => link(roleHash(r.name), null, r.name))]
+    const details = el('details', 'matrix', el('summary', null, 'Permission matrix'),
+      rows.length === 0 ? el('p', 'none', 'No permission keys in roles.json.') : table(header, rows),
+      el('p', 'legend', 'V view, C create, E edit, X delete, a dot for a missing base action, and the first letter of each extra action. Muted cells are inherited, yellow cells are overridden.'))
+    return details
+  }
+
+  async function rolesPage(stale) {
+    const data = await rolesData(true)
+    if (stale()) return
+    if (!data.enabled) {
+      side.replaceChildren()
+      return showMessage(ROLES_OFF)
+    }
+    rolesSide(data, null)
+    const c = data.counters
+    const counter = (number, label, bad) => el('div', `counter${bad ? ' bad' : ''}`, el('b', null, String(number)), label)
+    view.replaceChildren(
+      el('div', 'counters',
+        counter(c.roles, 'roles'),
+        counter(c.reviews, 'pending reviews', c.reviews > 0),
+        counter(c.noAccount, 'roles without an account', c.noAccount > 0),
+        counter(c.keysWithoutRunbook, 'permissions without a runbook', c.keysWithoutRunbook > 0)),
+      data.rows.length === 0
+        ? el('p', 'none', 'No roles in roles.json yet.')
+        : table(['Role', 'Inherits', 'Account', 'Runbooks', 'Review', 'Last results'], data.rows.map(roleRowNode)),
+      matrixSection(data.matrix),
+    )
+  }
+
+  function effectiveTable(detail) {
+    const entries = Object.entries(detail.effective).sort(([a], [b]) => a.localeCompare(b))
+    if (entries.length === 0) return el('p', 'none', 'This role has no permissions.')
+    const origin = (entry) => {
+      const from = entry.from?.length > 0 ? entry.from.join(', ') : null
+      if (entry.source === 'inherited') return `inherited from ${from ?? '-'}`
+      if (entry.source === 'overridden') return from ? `overridden (parent ${from})` : 'overridden'
+      return 'own'
+    }
+    const rows = entries.map(([key, entry]) => {
+      const cls = `perm ${entry.source}`
+      const extra = entry.actions.filter((action) => !BASE_ACTIONS.includes(action))
+      const keyCell = td('mono nowrap', key)
+      if (detail.guesses.includes(key)) keyCell.append(' ', badge('guess', 'pending', 'Proposed from the code, not confirmed'))
+      return row(
+        keyCell,
+        ...BASE_ACTIONS.map((action) => (entry.actions.includes(action) ? td(cls, 'yes') : td('muted', '-'))),
+        extra.length > 0 ? td(cls, extra.join(', ')) : td('muted', '-'),
+        td(cls, origin(entry)),
+      )
+    })
+    return table(['Key', 'View', 'Create', 'Edit', 'Delete', 'Other', 'Origin'], rows)
+  }
+
+  function roleRunbooks(detail) {
+    if (detail.runbooksOf.length === 0) return el('p', 'none', 'No runbook runs this role.')
+    const rows = detail.runbooksOf.map((rb) => {
+      const first = td(null, link(runbookHash(rb.id), 'rbid', rb.id))
+      if (rb.status && rb.status !== 'active') first.append(' ', badge(rb.status, rb.status))
+      first.append(el('span', 'title', rb.title || '(no title)'))
+      const states = rb.states.length === 0
+        ? el('span', 'muted', 'never run')
+        : el('div', 'badges', ...rb.states.map((s) => badge(s.viewport ? `${s.viewport} ${s.result ?? '-'}` : (s.result ?? '-'), stateClass(s.result))))
+      const tr = row(first, td('mono', rb.outcomes.join(', ')), td(null, states), td(null, rb.review ? badge('review', 'pending', REVIEW_HELP) : null))
+      tr.className = 'link'
+      tr.addEventListener('click', (event) => {
+        if (event.target.closest('a')) return
+        location.hash = runbookHash(rb.id)
+      })
+      return tr
+    })
+    return table(['Runbook', 'Outcome', 'Last run', ''], rows)
+  }
+
+  function roleHistoryTable(history) {
+    if (history.length === 0) return el('p', 'none', 'No permission change in the git history of roles.json.')
+    return table(['Date', 'Changes', 'Commit', 'Marked'], history.map((entry) => row(
+      td('date', entry.date),
+      td('mono', el('div', 'lines-list', ...entry.changes.map((change) => el('div', null, change)))),
+      td('date', entry.commit),
+      td(entry.marked > 0 ? 'small' : 'muted small', `${plural(entry.marked, 'runbook')} marked for review`),
+    )))
+  }
+
+  async function rolePage(name, stale) {
+    const [list, detail] = await Promise.all([settled(rolesData(true)), settled(api(`/api/role/${enc(name)}`))])
+    if (stale()) return
+    if (list.error) {
+      side.replaceChildren()
+      return showError(list.error)
+    }
+    if (!list.value.enabled) {
+      side.replaceChildren()
+      return showMessage(ROLES_OFF)
+    }
+    rolesSide(list.value, name)
+    if (!list.value.rows.some((r) => r.name === name)) return showMessage(`No role named "${name}".`)
+    if (detail.error) return showError(detail.error)
+    const d = detail.value
+
+    const dl = el('dl')
+    const add = (label, ...value) => dl.append(el('dt', null, label), el('dd', null, ...value))
+    add('Inherits', ...inheritsNodes(d.inherits))
+    add('Account', d.account ? `${d.account.emailEnv} / ${d.account.passwordEnv}` : accountNode(d))
+    add('Found', d.found.length === 0 ? el('span', 'muted', '-') : el('div', 'lines-list', ...d.found.map((source) => el('div', null, source))))
+    add('Guesses', d.guesses.length === 0 ? el('span', 'muted', '-') : d.guesses.join(', '))
+
+    const badges = el('div', 'badges', badge(plural(d.runbooks, 'runbook')))
+    if (d.reviews > 0) badges.append(badge(plural(d.reviews, 'pending review'), 'pending'))
+    view.replaceChildren(
+      el('div', 'crumbs', link('#/roles', null, 'roles'), ' / ', el('b', null, d.name)),
+      el('h3', 'detail-id', d.name),
+      el('div', 'detail-title', d.description || '(no description)'),
+      badges,
+      el('h4', null, 'Details'),
+      el('div', 'panel', dl),
+      el('h4', null, 'Effective permissions'),
+      effectiveTable(d),
+      el('h4', null, 'Runbooks'),
+      roleRunbooks(d),
+      el('h4', null, 'Permission history'),
+      roleHistoryTable(d.history),
+      el('p', 'legend', 'From the git log of roles.json.'),
+    )
   }
 
   // Router
@@ -783,14 +1084,16 @@
     const [hashPath, hashQuery = ''] = location.hash.replace(/^#\/?/, '').split('?')
     const raw = hashPath.replace(/\/$/, '')
     const filters = new URLSearchParams(hashQuery)
-    for (const key of [...filters.keys()]) if (!['capability', 'feature', 'path'].includes(key)) filters.delete(key)
+    for (const key of [...filters.keys()]) if (!['capability', 'feature', 'path', 'role'].includes(key)) filters.delete(key)
     const parts = raw === '' ? [] : raw.split('/').map((segment) => {
       try { return decodeURIComponent(segment) } catch { return null }
     })
     if (parts.length === 0) return location.replace('#/runbooks')
     setSideOpen(false)
     const [page, a, b, c] = parts
-    setMenu(page === 'coverage' ? 'coverage' : 'runbooks')
+    setMenu(page === 'coverage' || page === 'roles' ? page : 'runbooks')
+    // The Roles page fetches /api/roles itself; every other page reuses the first answer.
+    if (page !== 'roles') rolesData()
     const mine = ++token
     const stale = () => mine !== token
     try {
@@ -799,6 +1102,8 @@
       else if (page === 'runbook' && a && parts.length === 2) await runbookPage(a, 'runbook', null, stale)
       else if (page === 'runbook' && a && b === 'history' && parts.length <= 4) await runbookPage(a, 'history', c ?? null, stale)
       else if (page === 'coverage' && parts.length <= 2) await coveragePage(a === undefined ? null : dataName(a), stale, filters)
+      else if (page === 'roles' && parts.length === 1) await rolesPage(stale)
+      else if (page === 'roles' && parts.length === 2) await rolePage(a, stale)
       else notFound()
     } catch (error) {
       if (!stale()) showError(error)
