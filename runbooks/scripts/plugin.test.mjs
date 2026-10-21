@@ -83,12 +83,13 @@ test('all five roles commands exist and none is a stub', () => {
 
 test('every command is listed in the skill table and in both READMEs', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/*.md').map((rel) => path.basename(rel, '.md'))
+  const rolesCommands = findFiles(PLUGIN_ROOT, 'commands/roles/*.md').map((rel) => path.basename(rel, '.md'))
   for (const doc of ['skills/runbooks/SKILL.md', 'README.md', 'templates/readme.md']) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, doc), 'utf8')
     for (const name of commands) {
       assert.match(text, new RegExp(`/runbooks:${name}\\b`), `${doc} lists ${name}`)
     }
-    for (const name of ROLES_COMMANDS) {
+    for (const name of rolesCommands) {
       assert.match(text, new RegExp(`/runbooks:roles:${name}\\b`), `${doc} lists roles:${name}`)
     }
   }
