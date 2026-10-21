@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "actions": ["approve"],
+  "roles": {
+    "viewer": {
+      "description": "Reads billing",
+      "found": ["src/auth/roles.ts:8"],
+      "permissions": { "billing/*": ["view"] },
+      "origins": { "billing/*": "guess" }
+    },
+    "editor": {
+      "description": "Edits invoices",
+      "found": ["src/auth/roles.ts:12"],
+      "permissions": {
+        "billing/invoices": ["view", "create", "edit", "delete"],
+        "billing/*": ["view"]
+      }
+    },
+    "manager": {
+      "description": "Billing manager",
+      "inherits": ["editor"],
+      "found": ["user"],
+      "permissions": { "billing/invoices": ["view", "create", "edit", "approve"] }
+    },
+    "admin": {
+      "description": "Administrator",
+      "inherits": ["manager"],
+      "found": ["src/auth/roles.ts:30"],
+      "permissions": { "billing/invoices": ["view", "create", "edit", "delete", "approve"] }
+    }
+  }
+}
