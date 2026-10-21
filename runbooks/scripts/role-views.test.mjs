@@ -79,3 +79,10 @@ test('citingRole lists places and heirs', () => {
   const admin = citingRole(ROLES, registry, runbooks, 'admin')
   assert.deepEqual(admin.runbooks.find((r) => r.id === 'billing.legacy').places, ['roles', 'As:'])
 })
+
+test('citingRole lists a runbook whose only link to the role is a review entry', () => {
+  const base = runbooks.find((r) => r.id === 'billing.create-invoice')
+  const only = { ...base, roles: ['admin'], review: [{ reason: 'role-permissions', role: 'editor', key: 'billing/invoices', change: 'delete removed', date: '2026-10-22' }] }
+  const cited = citingRole(ROLES, registry, [only], 'editor')
+  assert.deepEqual(cited.runbooks, [{ id: only.id, path: only.path, places: ['review'] }])
+})

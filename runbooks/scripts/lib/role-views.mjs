@@ -117,6 +117,7 @@ export function citingRole(root, registry, runbooks, name) {
     if (steps.some((step) => step.roles.includes(name))) places.push('Roles:')
     if (steps.some((step) => name in step.outcomes)) places.push('role line')
     if (steps.some((step) => step.as === name)) places.push('As:')
+    if ((rb.review || []).some((entry) => entry.role === name)) places.push('review')
     if (places.length > 0) cited.push({ id: rb.id, path: rb.path, places })
   }
   return { runbooks: cited, heirs: heirsOf(registry, name) }

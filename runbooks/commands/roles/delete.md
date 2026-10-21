@@ -31,7 +31,7 @@ Done when you hold the role and its matrix.
 
 ## 2. List what cites the role
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --citing <name>` and show it: the runbooks that cite the role in `roles`, in a `Roles:` line, in a role line or in an `As:` line, and the heirs (roles that inherit from it, directly or not).
+Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --citing <name>` and show it: the runbooks that cite the role in `roles`, in a `Roles:` line, in a role line, in an `As:` line or in a `review` entry, and the heirs (roles that inherit from it, directly or not).
 
 Done when the user has seen the runbooks and the heirs.
 
@@ -52,7 +52,7 @@ The write has four parts, in one go:
 
 1. `roles.json`: remove the role's entry, remove it from every `inherits`, and apply the Copy answer.
 2. `runbooks.config.json`: remove `accounts.<name>` when it exists.
-3. Each runbook from step 2: remove `<name>` from `roles` (a runbook left with `roles` empty is a problem: tell the user and ask with `AskUserQuestion` whether to set `all` or deprecate it), remove it from `Roles:` lines (a line left empty is removed), remove its role lines, and and handle each `As: <name>`: show it in the diff and ask with `AskUserQuestion` which role replaces it (or `anonymous`), never delete it silently. `roles: all` is left as it is, even though `--citing` lists those runbooks under `roles`. Only explicit `roles` lists, `Roles:` lines, role lines and `As:` lines change. Drop the `review` entries whose `role` is the deleted role, and keep the `role-deleted` entries that step 5 adds afterwards.
+3. Each runbook from step 2: remove `<name>` from `roles` (a runbook left with `roles` empty is a problem: tell the user and ask with `AskUserQuestion` whether to set `all` or deprecate it), remove it from `Roles:` lines (a line left empty is removed), remove its role lines, and handle each `As: <name>`: show it in the diff and ask with `AskUserQuestion` which role replaces it (or `anonymous`), never delete it silently. `roles: all` is left as it is, even though `--citing` lists those runbooks under `roles`. Only explicit `roles` lists, `Roles:` lines, role lines, `As:` lines and `review` entries change. Drop the `review` entries whose `role` is the deleted role, and keep the `role-deleted` entries that step 5 adds afterwards.
 4. The fixture folders `@<name>` of mocked runbooks (`<upstream.fixtures>/<capability>/<flow>/@<name>/` and `.../S<nn>/@<name>/`): list them and ask whether to remove them (`git rm -r`, or delete the untracked files).
 5. Nothing else. Reports in `_runs/` stay as they are.
 
