@@ -88,5 +88,5 @@ test('the upstream server version equals the plugin version', async () => {
 test('the upstream reference has the sections the commands link to', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/references/upstream.md'), 'utf8')
   const headings = [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1])
-  assert.deepEqual(headings, ['Modes', 'Fixtures', 'Server', 'Control routes', 'Recording', 'Scripts'])
+  assert.deepEqual(headings, ['Modes', 'Fixtures', 'Server', 'Control routes', 'Recording', 'Scripts', 'Contract'])
 })

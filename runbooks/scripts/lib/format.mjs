@@ -146,3 +146,13 @@ export function moveToCallsMarkdown({ source, sourceRoot, runbooks, left, orphan
   lines.push(written.length > 0 ? `Written: ${written.join(', ')}.` : 'Dry run: nothing written. Run again with --write to apply.')
   return `${lines.join('\n')}\n`
 }
+
+export function contractMarkdown({ schema, runbooks, findings }) {
+  const lines = [
+    schema ? `Contract: ${schema}. Runbooks checked: ${runbooks.length}.` : `Runbooks checked: ${runbooks.length}.`,
+    ...(schema ? [] : ['No upstream.schema in the config: calls and fixtures were checked against each other only.']),
+    '',
+    findings.length === 0 ? 'No findings.' : table(['Runbook', 'Kind', 'Finding'], findings.map((f) => [f.runbook, f.kind, f.message])),
+  ]
+  return `${lines.join('\n')}\n`
+}
