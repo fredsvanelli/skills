@@ -2,10 +2,12 @@ import { actionsByCase, noAccountRoles } from './roles.mjs'
 
 const sameActions = (a, b) => a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n')
 
-// True when the role's actions are the same in every case of the runbook and no role line names it with a case.
+// True when the role's actions are the same in every case of the runbook, no role line names it with a case
+// and no step of the runbook has a Cases: line.
 export function runsOnce(registry, runbook, steps, role) {
   if (!runbook.context) return false
   if (steps.some((step) => step.caseOutcomes && Object.hasOwn(step.caseOutcomes, role))) return false
+  if (steps.some((step) => (step.cases ?? []).length > 0)) return false
   const byCase = actionsByCase(registry, role, runbook.capability, runbook.feature)
   if (byCase === null) return false
   const lists = (runbook.cases ?? []).map((kase) => Object.hasOwn(byCase, kase) ? byCase[kase] : [])

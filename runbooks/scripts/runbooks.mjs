@@ -64,7 +64,8 @@ Commands:
   contexts      [--json] lists the contexts with their keys, cases and runbook count
   contexts      --affected <name> [--key k] lists the runbooks of a context, narrowed to one key
   passes        <id> [--role a,b] [--case a,b] lists the passes of a runbook: role, case, the case whose data the
-                pass builds, viewport and account. A role whose permissions do not change by case runs once (case *)
+                pass builds, viewport and account. A role runs once (case *) when its permissions do not change
+                by case, no role line names it with a case and no step has a Cases: line
   rename-case   <from> <to> [--write] renames a case in every runbook of its context (cases, Preconditions,
                 step Cases lines, role lines) and moves its +<from> fixture folders. Refuses a <to> that is
                 already a case. A dry run unless --write. It does not edit roles.json

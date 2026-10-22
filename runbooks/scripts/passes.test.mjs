@@ -98,3 +98,23 @@ test('a case named like an Object key does not crash passes or junit', () => {
     assert.equal(junit.code, 0, junit.stderr)
   }
 })
+
+test('a Cases: line on any step makes every role run per case', () => {
+  const s03 = '### S03. The client shows its plan\n\nParents: S01\nCases: regular\nActions:\n1. Open the "Plan" tab.\nExpected: the tab shows the regular plan.\n\n---\n\n## Not covered'
+  const dir = copyWithEdit((text) => text.replace('## Not covered', s03))
+  const { registry, runbook, steps } = loadFixtureRunbook('clients.edit-client', dir)
+  assert.deepEqual(runbook.problems, [])
+  for (const role of ['viewer', 'admin', 'anonymous']) assert.equal(runsOnce(registry, runbook, steps, role), false)
+  assert.deepEqual(casePlan(registry, runbook, steps).admin, { once: false, cases: ['vip-team', 'vip-outside', 'regular'] })
+  const out = JSON.parse(run(['passes', 'clients.edit-client', '--json', '--root', dir]).stdout)
+  assert.equal(out.passes.length, 12)
+  assert.deepEqual(out.passes.filter((p) => p.role === 'admin').map((p) => p.case), ['vip-team', 'vip-outside', 'regular'])
+  const names = ['S01 open as admin in regular', 'S02 edit as admin in regular', 'S03 plan as admin in regular']
+  fs.writeFileSync(path.join(dir, 'run.xml'), `<testsuites><testsuite name="ui">${names.map((name) => `<testcase classname="ui" name="${name}"/>`).join('')}</testsuite></testsuites>`)
+  const junit = run(['junit', 'clients.edit-client', '--file', 'run.xml', '--root', dir, '--json'])
+  assert.equal(junit.code, 0, junit.stderr)
+  const result = JSON.parse(junit.stdout)
+  assert.deepEqual(result.extra, [])
+  assert.deepEqual(result.steps.find((row) => row.role === 'admin' && row.case === 'regular' && row.step === 'S03'), { step: 'S03', role: 'admin', case: 'regular', title: 'The client shows its plan', state: 'passed', seen: '', tests: ['S03 plan as admin in regular'] })
+  assert.equal(result.steps.some((row) => row.role === 'admin' && row.case === 'vip-team' && row.step === 'S03'), false)
+})
