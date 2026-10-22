@@ -23,7 +23,7 @@ const isObject = (value) => typeof value === 'object' && value !== null && !Arra
 const isStringList = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string')
 
 // A key is "<capability>/<feature>" or "<capability>/*". Neither part is empty or holds a slash.
-function splitKey(key) {
+export function splitKey(key) {
   const parts = key.split('/')
   return parts.length === 2 && parts[0] && parts[1] ? parts : null
 }
@@ -101,17 +101,21 @@ export function parseRoles(raw, { accounts } = {}) {
   return { version: 1, actions, names: Object.keys(roles), roles }
 }
 
-export function loadRoles(projectRoot, config) {
-  if (!rolesEnabled(config)) return null
+// The registry as written, for the commands that edit it and must keep the fields the loader drops.
+export function readRolesFile(projectRoot, config) {
   const rel = rolesFileOf(config)
   const file = path.join(projectRoot, rel)
   if (!fs.existsSync(file)) throw new RolesError(`${rel} not found`)
-  let raw
   try {
-    raw = JSON.parse(fs.readFileSync(file, 'utf8'))
+    return { rel, file, raw: JSON.parse(fs.readFileSync(file, 'utf8')) }
   } catch (err) {
     throw new RolesError(`${rel} is not valid JSON: ${err.message}`)
   }
+}
+
+export function loadRoles(projectRoot, config) {
+  if (!rolesEnabled(config)) return null
+  const { rel, raw } = readRolesFile(projectRoot, config)
   try {
     return parseRoles(raw, { accounts: config.accounts })
   } catch (err) {

@@ -221,3 +221,16 @@ export function contractMarkdown({ schema, runbooks, findings }) {
   ]
   return `${lines.join('\n')}\n`
 }
+
+export function importPermissionsMarkdown({ file, csv, actionsAdded, changes, kept, written }) {
+  const list = (actions) => (actions === null ? 'absent' : actions.join(', ') || 'none')
+  const lines = [`Imports ${csv} into ${file}.`, '']
+  lines.push(changes.length === 0 ? 'No key changes.' : table(['Role', 'Key', 'Before', 'After'],
+    changes.map((c) => [c.role, c.key, list(c.before), list(c.after)])), '')
+  if (actionsAdded.length > 0) lines.push(`Project actions added: ${actionsAdded.join(', ')}.`, '')
+  if (kept.length > 0) lines.push(`Roles with no row, left as they are: ${kept.join(', ')}.`, '')
+  if (written) lines.push(`Written: ${file}.`)
+  else if (changes.length === 0 && actionsAdded.length === 0) lines.push('Nothing to change.')
+  else lines.push('Dry run: nothing written. Run again with --write to apply.')
+  return `${lines.join('\n')}\n`
+}
