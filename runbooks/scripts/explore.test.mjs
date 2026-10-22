@@ -290,3 +290,28 @@ test('coverageView narrows the roles to the role filter', () => {
   assert.deepEqual(one.result.roles.map((r) => r.role), ['viewer'])
   assert.equal(one.scope, 'overall')
 })
+
+const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
+
+test('runbookView and rolesView carry the case', () => {
+  const config = loadConfig(CONTEXTS)
+  const view = runbookView(CONTEXTS, config, 'clients.edit-client', TODAY)
+  assert.equal(view.context, 'client-access')
+  assert.equal(view.casesAll, true)
+  assert.deepEqual(view.cases, ['vip-team', 'vip-outside', 'regular'])
+  assert.ok(view.stepStates.S02.some((s) => s.role === 'manager' && s.case === 'vip-outside'))
+  assert.ok(view.stepStates.S02.some((s) => s.role === 'admin' && s.case === '*'))
+  const roles = rolesView(CONTEXTS, config, TODAY)
+  const manager = roles.matrix.roles.find((r) => r.name === 'manager')
+  assert.deepEqual(Object.keys(manager.cells['clients/*'].cases), ['vip-team', 'vip-outside', 'regular'])
+  assert.equal(roles.matrix.roles.find((r) => r.name === 'viewer').cells['billing/*'].cases, undefined)
+  assert.deepEqual(roles.contexts.map((c) => c.name), ['client-access'])
+})
+
+test('without contexts the views keep their shape', () => {
+  const view = rolesView(ROLES, loadConfig(ROLES), TODAY)
+  assert.equal('contexts' in view, false)
+  assert.equal('caseKeys' in view.rows[0], false)
+  const rb = runbookView(ROLES, loadConfig(ROLES), 'billing.cancel-invoice', TODAY)
+  assert.equal('context' in rb, false)
+})

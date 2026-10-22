@@ -63,7 +63,14 @@ function reportsOf(root, config, runbooks) {
 
 export function roleRows(root, config, registry, runbooks) {
   const reports = reportsOf(root, config, runbooks)
-  return registry.names.map((name) => roleRow(root, config, registry, runbooks, reports, name))
+  const withContexts = Object.keys(registry.contexts ?? {}).length > 0
+  return registry.names.map((name) => {
+    const row = roleRow(root, config, registry, runbooks, reports, name)
+    // Without contexts the row keeps its old shape.
+    if (!withContexts) return row
+    const caseKeys = Object.values(effectivePermissions(registry, name)).filter((entry) => entry.cases).length
+    return { ...row, caseKeys }
+  })
 }
 
 // One state per case and viewport the role ran, in report order. `case` is absent when the report has no case. A role that ran once has the case '*'.

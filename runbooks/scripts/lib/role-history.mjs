@@ -20,14 +20,25 @@ function matrixAt(git, rev, file, name) {
   }
 }
 
-function diffMatrices(before, after) {
+// The actions of an entry in one case. A list is the same actions in every case.
+const actionsIn = (entry, kase) => (entry.cases && Object.hasOwn(entry.cases, kase) ? entry.cases[kase] : entry.cases ? [] : entry.actions)
+
+export function diffMatrices(before, after) {
   const changes = []
   for (const key of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) {
     if (!before[key]) changes.push(`${key}: key added`)
     else if (!after[key]) changes.push(`${key}: key removed`)
-    else {
+    else if (!before[key].cases && !after[key].cases) {
       for (const action of before[key].actions) if (!after[key].actions.includes(action)) changes.push(`${key}: ${action} removed`)
       for (const action of after[key].actions) if (!before[key].actions.includes(action)) changes.push(`${key}: ${action} added`)
+    } else {
+      const cases = [...new Set([...Object.keys(before[key].cases ?? {}), ...Object.keys(after[key].cases ?? {})])]
+      for (const kase of cases) {
+        const was = actionsIn(before[key], kase)
+        const now = actionsIn(after[key], kase)
+        for (const action of was) if (!now.includes(action)) changes.push(`${key}: ${kase}: ${action} removed`)
+        for (const action of now) if (!was.includes(action)) changes.push(`${key}: ${kase}: ${action} added`)
+      }
     }
   }
   return changes

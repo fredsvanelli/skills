@@ -195,3 +195,17 @@ test('/api/roles answers enabled false without role tracking', async (t) => {
   assert.deepEqual(await (await get(`${base}/api/roles`)).json(), { enabled: false })
   assert.equal((await get(`${base}/api/role/manager`)).status, 404)
 })
+
+test('the real page has a Case column in the runbook grid and lists contexts', () => {
+  const html = fs.readFileSync(fileURLToPath(new URL('../templates/ui.html', import.meta.url)), 'utf8')
+  assert.match(html, /'Case'/)
+  assert.match(html, /Contexts/)
+})
+
+test('/api/roles and /api/runbook serve the cases of a context', async (t) => {
+  const { base } = await start(t, { fixture: fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url)) })
+  const roles = await (await get(`${base}/api/roles`)).json()
+  assert.equal(roles.contexts[0].name, 'client-access')
+  const runbook = await (await get(`${base}/api/runbook/clients.edit-client`)).json()
+  assert.equal(runbook.context, 'client-access')
+})

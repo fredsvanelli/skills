@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from './lib/config.mjs'
-import { roleHistory } from './lib/role-history.mjs'
+import { roleHistory, diffMatrices } from './lib/role-history.mjs'
 
 const ROLES = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
 const REGISTRY = 'docs/runbooks/roles.json'
@@ -83,4 +83,18 @@ test('roleHistory does not count review lines of a role whose name starts with t
   assert.deepEqual(latest.changes, ['billing/invoices: delete added'])
   assert.equal(latest.marked, 0)
   assert.equal(roleHistory(dir, loadConfig(dir), 'manager-2')[0].marked, 1)
+})
+
+test('diffMatrices reports changes per case', () => {
+  const before = { 'clients/*': { actions: ['view', 'edit'], cases: { a: ['view', 'edit'], b: ['view'] } } }
+  const after = { 'clients/*': { actions: ['view'], cases: { a: ['view'], b: ['view'] } } }
+  assert.deepEqual(diffMatrices(before, after), ['clients/*: a: edit removed'])
+})
+
+test('diffMatrices counts a list as the same actions in every case', () => {
+  const list = { 'clients/*': { actions: ['view', 'edit'] } }
+  const map = { 'clients/*': { actions: ['view'], cases: { a: ['view', 'edit'], b: ['view'] } } }
+  assert.deepEqual(diffMatrices(list, map), ['clients/*: b: edit removed'])
+  assert.deepEqual(diffMatrices(map, list), ['clients/*: b: edit added'])
+  assert.deepEqual(diffMatrices(list, list), [])
 })

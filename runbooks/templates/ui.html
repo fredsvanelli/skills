@@ -546,6 +546,10 @@
     if (rb.feature) add('Feature', rb.feature)
     if (rb.rolesAll) add('Roles', 'all', rb.roles.length > 0 ? el('span', 'muted', ` (${rb.roles.join(', ')})`) : null)
     else if (rb.roles.length > 0) add('Roles', rb.roles.join(', '))
+    if (rb.context) {
+      add('Context', rb.context)
+      add('Cases', rb.casesAll ? 'all' : rb.cases.join(', '), rb.casesAll && rb.cases.length > 0 ? el('span', 'muted', ` (${rb.cases.join(', ')})`) : null)
+    }
     if (rb.viewports.length > 0) {
       add('Viewports', ...joined(rb.viewports.map((vp) => {
         const node = el('span', null, vp.name)
@@ -583,7 +587,9 @@
   }
 
   const stateText = (state) => (state === 'not-applicable' ? 'n/a' : state)
-  const stateBadge = (s) => badge(s.viewport ? `${s.viewport} ${stateText(s.state)}` : stateText(s.state), stateClass(s.state), s.state === 'not-applicable' ? 'not-applicable' : null)
+  // Each badge names the case and the viewport it ran in, when it has them.
+  const stateLabel = (s, text) => [s.case, s.viewport, text].filter(Boolean).join(' ')
+  const stateBadge = (s) => badge(stateLabel(s, stateText(s.state)), stateClass(s.state), s.state === 'not-applicable' ? 'not-applicable' : null)
 
   // With roles, the per-role grid above the steps holds the states, so the cards show none.
   function stepCard(step, states, withBadges = true) {
@@ -600,7 +606,7 @@
     return card
   }
 
-  // The last run as a grid of steps by role, one badge per viewport in each cell. Columns follow the runbook's roles.
+  // The last run as a grid of steps by role, one badge per case and viewport in each cell. Columns follow the runbook's roles.
   function roleGrid(rb) {
     const seen = Object.values(rb.stepStates).flat().map((s) => s.role ?? '-')
     const roles = [...new Set([...rb.roles.filter((name) => seen.includes(name)), ...seen])]
@@ -613,7 +619,7 @@
       }),
     ))
     const header = ['Step', ...roles.map((name) => (name === '-' ? 'no role' : link(`#/roles/${enc(name)}`, null, name)))]
-    return [el('div', 'role-grid', table(header, rows)), el('p', 'legend', 'Last run by role and viewport. n/a is not-applicable: a parent step was denied or hidden for that role.')]
+    return [el('div', 'role-grid', table(header, rows)), el('p', 'legend', 'Last run by role, case and viewport. * is a role that ran once for every case. n/a is not-applicable: a parent step was denied or hidden for that role.')]
   }
 
   // A role change marked this runbook; /runbooks:update clears the entries once the role lines are confirmed.
@@ -901,11 +907,15 @@
   // V C E X for the base actions, a dot for a missing one, then the first letter of each extra action.
   function permCell(entry) {
     if (!entry) return td('muted', '-')
-    const extra = entry.actions.filter((action) => !BASE_ACTIONS.includes(action))
-    const text = [...BASE_ACTIONS.map((action) => (entry.actions.includes(action) ? BASE_INITIALS[action] : '·')),
-      ...extra.map((action) => action.charAt(0).toUpperCase())].join(' ')
-    const cell = td(`perm ${entry.source}`, text)
-    cell.title = `${entry.actions.join(', ')} (${entry.source})`
+    const initials = (actions) => [...BASE_ACTIONS.map((action) => (actions.includes(action) ? BASE_INITIALS[action] : '·')),
+      ...actions.filter((action) => !BASE_ACTIONS.includes(action)).map((action) => action.charAt(0).toUpperCase())].join(' ')
+    // A key of a context shows one line per case.
+    const cell = entry.cases
+      ? td(`perm ${entry.source}`, ...Object.entries(entry.cases).map(([kase, actions]) => el('div', 'nowrap', `${kase} ${initials(actions)}`)))
+      : td(`perm ${entry.source}`, initials(entry.actions))
+    cell.title = entry.cases
+      ? `${Object.entries(entry.cases).map(([kase, actions]) => `${kase}: ${actions.join(', ') || 'none'}`).join('; ')} (${entry.source})`
+      : `${entry.actions.join(', ')} (${entry.source})`
     return cell
   }
 
@@ -933,6 +943,7 @@
       td('mono', ...inheritsNodes(r.inherits)),
       td('small', accountNode(r)),
       td('num', String(r.runbooks)),
+      ...(r.caseKeys === undefined ? [] : [td('num', String(r.caseKeys))]),
       td(null, r.reviews > 0 ? badge(String(r.reviews), 'pending') : el('span', 'muted', '0')),
       td(null, el('div', 'badges', ...resultBadges(r.results))),
     )
@@ -953,6 +964,20 @@
     return details
   }
 
+  function contextsSection(contexts) {
+    return [el('h4', null, 'Contexts'), contexts.length === 0 ? el('p', 'none', 'No contexts in roles.json.')
+      : table(['Context', 'Keys', 'Cases', 'Runbooks'], contexts.map((c) => row(
+        td(null, el('span', 'mono', c.name), c.description ? el('span', 'title', c.description) : null),
+        td('mono', c.keys.join(', ')), td('mono', c.cases.join(', ')), td('num', String(c.runbooks)))))]
+  }
+
+  // The contexts a role depends on: the ones that own a key where its entry has cases.
+  function contextsOf(detail, contexts) {
+    const owns = (context, key) => context.keys.some((k) => k === key || (k.endsWith('/*') && key.startsWith(k.slice(0, -1))))
+    const caseKeys = Object.keys(detail.effective).filter((key) => detail.effective[key].cases)
+    return contexts.filter((context) => caseKeys.some((key) => owns(context, key)))
+  }
+
   async function rolesPage(stale) {
     const data = await rolesData(true)
     if (stale()) return
@@ -971,8 +996,9 @@
         counter(c.keysWithoutRunbook, 'permissions without a runbook', c.keysWithoutRunbook > 0)),
       data.rows.length === 0
         ? el('p', 'none', 'No roles in roles.json yet.')
-        : table(['Role', 'Inherits', 'Account', 'Runbooks', 'Review', 'Last results'], data.rows.map(roleRowNode)),
+        : table(['Role', 'Inherits', 'Account', 'Runbooks', ...(data.contexts ? ['Case keys'] : []), 'Review', 'Last results'], data.rows.map(roleRowNode)),
       matrixSection(data.matrix),
+      ...(data.contexts ? contextsSection(data.contexts) : []),
     )
   }
 
@@ -985,19 +1011,25 @@
       if (entry.source === 'overridden') return from ? `overridden (parent ${from})` : 'overridden'
       return 'own'
     }
-    const rows = entries.map(([key, entry]) => {
+    const withCases = entries.some(([, entry]) => entry.cases)
+    // One row per case on a key of a context, one row otherwise.
+    const rows = entries.flatMap(([key, entry]) => {
       const cls = `perm ${entry.source}`
-      const extra = entry.actions.filter((action) => !BASE_ACTIONS.includes(action))
-      const keyCell = td('mono nowrap', key)
-      if (detail.guesses.includes(key)) keyCell.append(' ', badge('guess', 'pending', 'Proposed from the code, not confirmed'))
-      return row(
-        keyCell,
-        ...BASE_ACTIONS.map((action) => (entry.actions.includes(action) ? td(cls, 'yes') : td('muted', '-'))),
-        extra.length > 0 ? td(cls, extra.join(', ')) : td('muted', '-'),
-        td(cls, origin(entry)),
-      )
+      const lines = entry.cases ? Object.entries(entry.cases) : [[null, entry.actions]]
+      return lines.map(([kase, actions], index) => {
+        const extra = actions.filter((action) => !BASE_ACTIONS.includes(action))
+        const keyCell = td('mono nowrap', key)
+        if (index === 0 && detail.guesses.includes(key)) keyCell.append(' ', badge('guess', 'pending', 'Proposed from the code, not confirmed'))
+        return row(
+          keyCell,
+          ...(withCases ? [kase === null ? td('muted', '-') : td('mono nowrap', kase)] : []),
+          ...BASE_ACTIONS.map((action) => (actions.includes(action) ? td(cls, 'yes') : td('muted', '-'))),
+          extra.length > 0 ? td(cls, extra.join(', ')) : td('muted', '-'),
+          td(cls, origin(entry)),
+        )
+      })
     })
-    return table(['Key', 'View', 'Create', 'Edit', 'Delete', 'Other', 'Origin'], rows)
+    return table(['Key', ...(withCases ? ['Case'] : []), 'View', 'Create', 'Edit', 'Delete', 'Other', 'Origin'], rows)
   }
 
   function roleRunbooks(detail) {
@@ -1008,7 +1040,7 @@
       first.append(el('span', 'title', rb.title || '(no title)'))
       const states = rb.states.length === 0
         ? el('span', 'muted', 'never run')
-        : el('div', 'badges', ...rb.states.map((s) => badge(s.viewport ? `${s.viewport} ${s.result ?? '-'}` : (s.result ?? '-'), stateClass(s.result))))
+        : el('div', 'badges', ...rb.states.map((s) => badge(stateLabel(s, s.result ?? '-'), stateClass(s.result))))
       const tr = row(first, td('mono', rb.outcomes.join(', ')), td(null, states), td(null, rb.review ? badge('review', 'pending', REVIEW_HELP) : null))
       tr.className = 'link'
       tr.addEventListener('click', (event) => {
@@ -1052,6 +1084,8 @@
     add('Account', d.account ? `${d.account.emailEnv} / ${d.account.passwordEnv}` : accountNode(d))
     add('Found', d.found.length === 0 ? el('span', 'muted', '-') : el('div', 'lines-list', ...d.found.map((source) => el('div', null, source))))
     add('Guesses', d.guesses.length === 0 ? el('span', 'muted', '-') : d.guesses.join(', '))
+    const contexts = contextsOf(d, list.value.contexts ?? [])
+    if (contexts.length > 0) add('Contexts', ...joined(contexts.map((c) => el('span', null, c.name, el('span', 'muted', ` (${c.cases.join(', ')})`))), ', '))
 
     const badges = el('div', 'badges', badge(plural(d.runbooks, 'runbook')))
     if (d.reviews > 0) badges.append(badge(plural(d.reviews, 'pending review'), 'pending'))

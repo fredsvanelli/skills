@@ -551,3 +551,12 @@ test('two case-created marks for different cases both stay, and roles --affected
   const none = JSON.parse(run(['roles', '--affected', '--role', 'viewer', '--key', 'clients/list', '--case', 'nope', '--json', '--root', dir]).stdout)
   assert.deepEqual(none, [])
 })
+
+test('roles prints the Case keys column and one row per case for a context', () => {
+  const list = run(['roles', '--root', CONTEXTS])
+  assert.match(list.stdout, /\| Case keys \|/)
+  const detail = run(['roles', 'manager', '--root', CONTEXTS]).stdout
+  assert.match(detail, /\| Key \| Case \| Actions \| Source \| From \|/)
+  assert.match(detail, /\| clients\/\* \| vip-outside \|/)
+  assert.doesNotMatch(run(['roles', '--root', fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))]).stdout, /Case keys/)
+})

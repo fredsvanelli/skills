@@ -5,7 +5,7 @@ import { collect, coverageResult } from './project.mjs'
 import { computeCoverage, roleCoverage } from './coverage.mjs'
 import { rolesEnabled } from './config.mjs'
 import { loadRoles, effectivePermissions } from './roles.mjs'
-import { roleRows, roleDetail } from './role-views.mjs'
+import { roleRows, roleDetail, contextRows } from './role-views.mjs'
 import { roleHistory } from './role-history.mjs'
 import { staleState } from './stale.mjs'
 import { listReports, reportByName } from './reports.mjs'
@@ -112,8 +112,9 @@ export function runbookView(root, config, id, { today }) {
   const name = reportFileName(rb.lastRun)
   const report = name ? reportByName(root, runbooksDir, name) : null
   const stepStates = {}
-  for (const { step, state, viewport, role } of report?.steps ?? []) {
-    ;(stepStates[step] ??= []).push({ role: role || null, viewport: viewport ?? null, state })
+  for (const { step, state, viewport, role, case: kase } of report?.steps ?? []) {
+    // A report with no Case column gives entries without a case key.
+    ;(stepStates[step] ??= []).push({ role: role || null, ...(kase ? { case: kase } : {}), viewport: viewport ?? null, state })
   }
 
   return {
@@ -121,6 +122,7 @@ export function runbookView(root, config, id, { today }) {
     feature: rb.feature,
     roles: rb.roles,
     rolesAll: rb.rolesAll,
+    ...(rb.context ? { context: rb.context, cases: rb.cases, casesAll: rb.casesAll } : {}),
     review: rb.review,
     viewports: rb.viewports.map((vp) => ({ name: vp, width: config.viewports[vp]?.width ?? null, height: config.viewports[vp]?.height ?? null })),
     upstreamFromConfig: rb.surface === 'ui' && (data.upstream === undefined || data.upstream === null),
@@ -162,10 +164,11 @@ export function rolesView(root, config, { today }) {
         const effective = effectivePermissions(registry, name)
         return {
           name,
-          cells: Object.fromEntries(Object.entries(effective).map(([key, entry]) => [key, { actions: entry.actions, source: entry.source }])),
+          cells: Object.fromEntries(Object.entries(effective).map(([key, entry]) => [key, { actions: entry.actions, source: entry.source, ...(entry.cases ? { cases: entry.cases } : {}) }])),
         }
       }),
     },
+    ...(Object.keys(registry.contexts ?? {}).length > 0 ? { contexts: contextRows(registry, runbooks) } : {}),
   }
 }
 

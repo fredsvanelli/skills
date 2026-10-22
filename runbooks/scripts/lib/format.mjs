@@ -194,8 +194,10 @@ const resultsText = (results) => {
 }
 
 export function rolesMarkdown(rows) {
-  return `${table(['Role', 'Description', 'Inherits', 'Account', 'Runbooks', 'Reviews', 'Guesses', 'Last results'],
-    rows.map((r) => [r.name, r.description, r.inherits.join(', ') || '-', r.account ? 'yes' : 'no', r.runbooks, r.reviews, r.guesses.length, resultsText(r.results)]))}\n`
+  // The Case keys column shows only when the registry has contexts, which is when rows carry caseKeys.
+  const withCases = rows.some((r) => r.caseKeys !== undefined)
+  return `${table(['Role', 'Description', 'Inherits', 'Account', 'Runbooks', 'Reviews', 'Guesses', ...(withCases ? ['Case keys'] : []), 'Last results'],
+    rows.map((r) => [r.name, r.description, r.inherits.join(', ') || '-', r.account ? 'yes' : 'no', r.runbooks, r.reviews, r.guesses.length, ...(withCases ? [r.caseKeys ?? 0] : []), resultsText(r.results)]))}\n`
 }
 
 export function roleMarkdown(detail) {
@@ -205,8 +207,15 @@ export function roleMarkdown(detail) {
   if (detail.found.length > 0) lines.push(`Found in: ${detail.found.join(', ')}.`)
   lines.push('', '### Effective permissions', '')
   const keys = Object.keys(detail.effective)
-  lines.push(keys.length === 0 ? 'None.' : table(['Key', 'Actions', 'Source', 'From'],
-    keys.map((key) => [key, detail.effective[key].actions.join(', '), detail.effective[key].source, detail.effective[key].from.join(', ')])), '')
+  const withCases = keys.some((key) => detail.effective[key].cases)
+  const effectiveRows = keys.flatMap((key) => {
+    const entry = detail.effective[key]
+    const tail = [entry.source, entry.from.join(', ')]
+    if (!withCases) return [[key, entry.actions.join(', '), ...tail]]
+    if (!entry.cases) return [[key, '', entry.actions.join(', '), ...tail]]
+    return Object.entries(entry.cases).map(([kase, actions]) => [key, kase, actions.join(', '), ...tail])
+  })
+  lines.push(keys.length === 0 ? 'None.' : table(withCases ? ['Key', 'Case', 'Actions', 'Source', 'From'] : ['Key', 'Actions', 'Source', 'From'], effectiveRows), '')
   lines.push('### Runbooks', '')
   const stateText = (states) => (states.length === 0 ? 'never run' : states.map((s) => {
     const where = [s.case, s.viewport].filter(Boolean).join(' @ ')

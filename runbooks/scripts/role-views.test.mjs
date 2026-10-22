@@ -113,3 +113,12 @@ test('roleDetail shows states per case and viewport', () => {
   assert.deepEqual(states.map((s) => s.case), ['vip-team', 'vip-outside', 'regular'])
   assert.ok(states.every((s) => s.viewport === null && s.result === 'passed'))
 })
+
+test('roleRows counts the keys that depend on a case, only when the registry has contexts', () => {
+  const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
+  const cfg = loadConfig(CONTEXTS)
+  const rows = roleRows(CONTEXTS, cfg, loadRoles(CONTEXTS, cfg), loadRunbooks(CONTEXTS, cfg))
+  assert.equal(rows.find((r) => r.name === 'manager').caseKeys, 1)
+  assert.equal(rows.find((r) => r.name === 'anonymous').caseKeys, 0)
+  assert.equal('caseKeys' in roleRows(ROLES, config, registry, runbooks)[0], false)
+})
