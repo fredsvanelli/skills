@@ -397,3 +397,10 @@ test('junitMarkdown shows the case column and labels rows with the case', () => 
   assert.match(out, /\| Role \| Case \| Viewport \| Step \|/)
   assert.match(out, /Steps with no test: S02 as manager in vip-outside @ mobile/)
 })
+
+test('without casesOf, a name with " in <case>" maps to no role, as before cases', () => {
+  const steps = parseSteps(EDIT_CLIENT_BODY)
+  const { extra, steps: rows } = stepStates(steps, asTests(['S01 open as admin in foo']), { roles: ['admin'] })
+  assert.deepEqual(extra.map((e) => [e.role, e.reason]), [[null, 'no " as <role>" suffix']])
+  assert.equal(rows.find((r) => r.step === 'S01').state, 'blocked')
+})

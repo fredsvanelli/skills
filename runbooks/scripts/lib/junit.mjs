@@ -142,21 +142,19 @@ export function stepStates(steps, tests, { waived = [], viewports = [], roles = 
   const extraEntry = (step, role, kase, viewport, test, reason) =>
     ({ step, ...(withRoles ? { role } : {}), ...(withCases ? { case: kase } : {}), ...(multi ? { viewport } : {}), test, ...(withRoles ? { reason } : {}) })
   // The case a test belongs to, written after the role; '*' for a role that runs once and has none.
-  const caseOfRow = (role, testCase) => {
+  const caseOfRow = (role, written) => {
     if (!withCases || !role) return null
-    return testCase.name.match(ROLE_IN_NAME)?.[2]?.toLowerCase() ?? (planOf(role).once ? '*' : null)
+    return written ?? (planOf(role).once ? '*' : null)
   }
   // Why a test of a known step maps to no row, or null when it maps to one.
-  const mismatch = (testCase, step, role, kase, viewport) => {
+  const mismatch = (written, writtenRole, step, role, viewport) => {
     if (withRoles && !role) {
-      const written = testCase.name.match(ROLE_IN_NAME)?.[1].toLowerCase()
-      return written ? `${written} is not one of the runbook's roles` : 'no " as <role>" suffix'
+      return writtenRole ? `${writtenRole} is not one of the runbook's roles` : 'no " as <role>" suffix'
     }
     if (withRoles && noAccount.includes(role)) return `${role} has no account`
     if (withRoles && !runsFor(step, role)) return `${step} does not run for ${role}`
     if (withCases) {
       const plan = planOf(role)
-      const written = testCase.name.match(ROLE_IN_NAME)?.[2]?.toLowerCase()
       if (plan.once && written) return `${role} runs once; drop " in ${written}"`
       if (!plan.once && !written) return 'no " in <case>" suffix'
       if (!plan.once && !plan.cases.includes(written)) return `${written} is not one of the runbook's cases`
@@ -171,9 +169,12 @@ export function stepStates(steps, tests, { waived = [], viewports = [], roles = 
   for (const testCase of tests) {
     const step = stepOfTest(testCase)
     const viewport = multi ? viewportOfTest(testCase) : null
-    const role = withRoles ? roleOfTest(testCase, roles) : null
-    const kase = caseOfRow(role, testCase)
-    const reason = !step ? null : !known.has(step) ? `the runbook has no ${step}` : mismatch(testCase, step, role, kase, viewport)
+    // Without a case plan a name with " in <case>" names no role, as before cases existed.
+    const named = testCase.name.match(ROLE_IN_NAME)
+    const parts = named && (withCases || !named[2]) ? { role: named[1].toLowerCase(), written: named[2]?.toLowerCase() } : {}
+    const role = withRoles && parts.role && roles.includes(parts.role) ? parts.role : null
+    const kase = caseOfRow(role, parts.written)
+    const reason = !step ? null : !known.has(step) ? `the runbook has no ${step}` : mismatch(parts.written, parts.role, step, role, viewport)
     if (!step) others.push(testCase)
     else if (reason) extra.push(extraEntry(step, role, kase, viewport, testCase.name, reason))
     else byKey.set(keyOf(role, kase, viewport, step), [...(byKey.get(keyOf(role, kase, viewport, step)) ?? []), testCase])
