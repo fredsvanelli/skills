@@ -20,7 +20,7 @@ Changes one part of a project that `/runbooks:setup` already prepared, without g
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md` and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The questions and the detection for each group are the ones in `${CLAUDE_PLUGIN_ROOT}/commands/setup.md`; this command asks only those of the chosen groups.
 
-Run `git status --porcelain` now and keep the list: a file that is already dirty changes how its commit works (`commits.md`). When `tests.ui.root` points to another repository, keep `git -C <tests.ui.root> status --porcelain` too.
+Run `git status --porcelain` now and keep the list: a file that is already dirty changes how its commit works (`commits.md`). When `tests.ui.root` points to a UI tests repository, keep `git -C <tests.ui.root> status --porcelain` too.
 
 ## 1. Read the current settings
 
