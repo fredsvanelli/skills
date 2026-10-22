@@ -42,7 +42,7 @@ One key per surface the stack allows, `tests.ui` and `tests.api`. A key for a su
 | `framework` | the test library: `playwright`, `cypress`, `jest`, `vitest`, `phpunit`, `pest`, ... `to-test` writes scripts with it |
 | `dir` | the folder new scripts go in |
 | `command` | runs scripts and writes a JUnit XML report. `{files}` is replaced by the script paths, `{junit}` by `.runbooks/junit/<run id>.xml` |
-| `root` | optional: the folder the command runs in, relative to the project root (`"apps/api"`), as in `entries` sources. `dir` is relative to it. `tests.api.root` stays inside the project: a `root` outside it warns, and from runbooks 2.0 it is a config error (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). `tests.ui.root` may point to another repository that holds the UI tests (`"../project-001-e2e"`); a runbook's `scripts` then start with that path (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`) |
+| `root` | optional: the folder the command runs in, relative to the project root (`"apps/api"`), as in `entries` sources. `dir` is relative to it. `tests.api.root` stays inside the project: a `root` outside it warns, and from runbooks 2.0 it is a config error (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). `tests.ui.root` may point to a UI tests repository (`"../project-001-e2e"`); a runbook's `scripts` then start with that path (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`) |
 | `baseUrl` | optional, `api` only: set when the scripts call a running server (Playwright `request`, `cy.request`, supertest against a URL); `run` then checks it answers |
 
 ```json

@@ -40,7 +40,7 @@ Otherwise print the current value of every group in a table, in the config `lang
 |---|---|
 | `language` | `language` |
 | `stack` | `stack`, and the `tests.<surface>` blocks it adds or removes |
-| `tests` | `tests.<surface>`: `tech`, `framework`, `dir`, `command`, `root`, `baseUrl`. `tests.ui.root` may point to another repository that holds the UI tests (ADR 0007) |
+| `tests` | `tests.<surface>`: `tech`, `framework`, `dir`, `command`, `root`, `baseUrl`. `tests.ui.root` may point to a UI tests repository (ADR 0007) |
 | `design` | `design`, and its server in `.mcp.json`. Only with `ui` |
 | `app` | `app.baseUrl`, `app.start`, `uiText`, `data.seedHint` |
 | `accounts` | `accounts.<role>`. Only with `ui`. With tracking on, each key must be a registered role |
