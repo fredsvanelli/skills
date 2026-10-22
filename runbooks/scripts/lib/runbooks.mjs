@@ -117,6 +117,9 @@ function readCases(runbook, data, body, registry) {
   const known = registry.contexts[context].cases
   runbook.casesAll = !given || written === 'all'
   runbook.cases = runbook.casesAll ? [...known] : asList(written)
+  const twice = runbook.cases.filter((name, i) => runbook.cases.indexOf(name) !== i)
+  for (const name of new Set(twice)) runbook.problems.push(`case "${name}" appears twice in cases`)
+  runbook.cases = [...new Set(runbook.cases)]
   if (!runbook.casesAll && runbook.cases.length === 0) runbook.problems.push('cases must list at least one case, or be all')
   if (!runbook.casesAll) {
     for (const name of runbook.cases) {

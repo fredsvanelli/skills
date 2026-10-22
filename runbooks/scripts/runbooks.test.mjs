@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { loadConfig, ConfigError, upstreamModeOf, rolesEnabled, rolesFileOf } from './lib/config.mjs'
 import { loadRunbooks } from './lib/runbooks.mjs'
 import { filterRunbooks } from './lib/filter.mjs'
+import { run } from './runbooks.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
 
@@ -577,4 +578,15 @@ test('a registry with no contexts gives runbooks without the case fields', () =>
   const rb = roleRunbook(dir, 'billing.cancel-invoice')
   assert.ok(rb.problems.includes('cases needs a context: billing/invoices belongs to no context'))
   assert.deepEqual(fields.filter((field) => Object.hasOwn(rb, field)), [])
+})
+
+test('a case listed twice in cases is a problem and runs once', () => {
+  const dir = copyContexts()
+  const file = path.join(dir, 'docs/runbooks/clients/edit-client.md')
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('cases: all', 'cases: [vip-team, vip-team, regular]').replace(/ {2}- vip-outside:.*\r?\n/, ''))
+  const edit = loadRunbooks(dir, loadConfig(dir)).find((rb) => rb.id === 'clients.edit-client')
+  assert.deepEqual(edit.cases, ['vip-team', 'regular'])
+  assert.deepEqual(edit.problems.filter((p) => p.startsWith('case ')), ['case "vip-team" appears twice in cases'])
+  const out = run(['passes', 'clients.edit-client', '--json', '--role', 'manager', '--root', dir])
+  assert.deepEqual(JSON.parse(out.stdout).passes.map((p) => p.case), ['vip-team', 'regular'])
 })

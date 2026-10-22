@@ -180,6 +180,7 @@ Problems the loader reports:
 - `cases needs a context: <capability>/<feature> belongs to no context`
 - `cases must list at least one case, or be all`
 - `case "<name>" is not a case of <context>`
+- `case "<name>" appears twice in cases`
 - `Preconditions: case "<name>" has no line under Cases:`
 - `Preconditions: Cases: "<name>" is not one of the runbook's cases`
 - `<step>: Cases: "<name>" is not one of the runbook's cases`
