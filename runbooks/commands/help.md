@@ -27,9 +27,9 @@ Read-only. It runs no runbook, writes no file and commits nothing. It answers fr
 | `format` | `skills/runbooks/references/format.md`, `templates/runbook.md`, `templates/runbook-api.md`, `templates/placeholder.md` |
 | `lifecycle` | `templates/readme.md` (Lifecycle), `skills/runbooks/references/format.md` (Status, Placeholders, Step states), `commands/map.md`, `commands/create.md`, `commands/update.md` |
 | `scenarios` | `skills/scenarios/SKILL.md`, `commands/create.md` |
-| `config` | `skills/runbooks/references/config.md`, `commands/setup.md`, `commands/settings.md` |
+| `config` | `skills/runbooks/references/config.md`, `commands/setup.md`, `commands/settings.md`, `docs/adr/0007-ui-tests-may-live-in-another-repo.md` |
 | `run` | `skills/runbooks/references/run-modes.md`, `commands/run.md`, `commands/check.md` |
-| `scripts` | `commands/to-test.md`, `skills/runbooks/references/format.md` (What a step can verify, Scripts of api runbooks), `docs/adr/0001-api-runbooks-run-through-their-script.md` |
+| `scripts` | `commands/to-test.md`, `skills/runbooks/references/format.md` (What a step can verify, Scripts of api runbooks), `docs/adr/0001-api-runbooks-run-through-their-script.md`, `docs/adr/0007-ui-tests-may-live-in-another-repo.md` |
 | `coverage` | `skills/runbooks/references/coverage.md`, `commands/coverage.md`, `docs/adr/0002-endpoint-coverage-by-surface.md`, `docs/adr/0004-mocked-runbooks-never-cover-endpoints.md` |
 | `audit` | `commands/audit-runbooks.md`, `commands/list.md` (`--affected`) |
 | `upstream` | `skills/runbooks/references/upstream.md`, `docs/adr/0003-mocked-upstream-served-by-plugin-server.md`, `docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`, `docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md` |

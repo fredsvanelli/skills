@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { isOutside } from './config.mjs'
 import { ROLE_NAME } from './roles.mjs'
 
 const MODES = ['mocked', 'live', 'record']
@@ -42,6 +43,9 @@ export function copiedServerWarning(root, config, version) {
   const file = config.upstream?.serverFile
   if (!file) return null
   const full = path.resolve(root, file)
+  // A copy in a UI tests repository that is not cloned here is not missing; see docs/adr/0007.
+  const testsRoot = config.tests?.ui?.root
+  if (testsRoot && isOutside(root, testsRoot) && !fs.existsSync(path.resolve(root, testsRoot))) return null
   if (!fs.existsSync(full)) return `upstream.serverFile ${file} is missing: run /runbooks:setup to copy it`
   const found = /export const VERSION = '([^']*)'/.exec(fs.readFileSync(full, 'utf8'))?.[1] ?? 'unknown'
   if (found === version) return null

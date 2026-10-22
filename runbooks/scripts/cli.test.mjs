@@ -235,6 +235,21 @@ test('copiedServerWarning reports a missing copy and a version mismatch', () => 
   assert.equal(copiedServerWarning(none, configOf(none), VERSION), null)
 })
 
+test('copiedServerWarning skips a copy in a UI tests repository that is not cloned, see docs/adr/0007', () => {
+  const tests = { ui: { framework: 'playwright', root: '../app-e2e', dir: 'tests' } }
+  const dir = upstreamProject({ serverFile: '../app-e2e/tests/runbooks-upstream.mjs' }, { tests })
+  assert.equal(copiedServerWarning(dir, configOf(dir), VERSION), null)
+  fs.mkdirSync(path.resolve(dir, '../app-e2e'), { recursive: true })
+  try {
+    assert.equal(
+      copiedServerWarning(dir, configOf(dir), VERSION),
+      'upstream.serverFile ../app-e2e/tests/runbooks-upstream.mjs is missing: run /runbooks:setup to copy it',
+    )
+  } finally {
+    fs.rmSync(path.resolve(dir, '../app-e2e'), { recursive: true })
+  }
+})
+
 test('list and coverage warn about the copied server', () => {
   const dir = upstreamProject({ serverFile: 'tools/upstream-server.mjs' })
   for (const command of ['list', 'coverage']) {

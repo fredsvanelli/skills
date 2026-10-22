@@ -18,4 +18,4 @@ When the upstream API of a `ui` project lives in another repository, that reposi
 - Endpoints of the other repository leave the front's coverage. The front's percentage measures its own entries, and the endpoints a `live` runbook used to cover count only in the API's install.
 - Without `upstream.schema`, nothing in the front notices an API change before a `live` run. `setup` says so when the API publishes no OpenAPI document.
 - The plugin fetches nothing. Bringing the published document into the front (a scheduled job, a bot pull request, a dispatch from the API's CI) is the project's CI.
-- A `fullstack` stack spans one repository. A `root` outside the project warns in 1.4 and becomes a config error in 2.0.
+- A `fullstack` stack spans one repository. A `root` outside the project warns in 1.4 and becomes a config error in 2.0. ADR 0007 lifts this for `tests.ui.root`: the UI tests may live in another repository.

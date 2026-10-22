@@ -36,6 +36,8 @@ A `ui` runbook reaches its upstream API in one of two modes. In `live` mode, it 
 
 When the upstream API lives in another repository, each repository has its own runbooks install and neither reads the other's files. The front lists the operations its screens reach in `calls`, which never count as coverage, and keeps the OpenAPI document the API publishes as `upstream.schema`. `runbooks.mjs contract --strict` checks calls and fixtures against that document, and `list --affected` names the runbooks a new version of it reaches. The API's install covers its endpoints. See [ADR 0005](docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md).
 
+The UI tests may live in a repository of their own, such as `project-001-e2e` next to `project-001`. Setup asks where they live and writes the relative path to `tests.ui.root`. The runbooks, the fixtures and the coverage stay in the app's repository, and the scripts and the upstream server copy go to the tests repository, committed there. See [ADR 0007](docs/adr/0007-ui-tests-may-live-in-another-repo.md).
+
 ## Install
 
     claude plugin marketplace add fredsvanelli/skills

@@ -318,7 +318,7 @@ test('loadConfig rejects an upstream block that is not an object', () => {
   }
 })
 
-test('loadConfig warns about paths outside the project, see docs/adr/0005', () => {
+test('loadConfig warns about paths outside the project except tests.ui.root, see docs/adr/0005 and 0007', () => {
   const load = (config) => loadConfig(tmpProject({ [CONFIG_PATH]: JSON.stringify({ version: 1, ...config }) })).warnings
   assert.deepEqual(load({}), [])
   assert.deepEqual(load({
@@ -329,7 +329,7 @@ test('loadConfig warns about paths outside the project, see docs/adr/0005', () =
       { extractor: 'next-app-router', root: '../api', glob: 'src/app/**/route.ts' },
     ],
     slices: { billing: ['src/app/billing/**', 'apps/api/src/app/invoices/**', '../api/src/app/invoices/**'] },
-    tests: { ui: { framework: 'playwright', dir: 'e2e' }, api: { framework: 'jest', dir: 'test', root: '../api' } },
+    tests: { ui: { framework: 'playwright', dir: 'tests', root: '../app-e2e' }, api: { framework: 'jest', dir: 'test', root: '../api' } },
     upstream: { mode: 'live', root: '../api' },
   }), [
     'entries[2]: root "../api" is outside the project, so its CI never reads it (docs/adr/0005). /runbooks:settings sources moves its ids to calls. From runbooks 2.0 it is a config error',

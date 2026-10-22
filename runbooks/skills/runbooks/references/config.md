@@ -42,7 +42,7 @@ One key per surface the stack allows, `tests.ui` and `tests.api`. A key for a su
 | `framework` | the test library: `playwright`, `cypress`, `jest`, `vitest`, `phpunit`, `pest`, ... `to-test` writes scripts with it |
 | `dir` | the folder new scripts go in |
 | `command` | runs scripts and writes a JUnit XML report. `{files}` is replaced by the script paths, `{junit}` by `.runbooks/junit/<run id>.xml` |
-| `root` | optional: the folder the command runs in, relative to the project root (`"apps/api"`), as in `entries` sources. It stays inside the project: a `root` outside it warns, and from runbooks 2.0 it is a config error (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`) |
+| `root` | optional: the folder the command runs in, relative to the project root (`"apps/api"`), as in `entries` sources. `dir` is relative to it. `tests.api.root` stays inside the project: a `root` outside it warns, and from runbooks 2.0 it is a config error (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). `tests.ui.root` may point to another repository that holds the UI tests (`"../project-001-e2e"`); a runbook's `scripts` then start with that path (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`) |
 | `baseUrl` | optional, `api` only: set when the scripts call a running server (Playwright `request`, `cy.request`, supertest against a URL); `run` then checks it answers |
 
 ```json
@@ -299,5 +299,5 @@ Warnings the loader prints for paths outside the project (from runbooks 2.0 the 
 
 - `entries[<n>]: root "<root>" is outside the project, so its CI never reads it (docs/adr/0005). /runbooks:settings sources moves its ids to calls. ...`
 - `slices.<name>: glob "<glob>" is outside the project and never matches a change (docs/adr/0005). ...`
-- `tests.<surface>.root "<root>" is outside the project (docs/adr/0005). ...`
+- `tests.api.root "<root>" is outside the project (docs/adr/0005). ...`. A `tests.ui.root` outside the project does not warn (docs/adr/0007).
 - `upstream.root is no longer read (docs/adr/0005); /runbooks:settings upstream removes it`

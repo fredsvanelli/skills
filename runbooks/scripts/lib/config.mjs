@@ -143,8 +143,9 @@ function pathWarnings(projectRoot, config) {
       warnings.push(`slices.${name}: glob "${glob}" is outside the project and never matches a change (docs/adr/0005). ${UNTIL_2}`)
     }
   }
+  // The UI tests may live in another repository; see docs/adr/0007.
   for (const [surface, block] of Object.entries(config.tests)) {
-    if (block?.root && isOutside(projectRoot, block.root)) {
+    if (surface !== 'ui' && block?.root && isOutside(projectRoot, block.root)) {
       warnings.push(`tests.${surface}.root "${block.root}" is outside the project (docs/adr/0005). ${UNTIL_2}`)
     }
   }
