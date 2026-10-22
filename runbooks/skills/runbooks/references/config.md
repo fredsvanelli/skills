@@ -92,7 +92,7 @@ Endpoint sources: the `next-app-router` extractor marks route handlers `api-endp
 | `roles.<name>` | one entry per role. Names are kebab-case (`^[a-z0-9][a-z0-9-]*$`) |
 | `description` | one line about the role |
 | `inherits` | the parent roles. Missing means none |
-| `found` | where the role came from: `file:line`, `contract: <what>`, or `user`. `/runbooks:ui` shows it |
+| `found` | where the role came from: `file:line`, `contract: <what>`, a document path such as `docs/access.pdf:p3`, or `user`. `/runbooks:ui` shows it |
 | `contexts` | optional: the questions about the record that change what a role may do on some keys ("Contexts" below). Needs `"version": 2` |
 | `permissions` | the matrix: each key maps to a list of actions, or, on a key of a context, to a map from case to list ("Contexts" below) |
 | `origins` | per matrix key, how the scanner got it: `code`, `contract` or `guess` |
@@ -142,7 +142,7 @@ Base actions are `view`, `create`, `edit` and `delete`. They are fixed and need 
 | `contexts.<name>` | one entry per context. Names are kebab-case |
 | `description` | one line: the question about the record |
 | `keys` | the matrix keys the context reaches, with the syntax of "Keys" above |
-| `cases` | a map from case name to one sentence that says which record the case describes. Case names are kebab-case and unique across every context, so a case alone names it in role lines, fixture folders, test names and the CSV |
+| `cases` | a map from case name to one sentence that says which record the case describes. Case names are kebab-case and unique across every context, so a case alone names it in role lines, fixture folders and test names |
 
 - A file with `contexts` has `"version": 2`. The loader reads versions 1 and 2, and a file at `version: 1` with `contexts` is an error. A file with no `contexts` can stay at version 1.
 - A matrix key belongs to a context when the context lists it, or when the key is `<capability>/<feature>` and the context lists `<capability>/*`. A key that belongs to two contexts is an error.
@@ -151,13 +151,13 @@ Base actions are `view`, `create`, `edit` and `delete`. They are fixed and need 
 - `origins` stays per key, also on a key of a context.
 - A runbook whose `capability/feature` matches a key of a context runs once per case, and its text states what each role gets in each case (`format.md`, "Contexts and cases").
 
-**`found` and `origins`.** `found` is per role and `origins` is per key. A key the user typed has no `origins` entry. `/runbooks:permissions:manage` removes a key's entry when the user edits that key, and `import-permissions` removes it from each key the CSV adds, changes or removes. `roles` listings and `/runbooks:ui` flag the keys still marked `guess`. An `origins` key that is not in `permissions` is an error.
+**`found` and `origins`.** `found` is per role and `origins` is per key. A key the user typed has no `origins` entry. `/runbooks:permissions:manage` removes a key's entry when the user edits that key, and `/runbooks:roles:generate` gives each key it adds or changes the proposal's origin: `guess` for a key it deduced, none for a key the source states. `roles` listings and `/runbooks:ui` flag the keys still marked `guess`. An `origins` key that is not in `permissions` is an error.
 
 **`anonymous`.** It is always present, even when the file omits it. It cannot be deleted, renamed or given an account, and it inherits nothing.
 
 **Relation to `accounts`.** `accounts.<role>` holds the login of a role, as env var names. Every key of `accounts` must be a registered role, and `accounts.anonymous` is an error. A registered role without an `accounts` entry is valid: a `ui` run gives it `no-account`. The registry never holds a credential value.
 
-**CSV.** `/runbooks:export-permissions` writes the own entries as a CSV with the columns `role`, `key`, one per action (`x` or empty) and `origin`. A registry with contexts adds a `case` column after `key`: a list gives one row with an empty `case`, and a map gives one row per case of its context. `/runbooks:import-permissions` reads it back: the rows of a role replace that role's whole matrix, a role with no row keeps its own, a new action column adds a project action, and the `origin` column is ignored. The CSV is a working copy and is not committed.
+**Generating from a document.** `/runbooks:roles:generate` reads a document in any format, writes a proposal as JSON and merges it with `runbooks.mjs merge-roles`. The merge adds roles, contexts, cases, project actions and keys, and replaces the own entry of each key the proposal gives. A role, context or key the proposal leaves out stays as it is, and a key goes away only through the proposal's `remove` list. It never changes the parents of a registered role and never deletes a role, a context or a case: those stay with their own commands.
 
 Permission history comes from `git log` of `roles.json`. The plugin writes no history of its own.
 

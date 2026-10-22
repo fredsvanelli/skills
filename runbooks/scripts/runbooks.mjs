@@ -17,7 +17,7 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, importPermissionsMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown } from './lib/format.mjs'
 import { roleRows, roleDetail, affectedByChange, affectedByContext, contextRows, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
@@ -25,7 +25,7 @@ import { casePlan, passPlan } from './lib/passes.mjs'
 import { loadRoles, noAccountRoles, REVIEW_REASONS, REVIEW_FIELDS } from './lib/roles.mjs'
 import { planReview, planEnableRoles } from './lib/review-edit.mjs'
 import { planRenameCase, planDeleteCase, planDeleteContext } from './lib/case-edit.mjs'
-import { exportPermissions, planImport } from './lib/permissions-csv.mjs'
+import { planMerge } from './lib/roles-merge.mjs'
 import { todayLocal } from './lib/stale.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
@@ -75,10 +75,9 @@ Commands:
   delete-context <name> [--write] removes cases, the Preconditions Cases lists, step Cases lines and role
                 lines with cases from the runbooks of a context. A dry run unless --write
   roles         --citing r lists the runbooks that cite the role (roles, Roles:, role line, As:) and its heirs
-  export-permissions [--role r] [--out <csv>] prints the own permissions of each role as CSV: one row per
-                role and key, one column per action marked x, and the origin of the key. --out writes the file
-  import-permissions --file <csv> [--write] replaces the matrix of each role the CSV has rows for; a role
-                with no row keeps its matrix. Reads "," or ";" as the delimiter. A dry run unless --write
+  merge-roles   --file <json> [--write] merges a proposal of roles, contexts and permissions into roles.json:
+                a key the proposal gives replaces the role's own entry, and what it leaves out stays. Removes
+                only the keys its remove list names. A dry run unless --write
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
                 and prints its address; stop it with Ctrl+C
 
@@ -87,9 +86,8 @@ Global options:
   --config <file>  config path relative to the root (default: docs/runbooks/runbooks.config.json)
   --json           print JSON instead of Markdown
 
-Read-only, except move-to-calls, mark-review, enable-roles, import-permissions, rename-case, delete-case and
-delete-context with --write, and
-export-permissions with --out: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
+Read-only, except move-to-calls, mark-review, enable-roles, merge-roles, rename-case, delete-case and
+delete-context with --write: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
 contract --strict has findings, 2 on error.
 `
 
@@ -343,32 +341,17 @@ function commandPasses(root, config, options, positionals) {
   return options.json ? json(result) : passesMarkdown(result)
 }
 
-function commandExportPermissions(root, config, options) {
+function commandMergeRoles(root, config, options) {
   requireTracking(config)
-  const registry = loadRoles(root, config)
-  if (options.role !== undefined) {
-    if (typeof options.role !== 'string') throw new Error('--role needs a role name')
-    if (!registry.names.includes(options.role)) throw new Error(`no role "${options.role}"`)
-  }
-  const csv = exportPermissions(registry, pick(options, ['role']))
-  if (options.out === undefined) return csv
-  if (typeof options.out !== 'string') throw new Error('--out needs a file path')
-  fs.writeFileSync(path.resolve(root, options.out), csv)
-  const rows = csv.split('\r\n').length - 2
-  return options.json ? json({ file: options.out, rows }) : `Written: ${options.out}, ${rows} rows.\n`
-}
-
-function commandImportPermissions(root, config, options) {
-  requireTracking(config)
-  if (typeof options.file !== 'string') throw new Error('import-permissions needs --file <csv>')
+  if (typeof options.file !== 'string') throw new Error('merge-roles needs --file <json>')
   const file = path.resolve(root, options.file)
   if (!fs.existsSync(file)) throw new Error(`${options.file} not found`)
-  const registry = loadRoles(root, config)
-  const plan = { csv: options.file, ...planImport(root, config, registry, fs.readFileSync(file, 'utf8'), { write: options.write === true }) }
-  return options.json ? json(plan) : importPermissionsMarkdown(plan)
+  loadRoles(root, config)
+  const plan = { proposal: options.file, ...planMerge(root, config, fs.readFileSync(file, 'utf8'), { write: options.write === true }) }
+  return options.json ? json(plan) : mergeRolesMarkdown(plan)
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'export-permissions', 'import-permissions']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles']
 
 export function run(argv) {
   const stderr = []
@@ -399,8 +382,7 @@ export function run(argv) {
     else if (command === 'contexts') stdout = commandContexts(root, config, options, positionals)
     else if (['rename-case', 'delete-case', 'delete-context'].includes(command)) stdout = commandCaseEdit(root, config, options, positionals, command)
     else if (command === 'passes') stdout = commandPasses(root, config, options, positionals)
-    else if (command === 'export-permissions') stdout = commandExportPermissions(root, config, options)
-    else if (command === 'import-permissions') stdout = commandImportPermissions(root, config, options)
+    else if (command === 'merge-roles') stdout = commandMergeRoles(root, config, options)
     else stdout = commandItems(root, config, options, command, warnings)
     if (command === 'list' || command === 'coverage') {
       const copied = copiedServerWarning(root, config, VERSION)

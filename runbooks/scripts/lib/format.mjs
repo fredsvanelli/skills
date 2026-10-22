@@ -259,20 +259,41 @@ export function contractMarkdown({ schema, runbooks, findings }) {
   return `${lines.join('\n')}\n`
 }
 
-export function importPermissionsMarkdown({ file, csv, actionsAdded, changes, kept, written, missingCases = [] }) {
+export function mergeRolesMarkdown({ file, proposal, actionsAdded, contextsAdded, contextsChanged, rolesAdded, rolesChanged, changes, missingCases, written }) {
   const names = (actions) => actions.join(', ') || 'none'
   const list = (actions) => (actions === null ? 'absent' : Array.isArray(actions)
     ? names(actions)
     : Object.entries(actions).map(([kase, items]) => `${kase}: ${names(items)}`).join('; ') || 'none')
-  const lines = [`Imports ${csv} into ${file}.`, '']
-  lines.push(changes.length === 0 ? 'No key changes.' : table(['Role', 'Key', 'Before', 'After'],
-    changes.map((c) => [c.role, c.key, list(c.before), list(c.after)])), '')
-  for (const m of missingCases) lines.push(`${m.role} "${m.key}" has no row for ${m.cases.join(', ')}, so those cases get no access.`)
-  if (missingCases.length > 0) lines.push('')
+  const guess = (flag) => (flag ? 'guess' : '')
+  const lines = [`Merges ${proposal} into ${file}.`, '']
   if (actionsAdded.length > 0) lines.push(`Project actions added: ${actionsAdded.join(', ')}.`, '')
-  if (kept.length > 0) lines.push(`Roles with no row, left as they are: ${kept.join(', ')}.`, '')
+  for (const c of contextsAdded) lines.push(`Context added: ${c.name}, keys ${c.keys.join(', ')}, cases ${c.cases.join(', ')}.`)
+  for (const c of contextsChanged) {
+    const parts = [
+      ...(c.keysAdded.length > 0 ? [`keys added ${c.keysAdded.join(', ')}`] : []),
+      ...(c.casesAdded.length > 0 ? [`cases added ${c.casesAdded.join(', ')}`] : []),
+      ...(c.described.length > 0 ? [`new text for ${c.described.join(', ')}`] : []),
+    ]
+    lines.push(`Context changed: ${c.name}, ${parts.join('; ')}.`)
+  }
+  if (contextsAdded.length + contextsChanged.length > 0) lines.push('')
+  for (const r of rolesAdded) {
+    lines.push(`Role added: ${r.name}, "${r.description}"${r.inherits.length > 0 ? `, inherits ${r.inherits.join(', ')}` : ''}.`, '')
+    const keys = Object.entries(r.permissions)
+    lines.push(keys.length === 0 ? 'No own keys.' : table(['Key', 'Actions', 'Origin'],
+      keys.map(([key, actions]) => [key, list(actions), guess(r.guesses.includes(key))])), '')
+  }
+  for (const r of rolesChanged) lines.push(`Description of ${r.name}: "${r.before}" becomes "${r.after}".`)
+  if (rolesChanged.length > 0) lines.push('')
+  if (changes.length > 0) {
+    lines.push(table(['Role', 'Key', 'Before', 'After', 'Origin'],
+      changes.map((c) => [c.role, c.key, list(c.before), list(c.after), guess(c.guess)])), '')
+  }
+  for (const m of missingCases) lines.push(`${m.role} "${m.key}" has no entry for ${m.cases.join(', ')}, so those cases get no access.`)
+  if (missingCases.length > 0) lines.push('')
+  const empty = actionsAdded.length + contextsAdded.length + contextsChanged.length + rolesAdded.length + rolesChanged.length + changes.length === 0
   if (written) lines.push(`Written: ${file}.`)
-  else if (changes.length === 0 && actionsAdded.length === 0) lines.push('Nothing to change.')
+  else if (empty) lines.push('Nothing to change.')
   else lines.push('Dry run: nothing written. Run again with --write to apply.')
   return `${lines.join('\n')}\n`
 }

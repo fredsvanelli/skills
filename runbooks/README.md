@@ -22,8 +22,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:roles:update` | changes a role's description, parents or account, or renames it |
 | `/runbooks:roles:delete` | removes a role from the registry, the config and the runbooks that cite it |
 | `/runbooks:roles:list` | lists the roles, or shows one with its effective permissions |
-| `/runbooks:export-permissions` | writes the roles' permission matrix to a CSV, one row per role and key and one column per action, to edit in a spreadsheet |
-| `/runbooks:import-permissions` | reads that CSV back into `roles.json` and marks the runbooks the changes reach for review |
+| `/runbooks:roles:generate` | reads any document about who may do what (text, CSV, spreadsheet, JSON, PDF) and proposes the roles, contexts and permissions it describes, merged into `roles.json` |
 | `/runbooks:contexts:list` | lists the contexts, or shows one with its runbooks |
 | `/runbooks:contexts:create` | registers a context with its keys and cases, and marks the runbooks it reaches for review |
 | `/runbooks:contexts:update` | changes a context's keys, cases or description, and marks the runbooks the change reaches for review |

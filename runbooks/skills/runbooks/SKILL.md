@@ -31,8 +31,7 @@ Each command file holds the full procedure. When the user asks for one of these 
 | change a role's description, parents or account, or rename it | `/runbooks:roles:update` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/update.md` |
 | remove a role from the registry, the config and the runbooks that cite it | `/runbooks:roles:delete` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/delete.md` |
 | list the roles, or show one with its effective permissions | `/runbooks:roles:list` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/list.md` |
-| export the permission matrix to a CSV file | `/runbooks:export-permissions` | `${CLAUDE_PLUGIN_ROOT}/commands/export-permissions.md` |
-| import a permissions CSV into roles.json and mark the affected runbooks for review | `/runbooks:import-permissions` | `${CLAUDE_PLUGIN_ROOT}/commands/import-permissions.md` |
+| propose roles, contexts and permissions from a document (text, CSV, spreadsheet, JSON, PDF) and merge them into roles.json | `/runbooks:roles:generate` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/generate.md` |
 | list the contexts, or show one with its runbooks | `/runbooks:contexts:list` | `${CLAUDE_PLUGIN_ROOT}/commands/contexts/list.md` |
 | register a new context with its keys and cases, and mark the affected runbooks for review | `/runbooks:contexts:create` | `${CLAUDE_PLUGIN_ROOT}/commands/contexts/create.md` |
 | change a context's keys, cases or description, and mark the affected runbooks for review | `/runbooks:contexts:update` | `${CLAUDE_PLUGIN_ROOT}/commands/contexts/update.md` |
