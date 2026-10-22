@@ -87,22 +87,69 @@ Endpoint sources: the `next-app-router` extractor marks route handlers `api-endp
 
 | Key | Meaning |
 |---|---|
-| `version` | required, `1` |
+| `version` | required: `1`, or `2` when the file has `contexts` |
 | `actions` | the actions the project adds to the four fixed ones. The registry's action list is the fixed four followed by these. Identifiers are English and the UI shows them as they are |
 | `roles.<name>` | one entry per role. Names are kebab-case (`^[a-z0-9][a-z0-9-]*$`) |
 | `description` | one line about the role |
 | `inherits` | the parent roles. Missing means none |
 | `found` | where the role came from: `file:line`, `contract: <what>`, or `user`. `/runbooks:ui` shows it |
-| `permissions` | the matrix: each key maps to a list of actions |
+| `contexts` | optional: the questions about the record that change what a role may do on some keys ("Contexts" below). Needs `"version": 2` |
+| `permissions` | the matrix: each key maps to a list of actions, or, on a key of a context, to a map from case to list ("Contexts" below) |
 | `origins` | per matrix key, how the scanner got it: `code`, `contract` or `guess` |
 
 Base actions are `view`, `create`, `edit` and `delete`. They are fixed and need no entry in `actions`. An action in a role's permissions that is not in the action list is an error.
 
 **Keys.** A matrix key is `<capability>/<feature>` or `<capability>/*`, with the same names as runbook frontmatter. A key that matches no runbook's `capability/feature` and no slice gives a warning, to catch typos.
 
-**Lookup.** For a runbook, the role's entry for `<capability>/<feature>` wins over `<capability>/*`. A runbook with no `feature` uses `<capability>/*`. No entry means no access.
+**Lookup.** For a runbook, the role's entry for `<capability>/<feature>` wins over `<capability>/*`. A runbook with no `feature` uses `<capability>/*`. No entry means no access. On a key of a context, the lookup also takes the case ("Contexts" below).
 
 **Inheritance and override.** Roles can be independent or cumulative. The effective matrix of a role is the union of its parents' effective entries, plus its own. An own entry for a key replaces the inherited entry for that same key, so a manager can lose `delete` that its parent has. When two parents give the same key, their actions are joined. A cycle in `inherits` is an error.
+
+**Contexts.** A context is a question about the record that changes what a role may do on some keys: how the user relates to the client a record belongs to, for example. A case is one answer to it. The same `manager` login can edit one client and only view another. One list of actions per key cannot express that, and a context can. `/runbooks:roles:manage-contexts` creates, edits and deletes contexts.
+
+```json
+{
+  "version": 2,
+  "actions": [],
+  "contexts": {
+    "client-access": {
+      "description": "How the user relates to the client the record belongs to",
+      "keys": ["clients/*", "billing/invoices"],
+      "cases": {
+        "vip-team": "VIP client, the user is on its team",
+        "vip-outside": "VIP client, the user is not on its team",
+        "regular": "client that is not VIP"
+      }
+    }
+  },
+  "roles": {
+    "viewer": { "permissions": { "clients/*": ["view"] } },
+    "manager": {
+      "permissions": {
+        "clients/*": {
+          "vip-team": ["view", "create", "edit", "delete"],
+          "vip-outside": ["view"],
+          "regular": ["view", "create", "edit"]
+        }
+      }
+    }
+  }
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `contexts.<name>` | one entry per context. Names are kebab-case |
+| `description` | one line: the question about the record |
+| `keys` | the matrix keys the context reaches, with the syntax of "Keys" above |
+| `cases` | a map from case name to one sentence that says which record the case describes. Case names are kebab-case and unique across every context, so a case alone names it in role lines, fixture folders, test names and the CSV |
+
+- A file with `contexts` has `"version": 2`. The loader reads versions 1 and 2, and a file at `version: 1` with `contexts` is an error. A file with no `contexts` can stay at version 1.
+- A matrix key belongs to a context when the context lists it, or when the key is `<capability>/<feature>` and the context lists `<capability>/*`. A key that belongs to two contexts is an error.
+- On a key of a context, a role's entry is either a list, which gives the same actions in every case, or a map from case to list. A case the map leaves out is no access in that case. A map on a key of no context, or with a case its context does not have, is an error.
+- Inheritance works per case. A parent's list counts as the same list in every case, and two parents join their actions case by case. An own entry still replaces the inherited entry for the whole key and all its cases, so an own map that leaves out a case takes that case away. `runbooks.mjs roles <name>` prints the effective matrix with one row per key and case.
+- `origins` stays per key, also on a key of a context.
+- A runbook whose `capability/feature` matches a key of a context runs once per case, and its text states what each role gets in each case (`format.md`, "Contexts and cases").
 
 **`found` and `origins`.** `found` is per role and `origins` is per key. A key the user typed has no `origins` entry. `manage-permissions` removes a key's entry when the user edits that key, and `import-permissions` removes it from each key the CSV adds, changes or removes. `roles` listings and `/runbooks:ui` flag the keys still marked `guess`. An `origins` key that is not in `permissions` is an error.
 
@@ -110,21 +157,37 @@ Base actions are `view`, `create`, `edit` and `delete`. They are fixed and need 
 
 **Relation to `accounts`.** `accounts.<role>` holds the login of a role, as env var names. Every key of `accounts` must be a registered role, and `accounts.anonymous` is an error. A registered role without an `accounts` entry is valid: a `ui` run gives it `no-account`. The registry never holds a credential value.
 
-**CSV.** `/runbooks:export-permissions` writes the own entries as a CSV with the columns `role`, `key`, one per action (`x` or empty) and `origin`. `/runbooks:import-permissions` reads it back: the rows of a role replace that role's whole matrix, a role with no row keeps its own, a new action column adds a project action, and the `origin` column is ignored. The CSV is a working copy and is not committed.
+**CSV.** `/runbooks:export-permissions` writes the own entries as a CSV with the columns `role`, `key`, one per action (`x` or empty) and `origin`. A registry with contexts adds a `case` column after `key`: a list gives one row with an empty `case`, and a map gives one row per case of its context. `/runbooks:import-permissions` reads it back: the rows of a role replace that role's whole matrix, a role with no row keeps its own, a new action column adds a project action, and the `origin` column is ignored. The CSV is a working copy and is not committed.
 
 Permission history comes from `git log` of `roles.json`. The plugin writes no history of its own.
 
 Errors the loader raises, each prefixed with the file path:
 
-- `unsupported version <n>, expected 1`
+- `unsupported version <n>, expected 1 or 2`
+- `contexts need version 2`
 - `role "<name>" must be kebab-case`
 - `<role> inherits "<parent>", which is not a registered role`
 - `anonymous inherits nothing`
 - `inheritance cycle: a -> b -> a`
 - `<role>: key "<key>" must be <capability>/<feature> or <capability>/*`
-- `<role> "<key>": action "<action>" is not in actions`
+- `<role> "<key>": action "<action>" is not in actions`, and `<role> "<key>" in <case>: action "<action>" is not in actions` inside a map
+- `context "<name>" must be kebab-case`
+- `context "<name>": keys must be a list of matrix keys`
+- `context "<name>": key "<key>" must be <capability>/<feature> or <capability>/*`
+- `context "<name>": cases must map each case to a description`
+- `case "<name>" must be kebab-case`
+- `case "<name>" appears in contexts <a> and <b>`
+- `key "<key>" belongs to contexts <a> and <b>`
+- `<role> "<key>": a map of cases needs a key that belongs to a context`
+- `<role> "<key>": case "<case>" is not a case of <context>`
 - `accounts.<role> is not a registered role`
 - `accounts.anonymous is not allowed, because anonymous has no session`
+
+Warnings, which leave the registry usable:
+
+- `roles.json: <role> "<key>" matches no runbook or slice`
+- `roles.json: context <name> key "<key>" matches no runbook or slice`
+- `roles.json: context <name> has fewer than two cases`
 
 ## Viewports
 

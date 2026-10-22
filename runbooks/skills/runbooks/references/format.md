@@ -38,6 +38,7 @@ last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2
 | `feature` | finer grouping inside a capability; free text |
 | `tags` | free labels; `critical` marks the runbooks to run first |
 | `roles` | with role tracking off (config `roles.enabled` false): account roles from the config `accounts` that the steps log in as, and `all` is a problem. With tracking on: `all`, or a list of registered role names that run the runbook. `all` includes `anonymous`. A missing `roles` means `all`, and `create` writes `all` explicitly. A runbook that skips a role lists the roles it runs ("Roles" below) |
+| `cases` | tracking on, and only on a runbook whose `capability/feature` matches a key of a context (`config.md`, "Contexts"): `all`, or a list of cases of that context, the ones the runbook runs. A missing `cases` means `all`, and `create` writes `all` explicitly ("Contexts and cases" below) |
 | `review` | tracking on only: a list of marks that the runbook's text may be wrong after a role change. Each entry holds a `reason`, a `date` and the fields of its reason ("Review" below). Missing means nothing to review |
 | `viewports` | `ui` only: names from the config `viewports`, the screen sizes the steps run at, in run order. Missing or empty means the steps run once, at the browser's default size |
 | `design` | `ui` only, and only when the config has `design`: a map from a screen name (kebab-case) to its design reference, a frame link or a file path (`config.md`, Design). `<name>.<viewport>` is the variant used at that viewport; without one, every viewport uses `<name>`. Steps cite the names in their `Design:` line |
@@ -134,6 +135,58 @@ With role tracking on, a runbook runs the same steps once per role, like viewpor
 
 With role tracking off, role lines are plain text and no keyword is checked.
 
+### Contexts and cases
+
+With role tracking on, a runbook whose `capability/feature` matches a key of a context (`config.md`, "Contexts") runs once per case, as it runs once per role and per viewport. Each step then states what each role gets in each case. That context is the runbook's context. A runbook that matches no key of a context has no cases, and nothing in this section applies to it. Why a case runs inside a role instead of being a role of its own: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0006-a-case-is-a-run-dimension-inside-a-role.md`.
+
+- `cases` lists the cases the runbook runs, or `all` for every case of its context.
+- Preconditions say how to build the record of each case, under a `Cases:` list with one line per case of `cases`:
+
+  ```markdown
+  ## Preconditions
+
+  - Account: each role's login from `accounts`.
+  - Cases:
+    - vip-team: client "ACME" with `vip: true`, the role's account added to its team.
+    - vip-outside: client "Globex" with `vip: true`, the role's account not on its team.
+    - regular: client "Initech" with `vip: false`.
+  ```
+
+  A `live` runbook builds this data with the run suffix. A `mocked` runbook gets it from its `+<case>` fixture folders (`upstream.md`, "Case layer"). An `api` script builds it in each test, with the project's factories.
+- `Cases:` is an optional line on a step, like `Roles:` and `Viewports:`. It limits the step to some of the runbook's cases (`Cases: vip-team, regular`). Missing means every case of the runbook.
+- A role line can name cases: `- <role> in <case>[, <case>...]: <outcome>. <text>`. A line with no case applies to every case the step runs. For one role and one case, the line with the case wins over the line without one. A case adds no outcome keyword.
+
+  ```markdown
+  ### S02. The manager edits the client
+
+  Parents: S01
+  Requirement: none
+  Page: /clients/{id}
+  Actions:
+  1. Click "Edit".
+  2. Change the phone to "555-0100" and click "Save".
+  Expected: the page shows "Saved" and the phone "555-0100".
+  - manager in vip-outside: read-only. The "Edit" button does not appear.
+  - viewer: read-only. The "Edit" button does not appear.
+  ```
+
+  `manager` has no line for `vip-team` and `regular`, so it is `allowed` there. `viewer` has the same actions in every case, so one line covers all of them.
+
+**Roles that run once.** A role runs once, not once per case, when its effective actions on the runbook's key are the same in every case of `cases` and no role line names that role with a case. Its pass builds the data of the first case of `cases`, and its states carry the case `*`. Under `run --case`, it builds the first case of `cases` that the run selected. `anonymous` usually runs once. Every other role runs once per case of `cases`. `runbooks.mjs passes <id>` lists the passes: role, case, the case whose data the pass builds, viewport and account.
+
+Problems the loader reports:
+
+- `cases needs role tracking (roles.enabled)`
+- `cases needs a context: <capability>/<feature> belongs to no context`
+- `cases must list at least one case, or be all`
+- `case "<name>" is not a case of <context>`
+- `Preconditions: case "<name>" has no line under Cases:`
+- `Preconditions: Cases: "<name>" is not one of the runbook's cases`
+- `<step>: Cases: "<name>" is not one of the runbook's cases`
+- `<step>: role line "<role> in <case>" names a case the step does not run`
+- `<step>: role line "<role> in <case>": the runbook has no context`
+- `<step>: two role lines for <role> in <case>`
+
 ### Review
 
 `review` says the runbook's text may be wrong and needs editing. It is separate from `last_run.outdated`, which says the runbook needs another run. Each entry has a `reason`, a `date` and the fields of that reason:
@@ -141,16 +194,21 @@ With role tracking off, role lines are plain text and no keyword is checked.
 | Reason | Fields | Set when |
 |---|---|---|
 | `roles-enabled` | none | tracking was turned on, so every Expected needs its role lines |
-| `role-permissions` | `role`, `key`, `change` | a permission of the role on the key changed. `change` is one line (`delete removed`) |
+| `role-permissions` | `role`, `key`, `change`, and `case` when the change is in one case | a permission of the role on the key changed. `change` is one line (`delete removed`), and names the case when there is one (`vip-outside: edit removed`) |
 | `role-created` | `role` | a new role has no Expected lines yet |
 | `role-deleted` | `role` | a deleted role's heirs lost permissions |
+| `context-created` | `context` | a context was added, or a key was added to one. The runbooks it now reaches run per case and need `cases`, the Preconditions `Cases:` list and case role lines |
+| `case-created` | `case` | a case was added to a context. Its runbooks need its Preconditions line and its role lines |
 
 ```yaml
 roles: all
 review:
   - { reason: roles-enabled, date: 2026-10-21 }
   - { reason: role-permissions, role: editor, key: billing/invoices, change: "delete removed", date: 2026-10-22 }
+  - { reason: case-created, case: vip-new, date: 2026-10-23 }
 ```
+
+A renamed or deleted case, and a deleted context, mark nothing: `runbooks.mjs rename-case`, `delete-case` and `delete-context` rewrite the runbooks themselves. Deleting a case removes it from every `cases` list, `Cases:` line and role line, and deletes a role line left with no case.
 
 Only `update` of that runbook clears `review`, after the user confirms each role's Expected. A run does not clear it, because running old text proves nothing new. `run` still runs a runbook in review and warns before the first step. A runbook in review still counts as coverage. A runbook with tracking off and a `review` key has a problem.
 
@@ -183,7 +241,7 @@ One runbook proves one flow. On `ui`: what a user does across screens to get one
 
 One test per step, its name starting with the step id (`S01 admin creates a draft invoice`; `test_s01_...` or `testS01...` where names cannot have spaces). `runbooks.mjs junit` maps the JUnit report back to steps by that prefix.
 
-With role tracking on, an `api` script has one test per step and role, named `S01 <title> as <role>`. A mocked `ui` script has one test per step, role and viewport, named `S01 <title> as <role> @ <viewport>` (the `@ <viewport>` part only with viewports). `junit` reads the step, the role and the viewport from the name. A live `ui` script has one test per role and viewport, named `<title> as <role> @ <viewport>`, holding one `test.step('S01 <title>')` per step, and mode `test` is not offered for it (`commands/to-test.md`, item 5). A role's test for a step whose parent ended `denied`, `hidden` or `read-only` for that role is not written, and `junit` reports that step as `not-applicable`. A `ui` role with no entry in the config `accounts` gets no tests, and `junit` reports its steps as `no-account`. `junit` checks only `accounts`. A live run also gives `no-account` to a role whose env var names are missing from `mcp.secretsFile` (`run-modes.md`, "Roles").
+With role tracking on, an `api` script has one test per step and role, named `S01 <title> as <role>`. A mocked `ui` script has one test per step, role and viewport, named `S01 <title> as <role> @ <viewport>` (the `@ <viewport>` part only with viewports). `junit` reads the step, the role and the viewport from the name. A live `ui` script has one test per role and viewport, named `<title> as <role> @ <viewport>`, holding one `test.step('S01 <title>')` per step, and mode `test` is not offered for it (`commands/to-test.md`, item 5). With cases, the case follows the role: `S01 <title> as <role> in <case>` for `api`, `S01 <title> as <role> in <case> @ <viewport>` for mocked `ui`, and `<title> as <role> in <case> @ <viewport>` for live `ui`. A role that runs once has no `in <case>` part. `junit` reads the case from the name too, and gives the reason when a test fits no pass: `no " in <case>" suffix`, `<case> is not one of the runbook's cases`, `<role> runs once; drop " in <case>"`, or `<step> does not run in <case>`. A role's test for a step whose parent ended `denied`, `hidden` or `read-only` for that role is not written, and `junit` reports that step as `not-applicable`. A `ui` role with no entry in the config `accounts` gets no tests, and `junit` reports its steps as `no-account`. `junit` checks only `accounts`. A live run also gives `no-account` to a role whose env var names are missing from `mcp.secretsFile` (`run-modes.md`, "Roles").
 
 Tests in the file without a prefix stay outside the runbook's result. The runbook is the source of truth: when a test's assertion and its step's Expected differ, the script changes, unless the user says the runbook is wrong. Why: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0001-api-runbooks-run-through-their-script.md`.
 
@@ -197,17 +255,18 @@ A step depends on another when the parent's failure invalidates the child's resu
 - The tree has no cycles.
 - With `viewports`, the tree runs once per viewport, in the frontmatter order. Each step runs only at the viewports its `Viewports:` line allows, and its parents must run at each of them. A parent's state counts only for its children at the same viewport.
 - With role tracking on, the tree runs once per role of the runbook, and inside each role once per viewport. Each step runs only for the roles its `Roles:` line allows. A parent's state counts only for its children of the same role and viewport.
-- A parent that passes with the outcome `denied`, `hidden` or `read-only` for a role closes the branch for that role: its children are `not-applicable` for that role, because their action is not available either. A `not-applicable` parent makes its children `not-applicable` for that role too, all the way down the branch. A parent that is `failed`, `blocked` or `blocked-by-parent` still makes the child `blocked-by-parent`, and that rule wins when both apply. The children still run for the roles whose parent was `allowed` or `partial`.
+- With cases, the tree runs once per role, inside each role once per case of its passes (once, under `*`, for a role that runs once), and inside each case once per viewport. Each step runs only in the cases its `Cases:` line allows. A parent's state counts only for its children of the same role, case and viewport.
+- A parent that passes with the outcome `denied`, `hidden` or `read-only` for a role closes the branch for that role (with cases, for that role in that case, by the role line that applies there): its children are `not-applicable` for that role, because their action is not available either. A `not-applicable` parent makes its children `not-applicable` for that role too, all the way down the branch. A parent that is `failed`, `blocked` or `blocked-by-parent` still makes the child `blocked-by-parent`, and that rule wins when both apply. The children still run for the roles whose parent was `allowed` or `partial`.
 
 ## Step states
 
-Only run reports hold step states. With `viewports`, a step has one state per viewport it runs at. With role tracking on, it has one state per role too.
+Only run reports hold step states. With `viewports`, a step has one state per viewport it runs at. With role tracking on, it has one state per role too. With cases, it has one state per role, case and viewport, and a role that runs once records its states under the case `*`.
 
 | State | Use when |
 |---|---|
 | `passed` | the expected result appeared |
 | `failed` | something else appeared; record what was seen, quoting the screen |
-| `blocked` | something outside the product is missing: data, an account, an integration; record what |
+| `blocked` | something outside the product is missing: data, an account, an integration; record what. With cases, a case whose data cannot be built gives `blocked` to every step of that pass, with the reason |
 | `blocked-by-parent` | a parent is not `passed` in this run; the step is not executed. With role tracking on, a `not-applicable` parent gives `not-applicable` instead |
 | `waived` | the user chose to skip it; record the reason in their words. On `api`, only when asked before the run: the test still runs, and its outcome is ignored |
 | `not-applicable` | role tracking on: a parent ended with `denied`, `hidden` or `read-only` for this role, or is `not-applicable` for it, so the step has nothing to do. It is neither a failure nor a block |
@@ -220,7 +279,7 @@ Only run reports hold step states. With `viewports`, a step has one state per vi
 ## Status
 
 - `map` writes `placeholder`. `create` writes `draft`, also when it fills a placeholder.
-- A full run (no `--steps`, no `--role`) where every step ends `passed` or `waived`, at least one is `passed`, and none is in another state promotes `draft` to `active`. With `viewports`, this counts every state at every viewport. With role tracking on, it counts every role too, and `not-applicable` and `no-account` also allow the promotion. Compute it with `runbooks.mjs status`.
+- A full run (no `--steps`, no `--role`) where every step ends `passed` or `waived`, at least one is `passed`, and none is in another state promotes `draft` to `active`. With `viewports`, this counts every state at every viewport. With role tracking on, it counts every role too, and every case with cases, and `not-applicable` and `no-account` also allow the promotion. Compute it with `runbooks.mjs status`.
 - The run `result` is `failed` when any step failed, else `blocked` when any step is `blocked` or `blocked-by-parent`, else `passed`. `not-applicable` and `no-account` count toward none of these.
 - An `active` runbook that later fails stays `active`; `last_run` shows the failure.
 - `deprecated` runbooks are listed but never count as coverage and never appear in `list --affected`.

@@ -29,6 +29,14 @@ The keys are the union of the effective keys of every role. For a role and a key
 - When the role has no access, a runbook counts only if it has a `denied`, `hidden` or `read-only` line for that role. A denial that no step proves leaves the key uncovered.
 - The pair is **covered** when a qualifying runbook is `active`, **pending** when only `draft` runbooks qualify, and **uncovered** otherwise.
 
+On a key of a context (`config.md`, "Contexts"), the unit is a role, a key and a case, with one row per case of the context. Keys of no context keep the role and key pair. For a role, a key and a case:
+
+- The role has access when its effective actions in that case are not empty.
+- A runbook qualifies by the rule above, and its `cases` must include the case.
+- With no access, a runbook counts only if it has a `denied`, `hidden` or `read-only` line for that role that applies in that case: a line that names the case, or a line with no case on a step that runs in it.
+
+The by-role table gets a Case column when any row has a case, and `--role <name>` shows the cases under each key of a context.
+
 A runbook in review still counts, so turning tracking on does not drop coverage to zero. Placeholders and `deprecated` runbooks never count.
 
 ## Filters

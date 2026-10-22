@@ -39,9 +39,15 @@ Run `git status --porcelain` now and keep the list for the commit step.
 2. Read the runbook. Write down its steps with their `Parents:`, the highest step number, `covers`, `sources`, `status` and `last_run`. For a `ui` runbook, also its `upstream` mode (the `upstream` field of the list output, which is the effective mode) and, when it is `mocked`, the output of `... fixtures <id> --json`.
 3. With role tracking on, read the runbook's `review` first and show each entry: its reason, its date and its fields (`references/format.md`, Review). Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` for each role the runbook runs, for its effective permissions. Every entry becomes a change on the list of step 2:
    - `roles-enabled`: every Expected needs role lines, and each `As:` step becomes role lines;
-   - `role-permissions`: the role's lines for the steps that reach the key in `key`;
+   - `role-permissions`: the role's lines for the steps that reach the key in `key`, only the lines that apply in `case` when the entry has one;
    - `role-created`: the new role has no lines yet;
-   - `role-deleted`: the heirs of the deleted role lost permissions, so their lines change.
+   - `role-deleted`: the heirs of the deleted role lost permissions, so their lines change;
+   - `context-created`: the runbook now runs per case of `context`. It needs `cases: all`, a Preconditions `Cases:` list and case role lines, proposed as `create` does (step 3, Roles, the Cases item, and step 4);
+   - `case-created`: the new case in `case` needs its Preconditions line, and the role lines of each role whose actions in it differ from the other cases.
+
+   Read each role's actions per case from `roles <name> --json` (the `cases` map of the matching key under `effective`).
+
+   A runbook whose `problems` hold `cases needs a context`, or `role line "<role> in <case>": the runbook has no context`, lost its context, after a key was removed from one (`/runbooks:roles:manage-contexts`). That is a change too: remove `cases`, the Preconditions `Cases:` list and the step `Cases:` lines, and turn the case role lines into lines with no case, asking with `AskUserQuestion` which outcome stays for each role.
 4. When `last_run.report` exists, read it. Its failures and its Notes are evidence of where the screen already differs from the runbook.
 
 Done when you hold the step tree and the last report's findings, and with role tracking on, the review entries.
@@ -82,7 +88,7 @@ For each change, mark every step it reaches:
 - **mode**: the runbook changes upstream mode. Rewrite its content in the direction of the change (`references/upstream.md`, Changing a runbook's mode):
   - to `mocked`: every step whose Expected checks persistence after a reload, or a value the API saved, becomes a check of the request (method, URL and body). The persistence goes under "Not covered". The Data line points to the fixtures folder. The fixtures are recorded in step 5;
   - to `live`: every step rewritten that way gets its persistence check back, with the reload. Exact values that fixtures supplied move into Preconditions, created through the upstream API with the run suffix (`RUNBOOKS_RUN_ID`), and Expected quotes only the fixed part. The persistence lines leave "Not covered". The fixtures folder is deleted in step 5;
-- **roles**, with role tracking on: a step whose behavior differs by role gets role lines, and a step the review reaches gets its lines checked. A step with `As:` becomes role lines: the `As:` role keeps the common Expected, and each other role of the runbook gets a line (`denied`, `hidden`, `read-only`, `partial` or none for `allowed`), proposed from `allowedActions` as in `create` (step 3, Roles) and confirmed with `AskUserQuestion`. A step that only some roles run gets a `Roles:` line;
+- **roles**, with role tracking on: a step whose behavior differs by role gets role lines, and a step the review reaches gets its lines checked. On a runbook with cases, a step whose behavior differs by case gets case role lines (`- <role> in <case>: <outcome>. <detail>`) and, when only some cases reach it, a `Cases:` line. A step with `As:` becomes role lines: the `As:` role keeps the common Expected, and each other role of the runbook gets a line (`denied`, `hidden`, `read-only`, `partial` or none for `allowed`), proposed from `allowedActions` as in `create` (step 3, Roles) and confirmed with `AskUserQuestion`. A step that only some roles run gets a `Roles:` line;
 - **viewports**: the change reaches the layout at some sizes only (responsive classes, media queries). Edit or add the steps of those viewports, with `Viewports:` lines. When the change brings a layout at a size the runbook does not run at, or the runbook has no `viewports` and the change is responsive, ask which viewports it runs at as `create` does (step 2, item 6).
 
 Then follow the tree down: the children of every edited or removed step stay valid only if what they inherit still holds. Mark the ones that change.
@@ -118,7 +124,8 @@ Then:
 - `sources`: append the change's source;
 - `design`: the references from step 3 added or replaced, the ones of screens no step reaches any more removed, and the `Design:` lines of the steps that end on them;
 - `roles`, with role tracking on: `all` when the frontmatter has no `roles`. An explicit list such as `[admin]` is not turned into `all` on its own: ask with `AskUserQuestion` whether it is a deliberate subset, keep it on a yes and convert it to `all` only on a no. The role lines and `Roles:` lines from step 3 are written in each step, and each `As:` line they replace is removed;
-- `review`, with role tracking on: ask with `AskUserQuestion`, per role, whether the Expected lines written or kept are right. Once the user confirms every role, clear the key with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id> --clear` as a dry run, show what it would do, ask, and then run it again with `--write`. When the user confirms only some roles, the key stays and the summary names the roles still to confirm. Clearing `review` never touches `last_run.outdated`, which follows the last bullet of this list;
+- `cases`, with cases: `all` when the frontmatter has no `cases` and the runbook now runs per case, with the Preconditions `Cases:` list holding one line per case. A list of cases stays a list, with a new case added only when the user asks;
+- `review`, with role tracking on: ask with `AskUserQuestion`, per role, whether the Expected lines written or kept are right. On a runbook with cases, ask per role and case for the roles that run per case. The same confirmation clears `context-created` and `case-created` entries, which only `update` clears. Once the user confirms every role, clear the key with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id> --clear` as a dry run, show what it would do, ask, and then run it again with `--write`. When the user confirms only some roles, the key stays and the summary names the roles still to confirm. Clearing `review` never touches `last_run.outdated`, which follows the last bullet of this list;
 - `viewports`: the answer from step 3, when it changed; a size the config lacks goes into the config `viewports`, as in `create`;
 - "Not covered": add what the surface cannot show about the change, and remove what a step now proves;
 - `upstream`: write `upstream: live|mocked` only when the target mode differs from the config `upstream.mode`, and remove the field when it does not;
@@ -127,7 +134,7 @@ Then:
   - to `mocked`, record them. After a step change in a `mocked` runbook, re-record the fixtures the edited, added and removed steps reach: delete the affected files first, and the whole `<Sxx>/` folder of a removed step, because the recorder keeps an equal fixture and saves a differing response in the step's folder. Then record as `create` does (step 5): `/runbooks:run <id> --record` when `upstream.baseUrl` answers, over the data the Preconditions create and never over data that already sits in the environment, else from `upstream.schema`, else by hand. Each fixture has a `source` (`recorded <YYYY-MM-DD> from <origin>`, `schema`, or `hand-written: <reason>`). Remove volatile query keys such as `_t` from the recorded files. Run `... fixtures <id> --json` and fix every problem it lists;
   - a `mocked` step that `run` marked `blocked` for an unmatched request is the same case: the missing fixture is recorded here;
 - `scripts` of an `api` runbook: leave the files alone here. The next `/runbooks:run` finds new step ids without a test and completes the script, and `/runbooks:audit-runbooks` finds assertions that no longer match;
-- `status` stays as it is. When `last_run` is set and this update changed a step, a precondition, `viewports`, `design` or `upstream`, add `outdated: true` to it and keep its other fields: the run verified the old text. Only the next full run replaces `last_run` and moves `status`.
+- `status` stays as it is. When `last_run` is set and this update changed a step, a precondition, `cases`, `viewports`, `design` or `upstream`, add `outdated: true` to it and keep its other fields: the run verified the old text. Only the next full run replaces `last_run` and moves `status`.
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and confirm the runbook has an empty `problems` list.
 
@@ -139,7 +146,7 @@ Print the changes in the conversation before any commit question:
 - The steps as a tree with their parents.
 - The entries and requirements added or dropped, and the "Not covered" changes.
 - The viewports added or dropped, with the viewports added to the config.
-- With role tracking on: the role lines added, changed or removed per step, the `As:` steps rewritten, and the review entries cleared or still open.
+- With role tracking on: the role lines added, changed or removed per step, the `As:` steps rewritten, and the review entries cleared or still open. With cases: `cases`, the Preconditions `Cases:` lines and the case role lines added, changed or removed, and the passes from `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" passes <id>`.
 - The design references added, replaced or removed.
 - The unverified steps: every edited and added step and their children.
 - The upstream mode change, when there is one, with the steps rewritten and the "Not covered" lines added or removed.

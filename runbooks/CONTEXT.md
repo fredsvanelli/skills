@@ -35,6 +35,14 @@ _Avoid_: account, user type
 An action a role has on a `capability/feature` key of the registry. `view`, `create`, `edit` and `delete` are fixed, and the project may add others. A role inherits the permissions of its parents, and its own entry for a key replaces the inherited one.
 _Avoid_: access, right
 
+**Context**:
+A named question about the record that changes what a role may do on some `capability/feature` keys, such as how the user relates to the client a record belongs to. It lists its keys and its cases.
+_Avoid_: condition, scope, attribute, situation
+
+**Case**:
+One answer to a context, such as `vip-team` or `regular`. The cases of a context exclude each other. A role keeps one login across its cases, and a runbook on a key of the context runs once per case, as it runs once per role and per viewport.
+_Avoid_: condition, scope, attribute, situation
+
 **Outcome**:
 The keyword that opens a role line under a step's Expected and says what that role gets. `allowed` means the common Expected applies. `read-only` means the role sees the screen and cannot act. `hidden` means the control or screen does not appear. `denied` means a 403 page, a redirect or an error. `partial` means the role acts with limits that the text after the keyword states. `api` steps use only `allowed`, `denied` and `partial`.
 _Avoid_: result, verdict

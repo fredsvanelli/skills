@@ -126,6 +126,20 @@ test('a child map replaces the inherited key for every case', () => {
   assert.deepEqual(effectivePermissions(registry, 'k')['x/*'].cases, { a: ['view', 'edit'], b: [] })
 })
 
+test('an inherited list counts in every case and parents join per case', () => {
+  const registry = parseRoles({ version: 2, contexts: { c: { keys: ['x/*'], cases: { a: '', b: '' } } },
+    roles: { p: { permissions: { 'x/*': ['view'] } }, q: { permissions: { 'x/*': { a: ['edit'] } } }, k: { inherits: ['p', 'q'] } } })
+  assert.deepEqual(effectivePermissions(registry, 'k')['x/*'].cases, { a: ['view', 'edit'], b: ['view'] })
+})
+
+test('origins stays one value per key on a key with a map of cases', () => {
+  const registry = parseRoles({ version: 2, contexts: { c: { keys: ['x/*'], cases: { a: '', b: '' } } },
+    roles: { r: { permissions: { 'x/*': { a: ['view'] } }, origins: { 'x/*': 'guess' } } } })
+  assert.deepEqual(registry.roles.r.origins, { 'x/*': 'guess' })
+  assert.throws(() => parseRoles({ version: 2, contexts: { c: { keys: ['x/*'], cases: { a: '' } } },
+    roles: { r: { permissions: { 'x/*': { a: ['view'] } }, origins: { 'x/*': { a: 'guess' } } } } }), /for "x\/\*" must be one of code, contract, guess/)
+})
+
 test('parseRoles explains a broken context', () => {
   const ctx = (contexts, roles = {}) => () => parseRoles({ version: 2, contexts, roles })
   assert.throws(() => parseRoles({ version: 1, contexts: {}, roles: {} }), /contexts need version 2/)
@@ -139,6 +153,7 @@ test('parseRoles explains a broken context', () => {
   assert.throws(ctx({ c: { keys: 'x/*', cases: { a: '' } } }), /context "c": keys must be a list of matrix keys/)
   assert.throws(ctx({ c: { keys: ['x'], cases: { a: '' } } }), /context "c": key "x" must be <capability>\/<feature> or <capability>\/\*/)
   assert.throws(ctx({ c: { keys: ['x/*'], cases: ['a'] } }), /context "c": cases must map each case to a description/)
+  assert.throws(ctx({ c: { keys: ['x/*'], cases: { a: '' } } }, { r: { permissions: { 'x/*': { a: ['fly'] } } } }), /r "x\/\*" in a: action "fly" is not in actions/)
 })
 
 test('matrixWarnings flags a context key that matches nothing and a context with one case', () => {

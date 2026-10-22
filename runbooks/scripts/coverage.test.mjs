@@ -383,6 +383,20 @@ test('roleCoverage requires the runbook to include the case', () => {
   assert.equal(row('vip-team').state, 'covered')
 })
 
+test('without access in a case, only a closing line that applies in that case counts', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-contexts-'))
+  fs.cpSync(CONTEXTS, dir, { recursive: true })
+  const file = path.join(dir, 'docs/runbooks/roles.json')
+  const roles = JSON.parse(fs.readFileSync(file, 'utf8'))
+  roles.roles.manager.permissions['clients/*'] = { 'vip-team': ['view', 'edit'] }
+  fs.writeFileSync(file, JSON.stringify(roles))
+  const { registry, runbooks } = loadContexts(dir)
+  const [manager] = roleCoverage(registry, runbooks, { role: 'manager' })
+  const row = (kase) => manager.keys.find((k) => k.key === 'clients/*' && k.case === kase)
+  assert.deepEqual([row('vip-outside').access, row('vip-outside').state, row('vip-outside').runbooks], [false, 'covered', ['clients.edit-client']])
+  assert.deepEqual([row('regular').access, row('regular').state], [false, 'uncovered'])
+})
+
 test('coverageMarkdown adds a Case column only when a row has a case', () => {
   const { registry, runbooks } = loadContexts(CONTEXTS)
   const base = { entries: { total: 0, covered: 0, pending: 0, planned: 0, uncovered: [] }, groups: [], orphans: [], runbooks: { active: 0, draft: 0, placeholder: 0, automated: 0 }, invalid: [] }

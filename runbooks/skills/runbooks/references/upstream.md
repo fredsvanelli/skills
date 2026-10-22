@@ -47,7 +47,7 @@ The change goes through `update`.
 
 ## Fixtures
 
-A mocked runbook `<capability>.<flow>` keeps its fixtures in `<upstream.fixtures>/<capability>/<flow>/`. `upstream.fixtures` defaults to `<paths.runbooks>/_fixtures`. A fixture for one step goes in a folder named for the step, `<flow>/S03/`, and overrides the files in the runbook folder while that step is current. A `@<role>` folder is a role layer ("Role layer" below). Any other subfolder is a problem.
+A mocked runbook `<capability>.<flow>` keeps its fixtures in `<upstream.fixtures>/<capability>/<flow>/`. `upstream.fixtures` defaults to `<paths.runbooks>/_fixtures`. A fixture for one step goes in a folder named for the step, `<flow>/S03/`, and overrides the files in the runbook folder while that step is current. A `@<role>` folder is a role layer ("Role layer" below), and a `+<case>` folder a case layer ("Case layer" below). Any other subfolder is a problem.
 
 One fixture is one `.json` file:
 
@@ -103,6 +103,34 @@ Lookup goes from the most specific folder to the least: step and role, then step
 
 `runbooks.mjs fixtures` accepts `@<role>` folders. It reports a folder whose name is not a role name, one whose role the registry does not have, and any role folder when role tracking is off.
 
+### Case layer
+
+A runbook with cases (`format.md`, "Contexts and cases") gets the record of each case from its fixtures: the client with its `vip` flag and its team, for example. A folder named `+<case>` holds the responses of that case, at four levels:
+
+```
+_fixtures/clients/edit-client/
+  client.json
+  +vip-team/
+    client.json
+  @manager/
+    me.json
+    +vip-outside/
+      client.json
+  S02/
+    +regular/
+      client.json
+    @manager/
+      +vip-outside/
+        client.json
+```
+
+- `<capability>/<flow>/+<case>/` and `<capability>/<flow>/S02/+<case>/` hold a case's responses for every role, for the whole runbook or for one step.
+- `<capability>/<flow>/@<role>/+<case>/` and `<capability>/<flow>/S02/@<role>/+<case>/` hold them for one role in that case.
+
+Lookup goes from the most specific folder to the least: step, role and case; step and role; step and case; step; role and case; role; case; runbook. So `S02/@manager/+vip-outside/` comes first, then `S02/@manager/`, then `S02/+vip-outside/`. A fixture in a case folder answers only while that case is selected. A case with no folder of its own gets the role's and the runbook's responses, not a 501.
+
+`runbooks.mjs fixtures` accepts `+<case>` folders. It reports `<folder>: not a case folder` for a name that is not a case name, `<folder>: case <name> is not one of the runbook's cases`, and `<folder>: case folders need a context` for any case folder of a runbook with no context.
+
 ### Checking fixtures
 
 ```
@@ -118,10 +146,10 @@ When `upstream.schema` is set, `run` runs this check before the first step. A ru
 One dependency-free Node file, `scripts/upstream-server.mjs`, serves the upstream API. It listens on `127.0.0.1:<upstream.port>` (default `4010`). The app starts with the env var named in `upstream.urlEnv` (for example `NEXT_PUBLIC_API_URL`) set to the server's URL, so the server sees the requests of the browser and of the app's own server (SSR, route handlers, server actions).
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" upstream [--port n] [--mode mocked|live|record] [--runbook id] [--step Sxx]
+node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" upstream [--port n] [--mode mocked|live|record] [--runbook id] [--role name] [--case name] [--step Sxx]
 ```
 
-The command reads the `upstream` block of the config. The flags override `upstream.port` and `upstream.mode`, and select the runbook and step at startup. It prints `runbooks-upstream listening on http://127.0.0.1:<port>` and stops on SIGINT or SIGTERM. When the port is taken, it exits 2 with a message that names the port and `upstream.port`.
+The command reads the `upstream` block of the config. The flags override `upstream.port` and `upstream.mode`, and select the runbook, role, case and step at startup. It prints `runbooks-upstream listening on http://127.0.0.1:<port>` and stops on SIGINT or SIGTERM. When the port is taken, it exits 2 with a message that names the port and `upstream.port`.
 
 The server answers in one of three modes, which a select call changes without a restart:
 
@@ -137,14 +165,14 @@ Matching in `mocked` mode:
 
 1. The method and the path (without query) must be equal.
 2. Every query key the fixture names must be equal in the request.
-3. Among the candidates, a fixture in the current step's folder wins over one in the runbook folder, then the fixture naming more query keys, then the lower file name.
+3. Among the candidates, a fixture in the current step's folder wins over one in the runbook folder (with role and case folders, the order of "Case layer"), then the fixture naming more query keys, then the lower file name.
 
 ### The copy in the project
 
 When `tests.ui` exists, `setup` copies the server to `<tests.ui.dir>/runbooks-upstream.mjs` and writes the path in `upstream.serverFile`, so CI runs mocked scripts without the plugin. The copy carries the plugin version in its header comment and in `export const VERSION`. `list` and `coverage` warn when the copy is missing or from another version, `/runbooks:setup` refreshes the copy, and `/runbooks:upgrade` offers to run it. The copy takes its options from flags, which all take a value:
 
 ```
-node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--runbook id] [--step Sxx]
+node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--runbook id] [--role name] [--case name] [--step Sxx]
 ```
 
 `--fixtures` is required. `--port` defaults to `4010` and `--mode` to `mocked`.
@@ -160,8 +188,8 @@ curl -s http://127.0.0.1:<port>/__runbooks/state
 
 | Route | Does |
 |---|---|
-| `POST /__runbooks/select` | Takes a JSON object with any of `runbook`, `role`, `step` and `mode`, and changes only the keys it gets. A new `runbook` without `role` or `step` resets the role and the step. A new `role` without `step` resets the step. `runbook` is `null` or an id `<capability>.<flow>`, `role` is `null` or a role name, `step` is `null` or `S<nn>`, and `mode` is `mocked`, `live` or `record`. Every select clears the request log. Answers `{ runbook, mode, role, step }` |
-| `GET /__runbooks/state` | Answers `{ runbook, mode, role, step, requests, unmatched }` |
+| `POST /__runbooks/select` | Takes a JSON object with any of `runbook`, `role`, `case`, `step` and `mode`, and changes only the keys it gets. A new `runbook` resets the role, the case and the step it does not name. A new `role` resets the case and the step it does not name. A new `case` without `step` resets the step. `runbook` is `null` or an id `<capability>.<flow>`, `role` is `null` or a role name, `case` is `null` or a case name, `step` is `null` or `S<nn>`, and `mode` is `mocked`, `live` or `record`. Every select clears the request log. Answers `{ runbook, mode, role, case, step }` |
+| `GET /__runbooks/state` | Answers `{ runbook, mode, role, case, step, requests, unmatched }` |
 
 Three rules keep web pages away from these routes:
 
@@ -169,11 +197,11 @@ Three rules keep web pages away from these routes:
 - A select whose `content-type` is not `application/json` gets a 415. Playwright `request.post` with `data` and Cypress `cy.request` with an object body send that type.
 - The control routes send no CORS headers, and a preflight to them gets a 404, so a page on another origin can neither read them nor send them JSON.
 
-An invalid body, or a `runbook` or `step` that is not an id, gets a 400 and changes nothing. Any other control route gets a 404.
+An invalid body, or a `runbook`, `role`, `case` or `step` that is not a valid name, gets a 400 and changes nothing. Any other control route gets a 404.
 
 `requests` lists every request the app made since the last select, in all three modes, as `{ method, path, query, body, step, status }`. An agent checks the request a mocked screen sent by reading it there. `unmatched` lists the mocked requests that had no fixture, as `{ method, path, step }`.
 
-The agent selects the runbook, the role and the step before each step, and scripts do it in `beforeEach`. The scripts get `RUNBOOKS_UPSTREAM_URL`, the server origin, to make these calls.
+The agent selects the runbook, the role, the case and the step before each step, and scripts do it in `beforeEach`. The scripts get `RUNBOOKS_UPSTREAM_URL`, the server origin, to make these calls.
 
 ## Recording
 
@@ -181,10 +209,10 @@ The agent selects the runbook, the role and the step before each step, and scrip
 
 Rules for what is saved:
 
-- With a role selected, the file goes in that role's folder (`@<role>/`) inside the folder it would use otherwise, the runbook's or the current step's. Without a role, it goes in the runbook's or the step's folder. A run records each role's pass under its own folder.
+- With a role selected, the file goes in that role's folder (`@<role>/`) inside the folder it would use otherwise, the runbook's or the current step's. Without a role, it goes in the runbook's or the step's folder. With a case selected, it goes in the case's folder (`+<case>/`) inside that one, so `@viewer/+vip-team/` with both. A run records each role's pass, and each case's pass, under its own folder.
 - Each file is named from the method, the path and a hash of the query, and holds `request`, `response` and `source` (`recorded <date> from <upstream.baseUrl origin>`).
 - `set-cookie`, `authorization`, `cookie` and every header in `upstream.redactHeaders` are dropped, whatever the case. Transport headers (`content-length`, `content-encoding`, `transfer-encoding`, `connection`, `keep-alive`) are dropped too, and so are `vary` and every `access-control-*` header, because the server sends its own CORS headers in `mocked` mode.
-- An equal fixture that the selected role would be served (in its role folder, the step folder or the runbook level) means nothing is written. A response that differs is saved in the current step's folder.
+- An equal fixture that the selected role and case would be served (in any folder of the lookup order) means nothing is written. A response that differs is saved in the current step's folder.
 - A `text/event-stream` response streams to the app and is not recorded.
 - With no runbook selected, nothing is written.
 - `request.query` holds the full query, so remove volatile keys such as a cache-buster (`_t`) from the file by hand. Otherwise the fixture never matches again.
@@ -197,7 +225,7 @@ Rules for the agent:
 
 ## Scripts
 
-The script of a mocked runbook has one test per step, named `S01 <title>`. Each test selects the runbook and the step on the server, then navigates to the step's start page. `Parents:` still decide `blocked-by-parent`, which `runbooks.mjs junit` applies afterwards. With viewports, there is one test per step and viewport, named `S01 <title> @ <viewport>`, and `junit` gives one state per step and viewport. With role tracking on, there is one test per step, role and viewport, named `S01 <title> as <role> @ <viewport>`, and `junit` gives one state per step, role and viewport. This shape is what makes mode `test` available.
+The script of a mocked runbook has one test per step, named `S01 <title>`. Each test selects the runbook and the step on the server, then navigates to the step's start page. `Parents:` still decide `blocked-by-parent`, which `runbooks.mjs junit` applies afterwards. With viewports, there is one test per step and viewport, named `S01 <title> @ <viewport>`, and `junit` gives one state per step and viewport. With role tracking on, there is one test per step, role and viewport, named `S01 <title> as <role> @ <viewport>`, and `junit` gives one state per step, role and viewport. With cases, the case follows the role, `S01 <title> as <role> in <case> @ <viewport>`, and a role that runs once has no `in <case>` part. This shape is what makes mode `test` available.
 
 ```ts
 test.beforeEach(async ({ request }, info) => {
@@ -216,7 +244,7 @@ test.afterAll(async ({ playwright }) => {
 })
 ```
 
-The server holds one state for every client: one runbook, one step and one mode. So every test suite whose app points at the server runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. With two workers, one worker's select would change the responses the other worker's app gets. When `upstream.baseUrl` is set, the copy starts with `--mode live --target <upstream.baseUrl>`, so a test that never selects reaches the live API through it. A mocked script posts `{ runbook, mode: 'mocked', step }` in `beforeEach` (`{ runbook, mode: 'mocked', role, step }` with role tracking on, the role being the one the test is named for) and `{ runbook: null, mode: 'live' }` in `afterAll`, which hands the server back to those tests. A live `ui` script posts nothing.
+The server holds one state for every client: one runbook, role, case, step and mode. So every test suite whose app points at the server runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. With two workers, one worker's select would change the responses the other worker's app gets. When `upstream.baseUrl` is set, the copy starts with `--mode live --target <upstream.baseUrl>`, so a test that never selects reaches the live API through it. A mocked script posts `{ runbook, mode: 'mocked', step }` in `beforeEach` (`{ runbook, mode: 'mocked', role, step }` with role tracking on, the role being the one the test is named for, and `{ runbook, mode: 'mocked', role, case, step }` with cases, where a role that runs once selects the first case of the runbook's `cases`) and `{ runbook: null, mode: 'live' }` in `afterAll`, which hands the server back to those tests. A live `ui` script posts nothing.
 
 A script keeps the design comparison out: only a browser run compares a screen with its design. A mocked runbook without a script is allowed, but then no automated run checks its fixtures, and only the schema check or `list --affected` notices an API change. `setup` warns about this.
 

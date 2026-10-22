@@ -522,6 +522,20 @@ test('loadRunbooks reports case problems', () => {
   has((t) => t.replace('  - regular:', '  - gold: client "Zed".\n  - regular:'), 'Preconditions: Cases: "gold" is not one of the runbook\'s cases')
 })
 
+test('a role line with a case needs a runbook with a context', () => {
+  const dir = copyContexts()
+  const file = path.join(dir, 'docs/runbooks/billing/list-invoices.md')
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('the list holds the invoice.', 'the list holds the invoice.\n- viewer in regular: denied. 403.'))
+  const billing = loadRunbooks(dir, loadConfig(dir)).find((rb) => rb.id === 'billing.list-invoices')
+  assert.ok(billing.problems.includes('S01: role line "viewer in regular": the runbook has no context'))
+})
+
+test('context-created and case-created review entries need their field', () => {
+  const problems = withEditClient((t) => t.replace('cases: all', 'cases: all\nreview:\n  - { reason: context-created, date: 2026-10-22 }\n  - { reason: case-created, date: 2026-10-22 }'))
+  assert.ok(problems.includes('review[0]: context-created needs context'))
+  assert.ok(problems.includes('review[1]: case-created needs case'))
+})
+
 test('cases need a context and role tracking', () => {
   const dir = copyContexts()
   const file = path.join(dir, 'docs/runbooks/billing/list-invoices.md')

@@ -84,8 +84,12 @@ Runbooks against the matrix, for each runbook:
 | Check | Finding |
 |---|---|
 | a role line that contradicts the role's `allowedActions` for the step's key (`allowed` where the action is missing, or `denied`, `hidden` or `read-only` where it is allowed) | `role-contradiction`, with the step, the role line and the matrix entry, marked `guess` when its origin is `guess` |
+| on a runbook with cases, a role line that contradicts the role's actions in a case the line applies to: a line naming the case, or a line with no case in each case the step runs | `role-contradiction`, as above, with the case |
+| on a runbook with cases, a role and case that lack the step's action and have no line that applies in that case | `role-contradiction`, with the step, the role, the case and the matrix entry |
 
-`role-missing` and `role-gone` belong to no runbook and are reported once. `role-contradiction` has the verdict `drift`; the two registry findings do not change a runbook's verdict.
+Read a role's actions per case from `roles <name> --json`: the `cases` map of the key under `effective`. The audit does not scan the code for the condition behind a case, such as a team check or a VIP flag.
+
+`role-missing` and `role-gone` belong to no runbook and are reported once. `role-contradiction` has the verdict `drift`, with or without a case; the two registry findings do not change a runbook's verdict.
 
 The runbook's verdict is the worst of its findings; none means `in-sync`.
 
