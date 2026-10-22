@@ -61,9 +61,9 @@ test('templates parse', () => {
 
 const ROLES_COMMANDS = ['create', 'delete', 'list', 'manage-contexts', 'manage-permissions', 'update']
 
-test('all fifteen commands exist and none is a stub', () => {
+test('all sixteen commands exist and none is a stub', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/*.md').map((rel) => path.basename(rel, '.md'))
-  assert.deepEqual(commands, ['audit-runbooks', 'check', 'coverage', 'create', 'export-permissions', 'import-permissions', 'list', 'map', 'run', 'settings', 'setup', 'to-test', 'ui', 'update', 'upgrade'])
+  assert.deepEqual(commands, ['audit-runbooks', 'check', 'coverage', 'create', 'export-permissions', 'help', 'import-permissions', 'list', 'map', 'run', 'settings', 'setup', 'to-test', 'ui', 'update', 'upgrade'])
   for (const name of commands) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, `commands/${name}.md`), 'utf8')
     assert.doesNotMatch(text, /Not implemented yet/, `${name}.md is still a stub`)

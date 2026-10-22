@@ -26,6 +26,7 @@ Each command file holds the full procedure. When the user asks for one of these 
 | measure coverage | `/runbooks:coverage` | `${CLAUDE_PLUGIN_ROOT}/commands/coverage.md` |
 | open a local page with capabilities, runbooks, run history and coverage | `/runbooks:ui` | `${CLAUDE_PLUGIN_ROOT}/commands/ui.md` |
 | update the installed runbooks plugin to its latest version | `/runbooks:upgrade` | `${CLAUDE_PLUGIN_ROOT}/commands/upgrade.md` |
+| explain how part of the plugin works, or answer a question about it | `/runbooks:help` | `${CLAUDE_PLUGIN_ROOT}/commands/help.md` |
 | register a new role with its parents, account and permissions | `/runbooks:roles:create` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/create.md` |
 | change a role's description, parents or account, or rename it | `/runbooks:roles:update` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/update.md` |
 | remove a role from the registry, the config and the runbooks that cite it | `/runbooks:roles:delete` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/delete.md` |

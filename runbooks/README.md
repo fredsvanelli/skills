@@ -17,6 +17,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:coverage` | coverage report, overall or per capability, feature, slice or path |
 | `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
 | `/runbooks:upgrade` | updates the installed plugin to the latest version from its marketplace |
+| `/runbooks:help` | answers a question about the plugin from its own docs, optionally limited to one area (`--about roles`) |
 | `/runbooks:roles:create` | registers a role with its parents, account and permissions |
 | `/runbooks:roles:update` | changes a role's description, parents or account, or renames it |
 | `/runbooks:roles:delete` | removes a role from the registry, the config and the runbooks that cite it |
