@@ -130,6 +130,13 @@ Commit the runbook frontmatter changes (`status`, `last_run`, and `scripts` when
 
 Give the commit outcome: the short sha, or the paths left uncommitted. Then offer to investigate the causes of the failures (with `superpowers:systematic-debugging` when available), and to fix the `major` design differences; the fix is separate work.
 
+When the `stack` is `frontend` and the config sets `tests.ui`, name each runbook of this run that has an empty `scripts` and was fully approved: a run without `--steps` or `--role`, with `result: passed` and no step `no-account`. Say that the best next step for it is a test script, written in a fresh context, and print the two commands to type, one runbook after the other:
+
+```
+/clear
+/runbooks:to-test <id>
+```
+
 End with a line that offers `/runbooks:ui` to see the results by capability.
 
 Done when every selected runbook has a report, every step in it has a state, and the user has seen the results table before any commit question.
