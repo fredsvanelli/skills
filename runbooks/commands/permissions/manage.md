@@ -38,7 +38,7 @@ Ask with `AskUserQuestion`, in rounds of four. First ask which kind of change:
 - remove a key;
 - add a project action to `actions`.
 
-"Other" ends the loop. Repeat until the user has nothing more to change. Then ask the details of each kind. Contexts and cases are not created here: for a new one, offer `/runbooks:roles:manage-contexts`.
+"Other" ends the loop. Repeat until the user has nothing more to change. Then ask the details of each kind. Contexts and cases are not created here: offer `/runbooks:contexts:create` for a new context and `/runbooks:contexts:update` for a new case.
 
 - Change the actions of a key. Offer the keys of the effective matrix, then ask the actions the role has on the key, multi-select over the registry's `actions`, with the current ones as the recommended answer. On a key that belongs to a context, ask first whether the actions are the same in every case. On a yes, ask one list and write it as a list. On a no, ask the actions of each case of the context, one question per case, and write them as a map. A case the user leaves with no action stays in the map as an empty list, so the no access is explicit. Changing a key the role only inherits writes an own entry that replaces the inherited one (`config.md`, "Inheritance and override"). Removing every action writes an empty list, which overrides the parent and leaves the role without access.
 - Add a key. Ask `<capability>/<feature>` or `<capability>/*`, with the names of the runbook frontmatter. Offer the keys of `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` that no entry of this role covers. Then ask its actions as above.

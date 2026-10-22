@@ -105,7 +105,7 @@ Base actions are `view`, `create`, `edit` and `delete`. They are fixed and need 
 
 **Inheritance and override.** Roles can be independent or cumulative. The effective matrix of a role is the union of its parents' effective entries, plus its own. An own entry for a key replaces the inherited entry for that same key, so a manager can lose `delete` that its parent has. When two parents give the same key, their actions are joined. A cycle in `inherits` is an error.
 
-**Contexts.** A context is a question about the record that changes what a role may do on some keys: how the user relates to the client a record belongs to, for example. A case is one answer to it. The same `manager` login can edit one client and only view another. One list of actions per key cannot express that, and a context can. `/runbooks:roles:manage-contexts` creates, edits and deletes contexts.
+**Contexts.** A context is a question about the record that changes what a role may do on some keys: how the user relates to the client a record belongs to, for example. A case is one answer to it. The same `manager` login can edit one client and only view another. One list of actions per key cannot express that, and a context can. `/runbooks:contexts:create`, `/runbooks:contexts:update` and `/runbooks:contexts:delete` create, edit and delete contexts.
 
 ```json
 {

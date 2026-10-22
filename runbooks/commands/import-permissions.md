@@ -43,7 +43,7 @@ On exit 2, the message names the line and column of the problem (an unregistered
 - `<role> "<key>" mixes a row with no case and rows with cases`. Use one empty-case row or case rows, not both.
 - `case "<c>" is not a case of <context>`. Fix the name.
 - `key "<key>" belongs to no context, so its case must be empty`. Clear the cell.
-- `case "<c>" is not registered; /runbooks:roles:manage-contexts adds it`. The import never creates a context or a case, so run that command first.
+- `case "<c>" is not registered; /runbooks:contexts:update adds it`. The import never creates a context or a case, so run that command first.
 
 When the script prints `Nothing to change.`, say that `roles.json` already matches the CSV and stop.
 

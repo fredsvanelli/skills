@@ -136,7 +136,7 @@ function readRows(rows, header, registry, withCases) {
       if (!registry.contexts[context].cases.includes(kase)) {
         throw new RolesError(registry.caseNames.includes(kase)
           ? `line ${line}: case "${kase}" is not a case of ${context}`
-          : `line ${line}: case "${kase}" is not registered; /runbooks:roles:manage-contexts adds it`)
+          : `line ${line}: case "${kase}" is not registered; /runbooks:contexts:update adds it`)
       }
     }
     const id = `${role}\n${key}`

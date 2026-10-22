@@ -22,9 +22,12 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:roles:update` | changes a role's description, parents or account, or renames it |
 | `/runbooks:roles:delete` | removes a role from the registry, the config and the runbooks that cite it |
 | `/runbooks:roles:list` | lists the roles, or shows one with its effective permissions |
-| `/runbooks:roles:manage-contexts` | creates, changes and deletes contexts and their cases, and marks the runbooks the change reaches for review |
 | `/runbooks:export-permissions` | writes the roles' permission matrix to a CSV, one row per role and key and one column per action, to edit in a spreadsheet |
 | `/runbooks:import-permissions` | reads that CSV back into `roles.json` and marks the runbooks the changes reach for review |
+| `/runbooks:contexts:list` | lists the contexts, or shows one with its runbooks |
+| `/runbooks:contexts:create` | registers a context with its keys and cases, and marks the runbooks it reaches for review |
+| `/runbooks:contexts:update` | changes a context's keys, cases or description, and marks the runbooks the change reaches for review |
+| `/runbooks:contexts:delete` | removes a context from the registry and its runbooks, and marks the runbooks where a role's actions changed for review |
 | `/runbooks:permissions:manage` | changes what a role may do on each capability/feature key and marks the runbooks the change reaches for review |
 
 With `roles.enabled` on, the project keeps a role registry in `roles.json` inside the runbooks folder. A runbook lists the roles it covers, or `roles: all` for every registered role, and each run, script and audit pass then repeats once per role, with the expected outcome per role in each step (`allowed`, `read-only`, `hidden`, `denied` or `partial`). Steps that do not apply to a role, or a role without a test account, get their own states instead of failing. Changing a role or its permissions marks the runbooks it reaches with a `review` reason, which `/runbooks:update` clears once their role lines are right. Setup asks whether to track roles and settings can turn tracking on later; with it off, everything behaves as before. See Roles in [config](skills/runbooks/references/config.md) and in [format](skills/runbooks/references/format.md).

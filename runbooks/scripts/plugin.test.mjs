@@ -61,7 +61,8 @@ test('templates parse', () => {
 
 const COMMANDS = {
   '': ['audit-runbooks', 'check', 'coverage', 'create', 'export-permissions', 'help', 'import-permissions', 'list', 'map', 'run', 'settings', 'setup', 'to-test', 'ui', 'update', 'upgrade'],
-  roles: ['create', 'delete', 'list', 'manage-contexts', 'update'],
+  roles: ['create', 'delete', 'list', 'update'],
+  contexts: ['create', 'delete', 'list', 'update'],
   permissions: ['manage'],
 }
 

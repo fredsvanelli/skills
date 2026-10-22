@@ -179,7 +179,7 @@ test('a list and an equal full map count as unchanged, a changed case writes a m
   assert.deepEqual(readRoles(dir).roles.viewer.permissions['clients/*'], { 'vip-team': ['view', 'create'], 'vip-outside': ['view'], regular: ['view'] })
   const flat = plan(dir, `${head}manager,clients/*,,x,,,\n`)
   assert.deepEqual(flat.changes[0].after, ['view'])
-  assert.throws(() => plan(dir, `${head}manager,clients/*,gold,x,,,\n`), /line 2: case "gold" is not registered; \/runbooks:roles:manage-contexts adds it/)
+  assert.throws(() => plan(dir, `${head}manager,clients/*,gold,x,,,\n`), /line 2: case "gold" is not registered; \/runbooks:contexts:update adds it/)
   assert.throws(() => plan(dir, `${head}manager,billing/*,regular,x,,,\n`), /line 2: key "billing\/\*" belongs to no context, so its case must be empty/)
   assert.throws(() => plan(dir, `${head}manager,clients/*,regular,x,,,\nmanager,clients/*,regular,x,,,\n`), /line 3: manager "clients\/\*" in regular repeats line 2/)
 })

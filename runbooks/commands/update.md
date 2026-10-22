@@ -47,7 +47,7 @@ Run `git status --porcelain` now and keep the list for the commit step.
 
    Read each role's actions per case from `roles <name> --json` (the `cases` map of the matching key under `effective`).
 
-   A runbook whose `problems` hold `cases needs a context`, or `role line "<role> in <case>": the runbook has no context`, lost its context, after a key was removed from one (`/runbooks:roles:manage-contexts`). That is a change too: remove `cases`, the Preconditions `Cases:` list and the step `Cases:` lines, and turn the case role lines into lines with no case, asking with `AskUserQuestion` which outcome stays for each role.
+   A runbook whose `problems` hold `cases needs a context`, or `role line "<role> in <case>": the runbook has no context`, lost its context, after a key was removed from one (`/runbooks:contexts:update`). That is a change too: remove `cases`, the Preconditions `Cases:` list and the step `Cases:` lines, and turn the case role lines into lines with no case, asking with `AskUserQuestion` which outcome stays for each role.
 4. When `last_run.report` exists, read it. Its failures and its Notes are evidence of where the screen already differs from the runbook.
 
 Done when you hold the step tree and the last report's findings, and with role tracking on, the review entries.
