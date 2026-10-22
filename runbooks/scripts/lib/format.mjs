@@ -60,8 +60,9 @@ export function coverageMarkdown(result, scope) {
   lines.push('### Uncovered entry points', '', ...bullets(e.uncovered.map((i) => `\`${i.id}\`${i.file ? ` (\`${i.file}\`)` : ''}${i.citedByMocked ? `, cited, not covered (mocked: ${i.citedByMocked.join(', ')})` : ''}`)), '')
   if (r) lines.push('### Uncovered requirements', '', ...bullets(r.uncovered.map((i) => `\`${i.id}\`${i.title ? `: ${i.title}` : ''}`)), '')
   if (result.roles) {
-    const rows = result.roles.flatMap((r) => r.keys.map((k) => [r.role, `\`${k.key}\``, k.access ? 'access' : 'no access', k.state, k.runbooks.map((id) => `\`${id}\``).join(', ')]))
-    lines.push('### Roles', '', table(['Role', 'Key', 'Access', 'State', 'Runbooks'], rows), '')
+    const hasCase = result.roles.some((r) => r.keys.some((k) => k.case))
+    const rows = result.roles.flatMap((r) => r.keys.map((k) => [r.role, `\`${k.key}\``, ...(hasCase ? [k.case ?? ''] : []), k.access ? 'access' : 'no access', k.state, k.runbooks.map((id) => `\`${id}\``).join(', ')]))
+    lines.push('### Roles', '', table(['Role', 'Key', ...(hasCase ? ['Case'] : []), 'Access', 'State', 'Runbooks'], rows), '')
   }
   lines.push('### Orphans', '')
   if (result.orphanChecksSkipped && result.orphanChecksSkipped.length > 0) {

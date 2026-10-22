@@ -350,3 +350,44 @@ test('roleCoverage marks a role covered only by a draft runbook as pending', () 
   assert.equal(entry.state, 'pending')
   assert.deepEqual(entry.runbooks, ['billing.create-invoice'])
 })
+
+const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
+
+function loadContexts(dir) {
+  const config = loadConfig(dir)
+  return { registry: loadRoles(dir, config), runbooks: loadRunbooks(dir, config) }
+}
+
+test('roleCoverage counts a key of a context per case', () => {
+  const { registry, runbooks } = loadContexts(CONTEXTS)
+  const [manager] = roleCoverage(registry, runbooks, { role: 'manager' })
+  const row = (kase) => manager.keys.find((k) => k.key === 'clients/*' && k.case === kase)
+  assert.deepEqual([row('vip-team').access, row('vip-team').state], [true, 'covered'])
+  const [anonymous] = roleCoverage(registry, runbooks, { role: 'anonymous' })
+  assert.equal(anonymous.keys.find((k) => k.key === 'clients/*' && k.case === 'regular').state, 'uncovered')
+  assert.ok(roleCoverage(registry, runbooks).every((r) => r.keys.filter((k) => k.key === 'billing/*').every((k) => (k.case ?? null) === null)))
+  assert.deepEqual(manager.keys.filter((k) => k.key === 'clients/*').map((k) => k.case), ['vip-team', 'vip-outside', 'regular'])
+})
+
+test('roleCoverage requires the runbook to include the case', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-contexts-'))
+  fs.cpSync(CONTEXTS, dir, { recursive: true })
+  const file = path.join(dir, 'docs/runbooks/clients/edit-client.md')
+  const text = fs.readFileSync(file, 'utf8').replace('cases: all', 'cases: [vip-team, vip-outside]')
+  fs.writeFileSync(file, text.split('\n').filter((line) => !line.startsWith('  - regular:')).join('\n'))
+  const { registry, runbooks } = loadContexts(dir)
+  assert.deepEqual(runbooks.find((rb) => rb.id === 'clients.edit-client').problems, [])
+  const [manager] = roleCoverage(registry, runbooks, { role: 'manager' })
+  const row = (kase) => manager.keys.find((k) => k.key === 'clients/*' && k.case === kase)
+  assert.equal(row('regular').state, 'uncovered')
+  assert.equal(row('vip-team').state, 'covered')
+})
+
+test('coverageMarkdown adds a Case column only when a row has a case', () => {
+  const { registry, runbooks } = loadContexts(CONTEXTS)
+  const base = { entries: { total: 0, covered: 0, pending: 0, planned: 0, uncovered: [] }, groups: [], orphans: [], runbooks: { active: 0, draft: 0, placeholder: 0, automated: 0 }, invalid: [] }
+  const withCases = coverageMarkdown({ ...base, roles: roleCoverage(registry, runbooks) })
+  assert.match(withCases, /\| Role \| Key \| Case \| Access \|/)
+  const without = coverageMarkdown({ ...base, roles: roleCoverage(registry, runbooks).map((r) => ({ ...r, keys: r.keys.filter((k) => !k.case) })) })
+  assert.match(without, /\| Role \| Key \| Access \|/)
+})

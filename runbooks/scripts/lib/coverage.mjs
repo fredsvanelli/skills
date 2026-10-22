@@ -1,7 +1,7 @@
 import { matchesGlob } from './glob.mjs'
 import { filterRunbooks } from './filter.mjs'
 import { surfacesOf } from './config.mjs'
-import { effectivePermissions, allowedActions, keyMatches, CLOSING_OUTCOMES } from './roles.mjs'
+import { effectivePermissions, allowedActions, contextOfKey, keyMatches, CLOSING_OUTCOMES } from './roles.mjs'
 
 const NO_SLICE = '(no slice)'
 
@@ -193,25 +193,38 @@ export function computeCoverage({
 
 // Per role, every key in any role's matrix. With access, an active runbook that matches the key and runs
 // the role covers it. Without access, the runbook must also close the role out (read-only, hidden or denied).
+// A key of a context gets one row per case, and the runbook's cases must include the case.
 export function roleCoverage(registry, runbooks, { role } = {}) {
   const keys = [...new Set(registry.names.flatMap((name) => Object.keys(effectivePermissions(registry, name))))].sort()
   const candidates = runbooks.filter((rb) => rb.problems.length === 0 && (rb.status === 'active' || rb.status === 'draft'))
+  const rowFor = (name, key, kase) => {
+    const [capability, feature] = key.split('/', 2)
+    const access = allowedActions(registry, name, capability, feature === '*' ? null : feature, kase).length > 0
+    const closes = (rb) => {
+      const byRole = kase === null ? rb.roleOutcomes : rb.outcomesByCase
+      if (!Object.hasOwn(byRole ?? {}, name)) return false
+      const outcomes = kase === null ? byRole[name] : (Object.hasOwn(byRole[name], kase) ? byRole[name][kase] : [])
+      return outcomes.some((outcome) => CLOSING_OUTCOMES.includes(outcome))
+    }
+    const qualifying = candidates
+      .filter((rb) =>
+        rb.roles.includes(name) && keyMatches(key, rb.capability, rb.feature) &&
+        (kase === null || (rb.cases ?? []).includes(kase)) &&
+        (access || closes(rb)))
+      .sort((a, b) => a.id.localeCompare(b.id))
+    return {
+      key,
+      ...(kase === null ? {} : { case: kase }),
+      access,
+      state: qualifying.some((rb) => rb.status === 'active') ? 'covered' : qualifying.length > 0 ? 'pending' : 'uncovered',
+      runbooks: qualifying.map((rb) => rb.id),
+    }
+  }
   return registry.names.filter((name) => !role || name === role).map((name) => ({
     role: name,
-    keys: keys.map((key) => {
-      const [capability, feature] = key.split('/', 2)
-      const access = allowedActions(registry, name, capability, feature === '*' ? null : feature).length > 0
-      const qualifying = candidates
-        .filter((rb) =>
-          rb.roles.includes(name) && keyMatches(key, rb.capability, rb.feature) &&
-          (access || (Object.hasOwn(rb.roleOutcomes, name) ? rb.roleOutcomes[name] : []).some((outcome) => CLOSING_OUTCOMES.includes(outcome))))
-        .sort((a, b) => a.id.localeCompare(b.id))
-      return {
-        key,
-        access,
-        state: qualifying.some((rb) => rb.status === 'active') ? 'covered' : qualifying.length > 0 ? 'pending' : 'uncovered',
-        runbooks: qualifying.map((rb) => rb.id),
-      }
+    keys: keys.flatMap((key) => {
+      const context = contextOfKey(registry, key)
+      return context === null ? [rowFor(name, key, null)] : registry.contexts[context].cases.map((kase) => rowFor(name, key, kase))
     }),
   }))
 }
