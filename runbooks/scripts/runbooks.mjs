@@ -17,13 +17,14 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, importPermissionsMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, importPermissionsMarkdown } from './lib/format.mjs'
 import { roleRows, roleDetail, affectedByChange, affectedByContext, contextRows, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
 import { casePlan, passPlan } from './lib/passes.mjs'
 import { loadRoles, noAccountRoles, REVIEW_REASONS, REVIEW_FIELDS } from './lib/roles.mjs'
 import { planReview, planEnableRoles } from './lib/review-edit.mjs'
+import { planRenameCase, planDeleteCase, planDeleteContext } from './lib/case-edit.mjs'
 import { exportPermissions, planImport } from './lib/permissions-csv.mjs'
 import { todayLocal } from './lib/stale.mjs'
 
@@ -63,6 +64,14 @@ Commands:
   contexts      --affected <name> [--key k] lists the runbooks of a context, narrowed to one key
   passes        <id> [--role a,b] [--case a,b] lists the passes of a runbook: role, case, the case whose data the
                 pass builds, viewport and account. A role whose permissions do not change by case runs once (case *)
+  rename-case   <from> <to> [--write] renames a case in every runbook of its context (cases, Preconditions,
+                step Cases lines, role lines) and moves its +<from> fixture folders. Refuses a <to> that is
+                already a case. A dry run unless --write. It does not edit roles.json
+  delete-case   <name> [--write] removes a case from every cases list, Cases line and role line, and deletes a
+                role line left with no case. A runbook whose cases list only <name>, or that has a step
+                running only in it, is skipped and not written. +<name> folders stay and are listed
+  delete-context <name> [--write] removes cases, the Preconditions Cases lists, step Cases lines and role
+                lines with cases from the runbooks of a context. A dry run unless --write
   roles         --citing r lists the runbooks that cite the role (roles, Roles:, role line, As:) and its heirs
   export-permissions [--role r] [--out <csv>] prints the own permissions of each role as CSV: one row per
                 role and key, one column per action marked x, and the origin of the key. --out writes the file
@@ -76,7 +85,8 @@ Global options:
   --config <file>  config path relative to the root (default: docs/runbooks/runbooks.config.json)
   --json           print JSON instead of Markdown
 
-Read-only, except move-to-calls, mark-review, enable-roles and import-permissions with --write, and
+Read-only, except move-to-calls, mark-review, enable-roles, import-permissions, rename-case, delete-case and
+delete-context with --write, and
 export-permissions with --out: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
 contract --strict has findings, 2 on error.
 `
@@ -287,6 +297,27 @@ function commandContexts(root, config, options, positionals) {
   return options.json ? json(rows) : contextsMarkdown(rows)
 }
 
+function commandCaseEdit(root, config, options, positionals, command) {
+  requireTracking(config)
+  const count = command === 'rename-case' ? 2 : 1
+  if (positionals.length < count) throw new Error(command === 'rename-case' ? 'rename-case needs <from> and <to>' : `${command} needs a ${command === 'delete-case' ? 'case' : 'context'} name`)
+  const registry = loadRoles(root, config)
+  const write = options.write === true
+  let title
+  let result
+  if (command === 'rename-case') {
+    result = planRenameCase(root, config, registry, positionals[0], positionals[1], { write })
+    title = `Renames the case ${positionals[0]} to ${positionals[1]}. Edit roles.json too.`
+  } else if (command === 'delete-case') {
+    result = planDeleteCase(root, config, registry, positionals[0], { write })
+    title = `Deletes the case ${positionals[0]} from the runbooks. Edit roles.json too.`
+  } else {
+    result = planDeleteContext(root, config, registry, positionals[0], { write })
+    title = `Deletes the context ${positionals[0]} from the runbooks. Edit roles.json too.`
+  }
+  return options.json ? json(result) : caseEditMarkdown({ title, write, ...result })
+}
+
 function commandPasses(root, config, options, positionals) {
   requireTracking(config)
   const id = positionals[0]
@@ -334,7 +365,7 @@ function commandImportPermissions(root, config, options) {
   return options.json ? json(plan) : importPermissionsMarkdown(plan)
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'export-permissions', 'import-permissions']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'export-permissions', 'import-permissions']
 
 export function run(argv) {
   const stderr = []
@@ -363,6 +394,7 @@ export function run(argv) {
     else if (command === 'enable-roles') stdout = commandEnableRoles(root, config, options)
     else if (command === 'roles') stdout = commandRoles(root, config, options, positionals)
     else if (command === 'contexts') stdout = commandContexts(root, config, options, positionals)
+    else if (['rename-case', 'delete-case', 'delete-context'].includes(command)) stdout = commandCaseEdit(root, config, options, positionals, command)
     else if (command === 'passes') stdout = commandPasses(root, config, options, positionals)
     else if (command === 'export-permissions') stdout = commandExportPermissions(root, config, options)
     else if (command === 'import-permissions') stdout = commandImportPermissions(root, config, options)

@@ -176,6 +176,18 @@ export function reviewPlanMarkdown({ title, runbooks, skipped = [], written, wri
   return `${lines.join('\n')}\n`
 }
 
+export function caseEditMarkdown({ title, runbooks, skipped = [], folders = [], written, write }) {
+  const lines = [title, '']
+  lines.push(runbooks.length === 0 ? 'No runbook to change.' : table(['Runbook', 'Path'], runbooks.map((rb) => [rb.id, rb.path])), '')
+  if (skipped.length > 0) lines.push('### Skipped', '', ...bullets(skipped.map((s) => `\`${s.id}\`: ${s.reason}`)), '')
+  if (folders.length > 0) {
+    lines.push('### Fixture folders', '', ...bullets(folders.map((f) => (f.to === null ? `\`${f.from}\` stays in place` : `\`${f.from}\` moves to \`${f.to}\``))), '')
+  }
+  if (written.length > 0) lines.push(`Written: ${written.join(', ')}.`)
+  else lines.push(write ? 'Nothing to change.' : 'Dry run: nothing written. Run again with --write to apply.')
+  return `${lines.join('\n')}\n`
+}
+
 const resultsText = (results) => {
   const parts = Object.entries(results).filter(([, count]) => count > 0).map(([state, count]) => `${count} ${state}`)
   return parts.length > 0 ? parts.join(', ') : 'none'
