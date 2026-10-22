@@ -537,3 +537,19 @@ test('cases need a context and role tracking', () => {
   const edit = loadRunbooks(off, loadConfig(off)).find((rb) => rb.id === 'clients.edit-client')
   assert.ok(edit.problems.includes('cases needs role tracking (roles.enabled)'))
 })
+
+test('outcomesByCase keeps the outcome that applies in each step', () => {
+  const by = (transform) => {
+    const dir = copyContexts()
+    const file = path.join(dir, 'docs/runbooks/clients/edit-client.md')
+    fs.writeFileSync(file, transform(fs.readFileSync(file, 'utf8')))
+    return loadRunbooks(dir, loadConfig(dir)).find((rb) => rb.id === 'clients.edit-client')
+  }
+  const same = by((t) => t.replace('- viewer: read-only.', '- viewer in regular: hidden. A.\n- viewer: read-only.'))
+  assert.deepEqual(same.outcomesByCase.viewer, { 'vip-team': ['read-only'], 'vip-outside': ['read-only'], regular: ['hidden'] })
+  const two = by((t) => t.replace('Expected: the page shows the client.', 'Expected: the page shows the client.\n- viewer: read-only. A.').replace('- viewer: read-only. The', '- viewer in regular: hidden. The'))
+  assert.deepEqual(two.outcomesByCase.viewer.regular, ['read-only', 'hidden'])
+  assert.deepEqual(two.outcomesByCase.viewer['vip-team'], ['read-only'])
+  const limited = by((t) => t.replace('Parents: S01', 'Parents: S01\nCases: regular'))
+  assert.deepEqual(limited.outcomesByCase.viewer, { regular: ['read-only'] })
+})

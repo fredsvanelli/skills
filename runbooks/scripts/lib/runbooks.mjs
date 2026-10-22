@@ -214,15 +214,18 @@ function readStepRoles(runbook, body, registry) {
           runbook.problems.push(`${step.step}: outcome "${outcome}" does not apply to api steps`)
         }
         addOutcome(outcomes, role, outcome)
-        const roleCases = Object.hasOwn(byCaseOutcomes, role) ? byCaseOutcomes[role] : (byCaseOutcomes[role] = {})
-        roleCases[name] = [...new Set([...(Object.hasOwn(roleCases, name) ? roleCases[name] : []), outcome])]
       }
     }
-    for (const [role, outcome] of Object.entries(step.outcomes)) {
+    // The outcome that applies to a role in a case of this step: the case line, else the no-case line.
+    for (const role of new Set([...Object.keys(step.outcomes), ...Object.keys(step.caseOutcomes)])) {
       if (!registry.names.includes(role)) continue
       const roleCases = Object.hasOwn(byCaseOutcomes, role) ? byCaseOutcomes[role] : (byCaseOutcomes[role] = {})
+      const own = Object.hasOwn(step.caseOutcomes, role) ? step.caseOutcomes[role] : {}
       for (const name of stepCases) {
-        roleCases[name] = [...new Set([...(Object.hasOwn(roleCases, name) ? roleCases[name] : []), outcome])]
+        const applies = Object.hasOwn(own, name) ? own[name] : Object.hasOwn(step.outcomes, role) ? step.outcomes[role] : null
+        if (applies === null) continue
+        const seen = Object.hasOwn(roleCases, name) ? roleCases[name] : []
+        if (!seen.includes(applies)) roleCases[name] = [...seen, applies]
       }
     }
     if (step.as !== null && !runbook.review.some((entry) => entry.reason === 'roles-enabled')) {
