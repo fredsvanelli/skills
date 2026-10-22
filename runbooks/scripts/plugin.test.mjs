@@ -59,7 +59,7 @@ test('templates parse', () => {
   assert.equal(parseYaml(placeholder.yaml).status, 'placeholder')
 })
 
-const ROLES_COMMANDS = ['create', 'delete', 'list', 'manage-permissions', 'update']
+const ROLES_COMMANDS = ['create', 'delete', 'list', 'manage-contexts', 'manage-permissions', 'update']
 
 test('all fifteen commands exist and none is a stub', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/*.md').map((rel) => path.basename(rel, '.md'))

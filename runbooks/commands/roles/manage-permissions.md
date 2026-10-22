@@ -24,7 +24,7 @@ Run `git status --porcelain` now and keep the list for the commit step.
 
 1. Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop.
 2. Without `<name>`, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, show the roles, and ask which one with `AskUserQuestion`. A name the registry does not have gets the same list.
-3. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` and show the effective matrix: each key, its actions, whether they are the role's own, inherited from a role or overridden, and the keys marked `guess`.
+3. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` and show the effective matrix: each key (one row per case for a key of a context), its actions, whether they are the role's own, inherited from a role or overridden, and the keys marked `guess`.
 4. Read `roles.json`. Keep the `actions` list: the four base actions (`view`, `create`, `edit`, `delete`) plus the project's.
 
 Done when the user has seen the effective matrix and you hold the registry.
@@ -38,9 +38,9 @@ Ask with `AskUserQuestion`, in rounds of four. First ask which kind of change:
 - remove a key;
 - add a project action to `actions`.
 
-"Other" ends the loop. Repeat until the user has nothing more to change. Then ask the details of each kind:
+"Other" ends the loop. Repeat until the user has nothing more to change. Then ask the details of each kind. Contexts and cases are not created here: for a new one, offer `/runbooks:roles:manage-contexts`.
 
-- Change the actions of a key. Offer the keys of the effective matrix, then ask the actions the role has on the key, multi-select over the registry's `actions`, with the current ones as the recommended answer. Changing a key the role only inherits writes an own entry that replaces the inherited one (`config.md`, "Inheritance and override"). Removing every action writes an empty list, which overrides the parent and leaves the role without access.
+- Change the actions of a key. Offer the keys of the effective matrix, then ask the actions the role has on the key, multi-select over the registry's `actions`, with the current ones as the recommended answer. On a key that belongs to a context, ask first whether the actions are the same in every case. On a yes, ask one list, which is written as a list. On a no, ask the actions of each case of the context, one question per case, which is written as a map. A case the user leaves with no action stays in the map as an empty list, so the no access is explicit. Changing a key the role only inherits writes an own entry that replaces the inherited one (`config.md`, "Inheritance and override"). Removing every action writes an empty list, which overrides the parent and leaves the role without access.
 - Add a key. Ask `<capability>/<feature>` or `<capability>/*`, with the names of the runbook frontmatter. Offer the keys of `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` that no entry of this role covers. Then ask its actions as above.
 - Remove a key. Offer the role's own keys. An inherited key is not removed here: say so, and offer an own entry with an empty list instead.
 - Add a project action. Ask for the identifier. It is English, lowercase and not one of the base four. It goes into the top-level `actions` list, and the user can then give it to keys.
@@ -61,11 +61,11 @@ Done when `roles.json` is written and the script loads it.
 
 For each key whose actions changed, or that was added or removed:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <name> --key <key>`
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <name> --key <key> [--case <case>]`
 
-It lists the runbooks of the role and of the roles that inherit from it, grouped by role. A new project action in `actions` reaches no runbook until a key uses it.
+For a change in one case, pass `--case <case>`: it keeps the runbooks that run that case. For a change in several cases, run it once per case. It lists the runbooks of the role and of the roles that inherit from it, grouped by role. A new project action in `actions` reaches no runbook until a key uses it.
 
-Show the groups by role, with the key and the change in one line (`delete removed`, `approve added`). Merge a runbook that appears under several keys into one row with all its keys. When no runbook is reached, say so and go to step 6.
+Show the groups by role, with the key and the change in one line (`delete removed`, `approve added`; `vip-outside: edit removed` for one case). Merge a runbook that appears under several keys into one row with all its keys. When no runbook is reached, say so and go to step 6.
 
 Done when the user has seen every group.
 
@@ -75,7 +75,9 @@ Ask with `AskUserQuestion`: mark all, mark none, or pick some. On "pick some", a
 
 For each changed key, build the command for the chosen runbooks that the key reached:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <name> --key <key> --change "<one line>"`
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <name> --key <key> [--case <case>] --change "<one line>"`
+
+For a change in one case, add `--case <case>` and name the case in the line, as in `vip-outside: edit removed`.
 
 Run it without `--write` first, show what it would add to each runbook, and ask whether to write. On a yes, run it again with `--write`.
 
@@ -85,7 +87,7 @@ Done when each chosen runbook has its entry, or the user chose none.
 
 Print, before any commit question:
 
-- one line per key changed: old actions, new actions;
+- one line per key changed, and per case for a key of a context: old actions, new actions;
 - the project actions added;
 - the runbooks marked, with the reason and key, and the number left unmarked;
 - the command that resolves each review: `/runbooks:update <id>`.

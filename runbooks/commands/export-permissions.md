@@ -37,12 +37,13 @@ Done when you hold a path the user agreed to write.
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" export-permissions --out <file>`, with `--role r` when given. The script prints the number of rows it wrote. On exit 2, show its message and stop; it wrote nothing.
 
-The CSV has one row per role and own key. It holds no inherited key, because the import writes each row back as an own entry. Its columns:
+The CSV has one row per role and own key, and one row per case for a key where the role has a map. It holds no inherited key, because the import writes each row back as an own entry. Its columns:
 
 | Column | Holds |
 |---|---|
 | `role` | the role name |
 | `key` | `<capability>/<feature>` or `<capability>/*` |
+| `case` | only when the registry has contexts, after `key`. Empty for an entry that is a list. A map gives one row per case of the context, with empty marks for a case the map leaves out |
 | one per action | `x` when the role has the action on the key, empty when not. The four base actions come first, then the project's |
 | `origin` | `code`, `contract` or `guess`, empty when the user typed the key. The import ignores this column |
 
@@ -57,7 +58,7 @@ Print:
 - the path and the number of rows;
 - the roles with no row;
 - the keys marked `guess`, which are the ones worth checking first;
-- how to edit the file: mark `x` to give an action and clear the cell to take it away, add a row to add a key, delete a row to remove the key, and clear every action cell of a row to keep the key with no access, which overrides what the parents give. A new column named after a lowercase English action (`approve`, `export`) adds that action to the project's `actions`. Keep the `role` and `key` columns and one column for each action the registry has. A spreadsheet that saves with `;` as the delimiter works too;
+- how to edit the file: mark `x` to give an action and clear the cell to take it away, add a row to add a key, delete a row to remove the key, and clear every action cell of a row to keep the key with no access, which overrides what the parents give. On a key of a context, give one row with an empty `case` for the same actions in every case, or one row per case. A case row with no mark is no access in that case. Do not mix both for the same role and key. A new column named after a lowercase English action (`approve`, `export`) adds that action to the project's `actions`. Keep the `role`, `key` and `case` columns (`case` only when the registry has contexts) and one column for each action the registry has. A spreadsheet that saves with `;` as the delimiter works too;
 - the next step: `/runbooks:import-permissions <file>`.
 
 Say that the CSV is not committed: it is a working copy, and `roles.json` stays the record.

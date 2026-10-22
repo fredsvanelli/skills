@@ -27,8 +27,8 @@ Done when tracking is on, or the command stopped with that message.
 
 ## 2. Print
 
-- Without a name: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, or the same with `--json` when `$ARGUMENTS` has it. Print the table as the script gives it: name, description, inherits, account, runbook count, pending reviews, keys still marked `guess`, and the last results per role.
-- With a name: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>`. Print the effective permissions with the source of each row (own, inherited from a role, or overridden) and the role's runbooks. A name the registry does not have gets the list of registered roles.
+- Without a name: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, or the same with `--json` when `$ARGUMENTS` has it. Print the table as the script gives it: name, description, inherits, account, runbook count, pending reviews, keys still marked `guess`, and the last results per role. When the registry has contexts, the table also has a Case keys column with the number of keys of the role that depend on a case.
+- With a name: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>`. Print the effective permissions with the source of each row (own, inherited from a role, or overridden) and the role's runbooks. A key of a context has one row per case, with a Case column. A case the role's map leaves out shows no actions. A name the registry does not have gets the list of registered roles.
 
 The script exits 2 with `role tracking is off; /runbooks:settings roles turns it on` when tracking is off. Show that message and stop.
 

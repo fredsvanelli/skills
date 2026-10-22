@@ -34,9 +34,16 @@ Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" import-permissions --file
 
 - one row per key that changes: role, key, actions before and after. `absent` before means the CSV adds the key, `absent` after means the CSV dropped its row, and `none` is a key kept with no access;
 - the project actions the CSV adds as new columns;
-- the roles with no row, which keep their matrix.
+- the roles with no row, which keep their matrix;
+- `missingCases`: for a role and key with case rows for only some cases, the cases left without access. Show them, because the import writes a map with only the cases the CSV has.
 
-On exit 2, the message names the line and column of the problem (an unregistered role, a bad key, a repeated row, a cell that is not `x` or empty, a missing action column) or the registry error the result would raise. Show it, say to fix the CSV and run the command again, and stop. A role the registry does not have is added with `/runbooks:roles:create` first.
+On exit 2, the message names the line and column of the problem (an unregistered role, a bad key, a repeated row, a cell that is not `x` or empty, a missing action column) or the registry error the result would raise. Show it, say to fix the CSV and run the command again, and stop. A role the registry does not have is added with `/runbooks:roles:create` first. With contexts, the case errors and their fixes are:
+
+- `line 1: the registry has contexts, so the header needs a "case" column`. Add the column after `key`.
+- `<role> "<key>" mixes a row with no case and rows with cases`. Use one empty-case row or case rows, not both.
+- `case "<c>" is not a case of <context>`. Fix the name.
+- `key "<key>" belongs to no context, so its case must be empty`. Clear the cell.
+- `case "<c>" is not registered; /runbooks:roles:manage-contexts adds it`. The import never creates a context or a case, so run that command first.
 
 When the script prints `Nothing to change.`, say that `roles.json` already matches the CSV and stop.
 
@@ -58,9 +65,9 @@ Done when `roles.json` is written and the script loads it.
 
 For each entry of `changes`:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <role> --key <key>`
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <role> --key <key> [--case <case>]`
 
-It lists the runbooks of the role and of the roles that inherit from it, grouped by role. A new project action reaches no runbook until a key uses it.
+For a change in one case, pass `--case <case>`. It lists the runbooks of the role and of the roles that inherit from it, grouped by role. A new project action reaches no runbook until a key uses it.
 
 Show the groups by role, with the key and the change in one line (`delete removed`, `approve added`, `key added`, `key removed`). Merge a runbook that appears under several keys or roles into one row with all of them. When no runbook is reached, say so and go to step 6.
 
@@ -72,7 +79,7 @@ Ask with `AskUserQuestion`: mark all, mark none, or pick some. On "pick some", a
 
 For each changed role and key, build the command for the chosen runbooks it reached:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <role> --key <key> --change "<one line>"`
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <role> --key <key> [--case <case>] --change "<one line>"`
 
 Run them without `--write` first, show what they would add to each runbook, and ask whether to write. On a yes, run them again with `--write`.
 

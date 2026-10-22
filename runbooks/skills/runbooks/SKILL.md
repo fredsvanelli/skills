@@ -31,6 +31,7 @@ Each command file holds the full procedure. When the user asks for one of these 
 | remove a role from the registry, the config and the runbooks that cite it | `/runbooks:roles:delete` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/delete.md` |
 | list the roles, or show one with its effective permissions | `/runbooks:roles:list` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/list.md` |
 | change what a role may do on each capability/feature key and mark the affected runbooks for review | `/runbooks:roles:manage-permissions` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/manage-permissions.md` |
+| create, change or delete the contexts of the role registry and their cases, and mark the affected runbooks for review | `/runbooks:roles:manage-contexts` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/manage-contexts.md` |
 | export the permission matrix to a CSV file | `/runbooks:export-permissions` | `${CLAUDE_PLUGIN_ROOT}/commands/export-permissions.md` |
 | import a permissions CSV into roles.json and mark the affected runbooks for review | `/runbooks:import-permissions` | `${CLAUDE_PLUGIN_ROOT}/commands/import-permissions.md` |
 
