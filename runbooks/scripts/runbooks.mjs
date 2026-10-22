@@ -21,7 +21,7 @@ import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMark
 import { roleRows, roleDetail, affectedByChange, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
-import { passPlan } from './lib/passes.mjs'
+import { casePlan, passPlan } from './lib/passes.mjs'
 import { loadRoles, noAccountRoles, REVIEW_REASONS, REVIEW_FIELDS } from './lib/roles.mjs'
 import { planReview, planEnableRoles } from './lib/review-edit.mjs'
 import { exportPermissions, planImport } from './lib/permissions-csv.mjs'
@@ -160,6 +160,7 @@ function commandJunit(root, config, options, positionals) {
   if (steps.length === 0) throw new Error(`${runbook.path} has no steps`)
   const waived = typeof options.waive === 'string' ? options.waive.split(',').map((s) => s.trim()) : []
   const tracking = rolesEnabled(config) ? { roles: runbook.roles, noAccount: noAccountRoles(config, runbook) } : {}
+  if (rolesEnabled(config) && runbook.context) tracking.casesOf = casePlan(loadRoles(root, config), runbook, steps)
   const result = { id, ...stepStates(steps, parseJunit(fs.readFileSync(file, 'utf8')), { waived, viewports: runbook.viewports, ...tracking }) }
   return options.json ? json(result) : junitMarkdown(result)
 }

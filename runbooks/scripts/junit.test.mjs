@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseSteps, parseJunit, roleOfTest, stepOfTest, stepStates, viewportOfTest } from './lib/junit.mjs'
+import { parseSteps, parseJunit, caseOfTest, roleOfTest, stepOfTest, stepStates, viewportOfTest } from './lib/junit.mjs'
 import { nextStatus } from './lib/status.mjs'
 import { junitMarkdown } from './lib/format.mjs'
 import { run } from './runbooks.mjs'
@@ -316,4 +316,84 @@ test('junitMarkdown names the reason of each extra test with roles, and keeps th
   assert.match(junitMarkdown({ id: 'x', ...roles }), /^Tests that match no step to run: S01 \(S01 lists\): no " as <role>" suffix$/m)
   const plain = junitMarkdown({ id: 'x', ...stepStates(parseSteps(BODY), parseJunit(XML)) })
   assert.match(plain, /^Tests for steps the runbook does not have: S06 \(S06 jest failure\); S07 \(S07 phpunit failure\); S09 \(S09 something else\)$/m)
+})
+
+const EDIT_CLIENT_BODY = `# Edit a client
+
+## Steps
+
+### S01. Opens the client
+
+Parents: none
+
+### S02. Edits the client
+
+Parents: S01
+Expected: the page shows "Saved".
+- manager in vip-outside: read-only. No "Edit".
+
+### S03. Deletes the client
+
+Parents: S02
+
+### S04. Audits the team
+
+Parents: none
+Cases: vip-team
+`
+
+const asTests = (names) => names.map((name) => ({ name, outcome: 'passed', seen: '' }))
+const CASES_OF = { manager: { once: false, cases: ['vip-team', 'vip-outside'] }, admin: { once: true, cases: ['vip-team'] } }
+
+test('roleOfTest and caseOfTest read the role and case after "as"', () => {
+  const t = (name) => ({ name })
+  assert.equal(roleOfTest(t('S01 sign in as manager in vip-team @ mobile'), ['manager']), 'manager')
+  assert.equal(caseOfTest(t('S01 sign in as manager in vip-team @ mobile'), ['vip-team']), 'vip-team')
+  assert.equal(caseOfTest(t('S01 sign in as manager in other'), ['vip-team']), null)
+  assert.equal(caseOfTest(t('S01 log in as manager'), ['vip-team']), null)
+  assert.equal(roleOfTest(t('S01 log in as manager'), ['manager']), 'manager')
+})
+
+test('stepStates keeps one row per step, role and case, and closes a branch per case', () => {
+  const steps = parseSteps(EDIT_CLIENT_BODY)
+  const names = ['S01 open as manager in vip-team', 'S02 edit as manager in vip-team', 'S03 delete as manager in vip-team',
+    'S01 open as manager in vip-outside', 'S02 edit as manager in vip-outside', 'S01 open as admin', 'S02 edit as admin', 'S03 delete as admin',
+    'S02 edit as admin in regular']
+  const { steps: rows, extra } = stepStates(steps, asTests(names), { roles: ['manager', 'admin'], casesOf: CASES_OF })
+  const state = (role, kase, step) => rows.find((r) => r.role === role && r.case === kase && r.step === step).state
+  assert.equal(state('manager', 'vip-outside', 'S03'), 'not-applicable')
+  assert.equal(state('manager', 'vip-team', 'S03'), 'passed')
+  assert.equal(state('admin', '*', 'S03'), 'passed')
+  assert.deepEqual(extra.map((e) => e.reason), ['admin runs once; drop " in regular"'])
+  assert.deepEqual(rows.map((r) => `${r.role}/${r.case}/${r.step}`), [
+    'manager/vip-team/S01', 'manager/vip-team/S02', 'manager/vip-team/S03', 'manager/vip-team/S04',
+    'manager/vip-outside/S01', 'manager/vip-outside/S02', 'manager/vip-outside/S03',
+    'admin/*/S01', 'admin/*/S02', 'admin/*/S03', 'admin/*/S04'])
+})
+
+test('with cases, each extra test names why it maps to no row', () => {
+  const steps = parseSteps(EDIT_CLIENT_BODY)
+  const names = ['S01 open as manager', 'S01 open as manager in regular', 'S04 audit as manager in vip-outside', 'S04 audit as admin in vip-team']
+  const { extra } = stepStates(steps, asTests(names), { roles: ['manager', 'admin'], casesOf: CASES_OF })
+  assert.deepEqual(extra.map((e) => [e.test, e.reason, e.role, e.case]), [
+    ['S01 open as manager', 'no " in <case>" suffix', 'manager', null],
+    ['S01 open as manager in regular', 'regular is not one of the runbook\'s cases', 'manager', 'regular'],
+    ['S04 audit as manager in vip-outside', 'S04 does not run in vip-outside', 'manager', 'vip-outside'],
+    ['S04 audit as admin in vip-team', 'admin runs once; drop " in vip-team"', 'admin', 'vip-team'],
+  ])
+})
+
+test('a once role skips a step whose Cases line excludes its data case', () => {
+  const steps = parseSteps(EDIT_CLIENT_BODY)
+  const casesOf = { admin: { once: true, cases: ['vip-outside'] } }
+  const { steps: rows, extra } = stepStates(steps, asTests(['S04 audit as admin']), { roles: ['admin'], casesOf })
+  assert.equal(rows.some((r) => r.step === 'S04'), false)
+  assert.deepEqual(extra.map((e) => e.reason), ['S04 does not run in vip-outside'])
+})
+
+test('junitMarkdown shows the case column and labels rows with the case', () => {
+  const row = (state) => ({ step: 'S02', role: 'manager', case: 'vip-outside', viewport: 'mobile', title: '', state, seen: '', tests: [] })
+  const out = junitMarkdown({ id: 'x', result: 'blocked', steps: [row('blocked')], extra: [], others: [] })
+  assert.match(out, /\| Role \| Case \| Viewport \| Step \|/)
+  assert.match(out, /Steps with no test: S02 as manager in vip-outside @ mobile/)
 })

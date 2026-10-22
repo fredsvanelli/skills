@@ -113,11 +113,12 @@ export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLates
 export function junitMarkdown({ id, steps, result, extra, others }) {
   const withViewport = steps.some((s) => s.viewport)
   const withRole = steps.some((s) => s.role)
-  const label = (s) => `${s.step}${s.role ? ` as ${s.role}` : ''}${s.viewport ? ` @ ${s.viewport}` : ''}`
+  const withCase = steps.some((s) => s.case)
+  const label = (s) => `${s.step}${s.role ? ` as ${s.role}` : ''}${s.case && s.case !== '*' ? ` in ${s.case}` : ''}${s.viewport ? ` @ ${s.viewport}` : ''}`
   const missing = steps.filter((s) => s.tests.length === 0 && s.state !== 'not-applicable' && s.state !== 'no-account').map(label)
   const duplicates = steps.filter((s) => s.tests.length > 1).map(label)
   const lines = [`Result of ${id}: ${result}`, '']
-  const columns = [withRole && ['Role', (s) => s.role], withViewport && ['Viewport', (s) => s.viewport], ['Step', (s) => s.step],
+  const columns = [withRole && ['Role', (s) => s.role], withCase && ['Case', (s) => s.case], withViewport && ['Viewport', (s) => s.viewport], ['Step', (s) => s.step],
     ['State', (s) => s.state], ['Seen', (s) => s.seen], ['Tests', (s) => s.tests.join('; ')]].filter(Boolean)
   lines.push(table(columns.map(([name]) => name), steps.map((s) => columns.map(([, cell]) => cell(s)))), '')
   lines.push(`States: ${steps.map((s) => s.state).join(',')}`, '')

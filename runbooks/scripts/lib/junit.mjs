@@ -5,7 +5,7 @@ import { CLOSING_OUTCOMES } from './roles.mjs'
 const VIEWPORT_IN_NAME = /@\s*([a-z0-9][a-z0-9-]*)\s*$/i
 // S01 at the start of a word or after "test"/"test_": "S01 creates", "test_s01_creates", "testS01Creates".
 const STEP_IN_NAME = /(?:^|[^A-Za-z0-9]|test_?)(S\d{2,})(?![0-9])/i
-const ROLE_IN_NAME = /\bas\s+([a-z0-9][a-z0-9-]*)\s*(?:@\s*[a-z0-9][a-z0-9-]*\s*)?$/i
+const ROLE_IN_NAME = /\bas\s+([a-z0-9][a-z0-9-]*)(?:\s+in\s+([a-z0-9][a-z0-9-]*))?\s*(?:@\s*[a-z0-9][a-z0-9-]*\s*)?$/i
 const BLOCKING = ['failed', 'blocked', 'blocked-by-parent']
 
 export { parseSteps } from './steps.mjs'
@@ -57,6 +57,12 @@ export function roleOfTest(testCase, roles) {
   return role && roles.includes(role) ? role : null
 }
 
+// The case written after the role, when it is one of cases.
+export function caseOfTest(testCase, cases) {
+  const kase = testCase.name.match(ROLE_IN_NAME)?.[2]?.toLowerCase() ?? null
+  return kase && cases.includes(kase) ? kase : null
+}
+
 // Own state of one step from its tests.
 const ownState = (tests) => {
   if (tests.length === 0) return { state: 'blocked', seen: 'no test for this step in the script' }
@@ -66,10 +72,15 @@ const ownState = (tests) => {
   return { state: 'passed', seen: '' }
 }
 
-// Rows for the steps that run in one context (the whole runbook, one viewport, one role).
+// Rows for the steps that run in one context (the whole runbook, one viewport, one role, one case).
 // testsOf(step) returns that step's tests in the context. role is null without roles;
-// noAccount is true when the role has no login.
-function resolveRows(active, testsOf, waived, { role = null, noAccount = false } = {}) {
+// noAccount is true when the role has no login; dataCase is the case whose outcome lines apply.
+function resolveRows(active, testsOf, waived, { role = null, noAccount = false, dataCase = null } = {}) {
+  const closingOutcome = (s) => {
+    if (role === null) return undefined
+    if (dataCase !== null && Object.hasOwn(s.caseOutcomes ?? {}, role) && Object.hasOwn(s.caseOutcomes[role], dataCase)) return s.caseOutcomes[role][dataCase]
+    return Object.hasOwn(s.outcomes ?? {}, role) ? s.outcomes[role] : undefined
+  }
   const known = new Set(active.map((s) => s.step))
   const resolved = new Map()
   const resolve = (step, visiting = new Set()) => {
@@ -80,7 +91,7 @@ function resolveRows(active, testsOf, waived, { role = null, noAccount = false }
     const parentStates = parents.filter((p) => known.has(p)).map((p) => ({ step: p, ...resolve(p, visiting) }))
     const blockedBy = parentStates.filter((p) => BLOCKING.includes(p.state)).map((p) => p.step)
     const closes = (p) => p.state === 'not-applicable'
-      || (p.state === 'passed' && CLOSING_OUTCOMES.includes(active.find((s) => s.step === p.step).outcomes?.[role]))
+      || (p.state === 'passed' && CLOSING_OUTCOMES.includes(closingOutcome(active.find((s) => s.step === p.step))))
     const result = noAccount ? { state: 'no-account', seen: `no account for ${role}` }
       : waived.includes(step) ? { state: 'waived', seen: '' }
       : blockedBy.length > 0 ? { state: 'blocked-by-parent', seen: `parent ${blockedBy.join(', ')} did not pass` }
@@ -103,15 +114,17 @@ const overall = (rows) => {
     : 'passed'
 }
 
-// With roles, each role runs the steps in turn (and inside it each viewport), and each row has a role.
-export function stepStates(steps, cases, { waived = [], viewports = [], roles = [], noAccount = [] } = {}) {
+// With roles, each role runs the steps in turn (and inside it each case and viewport), and each row has a role.
+export function stepStates(steps, tests, { waived = [], viewports = [], roles = [], noAccount = [], casesOf = null } = {}) {
   const known = new Set(steps.map((s) => s.step))
   const byKey = new Map()
   const others = []
   const extra = []
   const multi = viewports.length > 0
   const withRoles = roles.length > 0
-  const keyOf = (role, viewport, step) => `${role ?? ''}|${viewport ?? ''}|${step}`
+  const withCases = withRoles && casesOf !== null
+  const planOf = (role) => (withCases && Object.hasOwn(casesOf, role) ? casesOf[role] : { once: true, cases: [] })
+  const keyOf = (role, kase, viewport, step) => `${role ?? ''}|${kase ?? ''}|${viewport ?? ''}|${step}`
   const stepOf = (step) => steps.find((s) => s.step === step)
   const runsAt = (step, viewport) => {
     const { viewports: only } = stepOf(step)
@@ -121,43 +134,67 @@ export function stepStates(steps, cases, { waived = [], viewports = [], roles = 
     const { roles: only } = stepOf(step)
     return only.length === 0 || only.includes(role)
   }
+  const runsInCase = (step, dataCase) => {
+    const { cases: only } = stepOf(step)
+    return only.length === 0 || dataCase === undefined || only.includes(dataCase)
+  }
   // With roles, each entry says why the test maps to no row; without them entries keep their 1.5.0 shape.
-  const extraEntry = (step, role, viewport, test, reason) =>
-    ({ step, ...(withRoles ? { role } : {}), ...(multi ? { viewport } : {}), test, ...(withRoles ? { reason } : {}) })
+  const extraEntry = (step, role, kase, viewport, test, reason) =>
+    ({ step, ...(withRoles ? { role } : {}), ...(withCases ? { case: kase } : {}), ...(multi ? { viewport } : {}), test, ...(withRoles ? { reason } : {}) })
+  // The case a test belongs to, written after the role; '*' for a role that runs once and has none.
+  const caseOfRow = (role, testCase) => {
+    if (!withCases || !role) return null
+    return testCase.name.match(ROLE_IN_NAME)?.[2]?.toLowerCase() ?? (planOf(role).once ? '*' : null)
+  }
   // Why a test of a known step maps to no row, or null when it maps to one.
-  const mismatch = (testCase, step, role, viewport) => {
+  const mismatch = (testCase, step, role, kase, viewport) => {
     if (withRoles && !role) {
       const written = testCase.name.match(ROLE_IN_NAME)?.[1].toLowerCase()
       return written ? `${written} is not one of the runbook's roles` : 'no " as <role>" suffix'
     }
     if (withRoles && noAccount.includes(role)) return `${role} has no account`
     if (withRoles && !runsFor(step, role)) return `${step} does not run for ${role}`
+    if (withCases) {
+      const plan = planOf(role)
+      const written = testCase.name.match(ROLE_IN_NAME)?.[2]?.toLowerCase()
+      if (plan.once && written) return `${role} runs once; drop " in ${written}"`
+      if (!plan.once && !written) return 'no " in <case>" suffix'
+      if (!plan.once && !plan.cases.includes(written)) return `${written} is not one of the runbook's cases`
+      const dataCase = plan.once ? plan.cases[0] : written
+      if (!runsInCase(step, dataCase)) return `${step} does not run in ${dataCase}`
+    }
     if (multi && !viewport) return 'no " @ <viewport>" suffix'
     if (multi && !viewports.includes(viewport)) return `${viewport} is not one of the runbook's viewports`
     if (multi && !runsAt(step, viewport)) return `${step} does not run at ${viewport}`
     return null
   }
-  for (const testCase of cases) {
+  for (const testCase of tests) {
     const step = stepOfTest(testCase)
     const viewport = multi ? viewportOfTest(testCase) : null
     const role = withRoles ? roleOfTest(testCase, roles) : null
-    const reason = !step ? null : !known.has(step) ? `the runbook has no ${step}` : mismatch(testCase, step, role, viewport)
+    const kase = caseOfRow(role, testCase)
+    const reason = !step ? null : !known.has(step) ? `the runbook has no ${step}` : mismatch(testCase, step, role, kase, viewport)
     if (!step) others.push(testCase)
-    else if (reason) extra.push(extraEntry(step, role, viewport, testCase.name, reason))
-    else byKey.set(keyOf(role, viewport, step), [...(byKey.get(keyOf(role, viewport, step)) ?? []), testCase])
+    else if (reason) extra.push(extraEntry(step, role, kase, viewport, testCase.name, reason))
+    else byKey.set(keyOf(role, kase, viewport, step), [...(byKey.get(keyOf(role, kase, viewport, step)) ?? []), testCase])
   }
 
   const rows = []
   for (const role of withRoles ? roles : [null]) {
-    for (const viewport of multi ? viewports : [null]) {
-      const active = steps.filter((s) => (!withRoles || runsFor(s.step, role)) && (!multi || runsAt(s.step, viewport)))
-      const testsOf = (step) => byKey.get(keyOf(role, viewport, step)) ?? []
-      const context = { role, noAccount: withRoles && noAccount.includes(role) }
-      for (const { step, ...rest } of resolveRows(active, testsOf, waived, context)) {
-        if (rest.state === 'not-applicable') {
-          for (const test of testsOf(step)) extra.push(extraEntry(step, role, viewport, test.name, `${step} is not-applicable for ${role}`))
+    const plan = withRoles ? planOf(role) : null
+    for (const kase of withCases ? (plan.once ? ['*'] : plan.cases) : [null]) {
+      const dataCase = withCases ? (plan.once ? plan.cases[0] : kase) : undefined
+      for (const viewport of multi ? viewports : [null]) {
+        const active = steps.filter((s) => (!withRoles || runsFor(s.step, role)) && (!withCases || runsInCase(s.step, dataCase))
+          && (!multi || runsAt(s.step, viewport)))
+        const testsOf = (step) => byKey.get(keyOf(role, kase, viewport, step)) ?? []
+        const context = { role, noAccount: withRoles && noAccount.includes(role), dataCase: dataCase ?? null }
+        for (const { step, ...rest } of resolveRows(active, testsOf, waived, context)) {
+          if (rest.state === 'not-applicable') {
+            for (const test of testsOf(step)) extra.push(extraEntry(step, role, kase, viewport, test.name, `${step} is not-applicable for ${role}`))
+          }
+          rows.push({ step, ...(withRoles ? { role } : {}), ...(withCases ? { case: kase } : {}), ...(multi ? { viewport } : {}), ...rest })
         }
-        rows.push({ step, ...(withRoles ? { role } : {}), ...(multi ? { viewport } : {}), ...rest })
       }
     }
   }
