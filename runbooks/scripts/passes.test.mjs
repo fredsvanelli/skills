@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { run } from './runbooks.mjs'
@@ -11,15 +12,27 @@ import { splitFrontmatter } from './lib/yaml.mjs'
 import { parseSteps } from './lib/steps.mjs'
 import { runsOnce, casePlan, passPlan } from './lib/passes.mjs'
 import { passesMarkdown } from './lib/format.mjs'
+import { stepStates } from './lib/junit.mjs'
 
 const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
 
-function loadFixtureRunbook(id) {
-  const config = loadConfig(CONTEXTS)
-  const registry = loadRoles(CONTEXTS, config)
-  const runbook = loadRunbooks(CONTEXTS, config).find((rb) => rb.id === id)
-  const parts = splitFrontmatter(fs.readFileSync(path.resolve(CONTEXTS, runbook.path), 'utf8'))
+const EDIT = 'docs/runbooks/clients/edit-client.md'
+
+function loadFixtureRunbook(id, root = CONTEXTS) {
+  const config = loadConfig(root)
+  const registry = loadRoles(root, config)
+  const runbook = loadRunbooks(root, config).find((rb) => rb.id === id)
+  const parts = splitFrontmatter(fs.readFileSync(path.resolve(root, runbook.path), 'utf8'))
   return { registry, runbook, steps: parseSteps(parts.body) }
+}
+
+// A copy of the contexts fixture with edit-client.md changed by edit(text).
+function copyWithEdit(edit) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-passes-'))
+  fs.cpSync(CONTEXTS, dir, { recursive: true })
+  const file = path.join(dir, EDIT)
+  fs.writeFileSync(file, edit(fs.readFileSync(file, 'utf8')))
+  return dir
 }
 
 test('passPlan runs a role per case only when its actions or lines change by case', () => {
@@ -63,4 +76,25 @@ test('passes CLI lists the passes in order', () => {
   assert.equal(run(['passes', 'nope', '--root', CONTEXTS]).code, 2)
   assert.equal(run(['passes', 'clients.edit-client', '--role', 'ghost', '--root', CONTEXTS]).code, 2)
   assert.equal(run(['passes', 'clients.edit-client', '--case', 'ghost', '--root', CONTEXTS]).code, 2)
+})
+
+test('a case named like an Object key does not crash passes or junit', () => {
+  for (const name of ['constructor', '__proto__']) {
+    const dir = copyWithEdit((text) => text.replace('cases: all', `cases: [vip-team, ${name}]`))
+    const { registry, runbook, steps } = loadFixtureRunbook('clients.edit-client', dir)
+    assert.deepEqual(runbook.cases, ['vip-team', name])
+    assert.ok(runbook.problems.includes(`case "${name}" is not a case of client-access`))
+    assert.equal(runsOnce(registry, runbook, steps, 'admin'), false) // full access in vip-team, none in the unknown case
+    const out = run(['passes', 'clients.edit-client', '--json', '--root', dir])
+    assert.equal(out.code, 0, out.stderr)
+    assert.deepEqual(JSON.parse(out.stdout).passes.filter((p) => p.role === 'manager').map((p) => p.case), ['vip-team', name])
+    const casesOf = casePlan(registry, runbook, steps)
+    const result = stepStates(steps, [{ name: `S01 open as admin in ${name}`, classname: 'ui', outcome: 'passed', seen: '' }], { roles: runbook.roles, casesOf })
+    const row = result.steps.find((r) => r.role === 'admin' && r.case === name && r.step === 'S01')
+    // A test name can carry only a kebab-case case, so the S01 test maps to the constructor row alone.
+    assert.equal(row.state, name === 'constructor' ? 'passed' : 'blocked')
+    fs.writeFileSync(path.join(dir, 'run.xml'), '<testsuites><testsuite name="ui"><testcase classname="ui" name="S01 open as admin in constructor"/></testsuite></testsuites>')
+    const junit = run(['junit', 'clients.edit-client', '--file', 'run.xml', '--root', dir, '--json'])
+    assert.equal(junit.code, 0, junit.stderr)
+  }
 })

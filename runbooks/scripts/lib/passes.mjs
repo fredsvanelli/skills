@@ -8,7 +8,7 @@ export function runsOnce(registry, runbook, steps, role) {
   if (steps.some((step) => step.caseOutcomes && Object.hasOwn(step.caseOutcomes, role))) return false
   const byCase = actionsByCase(registry, role, runbook.capability, runbook.feature)
   if (byCase === null) return false
-  const lists = (runbook.cases ?? []).map((kase) => byCase[kase] ?? [])
+  const lists = (runbook.cases ?? []).map((kase) => Object.hasOwn(byCase, kase) ? byCase[kase] : [])
   return lists.every((list) => sameActions(list, lists[0]))
 }
 
@@ -30,7 +30,7 @@ export function passPlan(registry, config, runbook, steps, { roles, cases } = {}
   const passes = []
   for (const role of runbook.roles ?? []) {
     if (roles && !roles.includes(role)) continue
-    const entry = plan === null ? null : plan[role]
+    const entry = plan === null || !Object.hasOwn(plan, role) ? null : plan[role]
     const items = entry === null ? [{ case: null, dataCase: null }]
       : entry.once ? [{ case: '*', dataCase: entry.cases[0] ?? null }]
         : entry.cases.map((kase) => ({ case: kase, dataCase: kase }))
