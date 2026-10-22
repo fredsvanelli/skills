@@ -279,7 +279,7 @@ Only run reports hold step states. With `viewports`, a step has one state per vi
 ## Status
 
 - `map` writes `placeholder`. `create` writes `draft`, also when it fills a placeholder.
-- A full run (no `--steps`, no `--role`) where every step ends `passed` or `waived`, at least one is `passed`, and none is in another state promotes `draft` to `active`. With `viewports`, this counts every state at every viewport. With role tracking on, it counts every role too, and every case with cases, and `not-applicable` and `no-account` also allow the promotion. Compute it with `runbooks.mjs status`.
+- A full run (no `--steps`, no `--role`, no `--case`) where every step ends `passed` or `waived`, at least one is `passed`, and none is in another state promotes `draft` to `active`. With `viewports`, this counts every state at every viewport. With role tracking on, it counts every role too, and every case with cases, and `not-applicable` and `no-account` also allow the promotion. Compute it with `runbooks.mjs status`.
 - The run `result` is `failed` when any step failed, else `blocked` when any step is `blocked` or `blocked-by-parent`, else `passed`. `not-applicable` and `no-account` count toward none of these.
 - An `active` runbook that later fails stays `active`; `last_run` shows the failure.
 - `deprecated` runbooks are listed but never count as coverage and never appear in `list --affected`.
