@@ -75,6 +75,10 @@ _Avoid_: dependency, endpoint reference
 The OpenAPI document an upstream API in another repository publishes, kept in the front as `upstream.schema`. It is the only thing the two repositories share.
 _Avoid_: spec, interface
 
+**UI tests repository**:
+A repository of its own that holds the scripts of the app's `ui` runbooks, cloned next to the app's repository. The runbooks and their coverage stay in the app's repository, and only the scripts live there.
+_Avoid_: e2e repository, tests repo, another repository
+
 **Upstream mode**:
 How a `ui` runbook reaches its upstream API: `live` (the real API, holding test data) or `mocked` (fixed responses served in its place). The project has a default and a runbook may override it. A `mocked` runbook runs in the browser like any `ui` runbook, and proves what the screen shows and sends, never what the API saves.
 _Avoid_: backend mode, mock mode, fake API
