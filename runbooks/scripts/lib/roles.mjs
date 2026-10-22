@@ -221,7 +221,7 @@ export function contextOfRunbook(registry, capability, feature) {
 // A key of no context has no `cases` property.
 export function effectivePermissions(registry, name) {
   const memo = new Map()
-  const casesOf = (key) => registry.contexts[contextOfKey(registry, key)]?.cases ?? null
+  const casesOf = (key) => contextIn(registry.contexts, key)?.cases ?? null
   const perCase = (key, value) => {
     const names = casesOf(key)
     return Object.fromEntries(names.map((kase) => [kase, Array.isArray(value) ? [...value] : [...(Object.hasOwn(value, kase) ? value[kase] : [])]]))

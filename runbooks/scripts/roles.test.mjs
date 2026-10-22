@@ -145,3 +145,11 @@ test('matrixWarnings flags a context key that matches nothing and a context with
   const registry = parseRoles({ version: 2, contexts: { c: { keys: ['x/*'], cases: { a: '' } } }, roles: {} })
   assert.deepEqual(matrixWarnings(registry, [], {}), ['roles.json: context c key "x/*" matches no runbook or slice', 'roles.json: context c has fewer than two cases'])
 })
+
+test('a key of no context gets no cases even when a context is named null', () => {
+  const registry = parseRoles({ version: 2, contexts: { null: { keys: ['x/*'], cases: { a: '', b: '' } } },
+    roles: { r: { permissions: { 'y/*': ['view'], 'x/*': { a: ['view'] } } } } })
+  const matrix = effectivePermissions(registry, 'r')
+  assert.deepEqual(matrix['y/*'], { actions: ['view'], source: 'own', from: [] })
+  assert.deepEqual(matrix['x/*'].cases, { a: ['view'], b: [] })
+})
