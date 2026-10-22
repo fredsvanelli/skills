@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseSteps } from './lib/steps.mjs'
+import { parseSteps, parsePreconditionCases } from './lib/steps.mjs'
 
 const BODY = [
   '## Steps', '', '### S01. Lists the invoice', '', 'Parents: none', 'Page: `/billing/invoices`',
@@ -44,4 +44,47 @@ test('role lines stop at a --- line and at any # heading', () => {
 test('a bullet in Expected is a role line only when its keyword is an outcome', () => {
   const [s] = parseSteps(['### S01. A', 'Expected: the invoice shows:', '- status: paid', '- total: 100', '- ghost: denied.'].join('\n'))
   assert.deepEqual(s.outcomes, { ghost: 'denied' })
+})
+
+test('parseSteps reads Cases: lines and role lines with cases', () => {
+  const body = [
+    '### S02. Edit', '', 'Parents: S01', 'Cases: vip-team, regular',
+    'Expected: the page shows "Saved".',
+    '- manager in vip-outside: read-only. No "Edit".',
+    '- manager in vip-team,regular: partial. No "Delete".',
+    '- viewer: read-only. No "Edit".',
+    '- viewer: hidden. Twice.',
+  ].join('\r\n')
+  const [step] = parseSteps(body)
+  assert.deepEqual(step.cases, ['vip-team', 'regular'])
+  assert.deepEqual(step.outcomes, { viewer: 'hidden' })
+  assert.deepEqual(step.caseOutcomes, { manager: { 'vip-outside': 'read-only', 'vip-team': 'partial', regular: 'partial' } })
+  assert.deepEqual(step.duplicates, ['viewer'])
+})
+
+test('parseSteps labels a repeated role and case by role and case', () => {
+  const [step] = parseSteps([
+    '### S01. A', 'Expected: ok',
+    '- manager in vip-team: read-only.',
+    '- manager in vip-team, regular: partial.',
+    '- manager in regular: hidden.',
+  ].join('\n'))
+  assert.deepEqual(step.duplicates, ['manager in vip-team', 'manager in regular'])
+  assert.deepEqual(parseSteps('### S01. A\nExpected: ok\n- manager: allowed.')[0].duplicates, [])
+  assert.deepEqual(parseSteps('### S01. A')[0].cases, [])
+})
+
+test('parseSteps handles a role named constructor with cases', () => {
+  const [step] = parseSteps('### S01. A\nExpected: ok\n- constructor in regular: hidden.\n- constructor: denied.')
+  assert.deepEqual(step.caseOutcomes.constructor, { regular: 'hidden' })
+  assert.equal(step.outcomes.constructor, 'denied')
+  assert.deepEqual(step.duplicates, [])
+})
+
+test('parsePreconditionCases reads the Cases: bullets of Preconditions', () => {
+  const body = '## Preconditions\n\n- Account: each role.\n- Cases:\n  - vip-team: client "ACME".\n  - regular: client "Initech".\n\n---\n\n## Steps\n'
+  assert.deepEqual(parsePreconditionCases(body), { 'vip-team': 'client "ACME".', regular: 'client "Initech".' })
+  assert.deepEqual(parsePreconditionCases(body.replace(/\n/g, '\r\n')), { 'vip-team': 'client "ACME".', regular: 'client "Initech".' })
+  assert.deepEqual(parsePreconditionCases('## Preconditions\n\n- Data: one client.\n'), {})
+  assert.deepEqual(parsePreconditionCases('## Preconditions\n\n- Cases:\n  - a: x\n## Steps\n  - b: y\n'), { a: 'x' })
 })
