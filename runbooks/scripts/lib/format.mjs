@@ -195,7 +195,10 @@ export function roleMarkdown(detail) {
   lines.push(keys.length === 0 ? 'None.' : table(['Key', 'Actions', 'Source', 'From'],
     keys.map((key) => [key, detail.effective[key].actions.join(', '), detail.effective[key].source, detail.effective[key].from.join(', ')])), '')
   lines.push('### Runbooks', '')
-  const stateText = (states) => (states.length === 0 ? 'never run' : states.map((s) => (s.viewport ? `${s.viewport}: ${s.result}` : s.result)).join(', '))
+  const stateText = (states) => (states.length === 0 ? 'never run' : states.map((s) => {
+    const where = [s.case, s.viewport].filter(Boolean).join(' @ ')
+    return where ? `${where}: ${s.result}` : s.result
+  }).join(', '))
   lines.push(detail.runbooksOf.length === 0 ? 'None.' : table(['Id', 'Title', 'Status', 'Outcomes', 'Last run', 'Review'],
     detail.runbooksOf.map((rb) => [rb.id, rb.title, rb.status, rb.outcomes.join(', '), stateText(rb.states), rb.review ? 'yes' : 'no'])))
   return `${lines.join('\n')}\n`

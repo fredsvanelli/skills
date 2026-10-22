@@ -164,3 +164,17 @@ test('a report without roles has roles [] and no role on its steps', () => {
   assert.deepEqual(r.roles, [])
   assert.deepEqual(r.steps, [{ step: 'S01', state: 'passed' }])
 })
+
+test('readReport reads the Case column', () => {
+  const CONTEXTS = path.join(import.meta.dirname, '__fixtures__/contexts')
+  const report = latestReport(CONTEXTS, 'docs/runbooks', 'clients.edit-client')
+  assert.deepEqual(report.cases, ['vip-team', 'vip-outside', 'regular'])
+  assert.ok(report.steps.some((row) => row.role === 'manager' && row.case === 'vip-outside' && row.step === 'S02' && row.state === 'passed'))
+  assert.ok(report.steps.some((row) => row.role === 'admin' && row.case === '*'))
+})
+
+test('a report without a Case column has no cases and rows without a case', () => {
+  const report = latestReport(path.join(import.meta.dirname, '__fixtures__/roles'), 'docs/runbooks', 'billing.cancel-invoice')
+  assert.deepEqual(report.cases, [])
+  assert.ok(report.steps.every((row) => !('case' in row)))
+})

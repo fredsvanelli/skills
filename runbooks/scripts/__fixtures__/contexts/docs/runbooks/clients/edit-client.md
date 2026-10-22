@@ -11,6 +11,7 @@ covers:
   requirements: []
 sources: []
 scripts: []
+last_run: { date: 2026-10-21, commit: "abc1234", result: passed, report: _runs/2026-10-21-1000-clients.edit-client.md }
 status: active
 ---
 

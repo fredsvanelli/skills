@@ -66,14 +66,18 @@ export function roleRows(root, config, registry, runbooks) {
   return registry.names.map((name) => roleRow(root, config, registry, runbooks, reports, name))
 }
 
-function viewportStates(report, name) {
+// One state per case and viewport the role ran, in report order. `case` is absent when the report has no case. A role that ran once has the case '*'.
+export function passStates(report, name) {
   if (!report) return []
   const rows = report.steps.filter((row) => row.role === name)
-  const viewports = [...new Set(rows.map((row) => row.viewport || null))]
-  return viewports.map((viewport) => ({
-    viewport,
-    result: roleResult(rows.filter((row) => (row.viewport || null) === viewport), name),
-  }))
+  const keyOf = (row) => JSON.stringify([row.case || null, row.viewport || null])
+  const keys = [...new Set(rows.map(keyOf))]
+  return keys.map((key) => {
+    const [caseName, viewport] = JSON.parse(key)
+    const result = roleResult(rows.filter((row) => keyOf(row) === key), name)
+    // A report with no Case column gives states without a case key.
+    return caseName === null ? { viewport, result } : { case: caseName, viewport, result }
+  })
 }
 
 export function roleDetail(root, config, registry, runbooks, name) {
@@ -87,7 +91,7 @@ export function roleDetail(root, config, registry, runbooks, name) {
       title: rb.title,
       status: rb.status,
       outcomes: outcomes && outcomes.length > 0 ? [...outcomes] : ['allowed'],
-      states: viewportStates(reports.get(rb.id), name),
+      states: passStates(reports.get(rb.id), name),
       review: rb.review.length > 0,
     }
   })

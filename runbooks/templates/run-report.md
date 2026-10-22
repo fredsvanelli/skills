@@ -9,21 +9,22 @@ executor: <the user | the agent | Claude in Chrome extension, result reported by
 partial: false
 upstream: <live | mocked>
 roles: [<the roles that ran, in run order; [] when role tracking is off>]
+cases: [<the cases that ran, in run order; [] when the runbook has no context>]
 viewports: [<name widthxheight, in run order; [] when the runbook has none>]
 result: <passed | failed | blocked>
 ---
 
 # Run <run id>
 
-| Step | State | Role | Viewport | Seen | Evidence |
-|---|---|---|---|---|---|
-| S01 | passed | <role, or leave the column out when role tracking is off> | <viewport, or leave the column out when the runbook has none> | <what was observed> | `<evidence path>` |
+| Step | State | Role | Case | Viewport | Seen | Evidence |
+|---|---|---|---|---|---|---|
+| S01 | passed | <role, or leave the column out when role tracking is off> | <case, `*` for a role that ran once, or empty when the runbook has no context> | <viewport, or leave the column out when the runbook has none> | <what was observed> | `<evidence path>` |
 
-<One row per step, role and viewport. Rows are grouped by role, then by viewport, in run order. Leave the Role column out when role tracking is off and the Viewport column out when the runbook has none.>
+<One row per step, role, case and viewport. Rows are grouped by role, then by case, then by viewport, in run order. Leave the Role column out when role tracking is off and the Viewport column out when the runbook has none.>
 
 ## Failures
 
-### S0N <as role, with role tracking> <@ viewport, with viewports>
+### S0N <as role, with role tracking> <in case, with cases> <@ viewport, with viewports>
 
 Expected: <from the runbook>
 

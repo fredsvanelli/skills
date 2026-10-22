@@ -104,3 +104,12 @@ test('citingRole counts role lines with a case', () => {
   const edit = cited.runbooks.find((rb) => rb.id === 'clients.edit-client')
   assert.ok(edit.places.includes('role line'))
 })
+
+test('roleDetail shows states per case and viewport', () => {
+  const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
+  const cfg = loadConfig(CONTEXTS)
+  const detail = roleDetail(CONTEXTS, cfg, loadRoles(CONTEXTS, cfg), loadRunbooks(CONTEXTS, cfg), 'manager')
+  const states = detail.runbooksOf.find((rb) => rb.id === 'clients.edit-client').states
+  assert.deepEqual(states.map((s) => s.case), ['vip-team', 'vip-outside', 'regular'])
+  assert.ok(states.every((s) => s.viewport === null && s.result === 'passed'))
+})
