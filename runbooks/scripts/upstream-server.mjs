@@ -14,17 +14,19 @@ export const VERSION = '1.6.0'
 const MODES = ['mocked', 'live', 'record']
 const STEP_DIR = /^S\d+$/
 const ROLE = /^[a-z0-9][a-z0-9-]*$/
+const CASE_DIR = /^\+[a-z0-9][a-z0-9-]*$/
 const RUNBOOK_ID = /^[\w-]+\.[\w-]+$/
 const CONTROL = '/__runbooks/'
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '[::1]']
 // Headers starting with access-control- are never recorded either: the server answers CORS itself.
 const NEVER_RECORDED = ['set-cookie', 'authorization', 'cookie', 'content-length', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'vary']
 
-// Reads the .json files of a runbook folder (step null) and of its S<nn> subfolders, and those of the @<role>
-// folders at both levels (role set). Invalid files are skipped.
+// Reads the .json files of a runbook folder (step null) and of its S<nn> subfolders, those of the @<role>
+// folders at both levels (role set), and those of the +<case> folders inside each of them (case set).
+// Invalid files are skipped.
 function readFixtures(dir) {
   const fixtures = []
-  const readDir = (folder, step, role = null) => {
+  const readDir = (folder, step, role = null, kase = null) => {
     let names
     try {
       names = fs.readdirSync(path.join(dir, folder)).sort()
@@ -36,7 +38,7 @@ function readFixtures(dir) {
       try {
         const data = JSON.parse(fs.readFileSync(path.join(dir, folder, name), 'utf8'))
         if (!data?.request?.method || !data?.request?.path || data?.response?.status === undefined) continue
-        fixtures.push({ file: folder ? `${folder}/${name}` : name, step, role, request: data.request, response: data.response })
+        fixtures.push({ file: folder ? `${folder}/${name}` : name, step, role, case: kase, request: data.request, response: data.response })
       } catch {
         continue
       }
@@ -51,11 +53,27 @@ function readFixtures(dir) {
     }
     for (const entry of entries) {
       if (entry.isDirectory() && entry.name.startsWith('@') && ROLE.test(entry.name.slice(1))) {
-        readDir(parent ? `${parent}/${entry.name}` : entry.name, step, entry.name.slice(1))
+        const folder = parent ? `${parent}/${entry.name}` : entry.name
+        readDir(folder, step, entry.name.slice(1))
+        readCases(folder, step, entry.name.slice(1))
+      }
+    }
+  }
+  const readCases = (parent, step, role) => {
+    let entries = []
+    try {
+      entries = fs.readdirSync(path.join(dir, parent), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && CASE_DIR.test(entry.name)) {
+        readDir(parent ? `${parent}/${entry.name}` : entry.name, step, role, entry.name.slice(1))
       }
     }
   }
   readDir('', null)
+  readCases('', null, null)
   readRoles('', null)
   let entries = []
   try {
@@ -66,6 +84,7 @@ function readFixtures(dir) {
   for (const entry of entries) {
     if (entry.isDirectory() && STEP_DIR.test(entry.name)) {
       readDir(entry.name, entry.name)
+      readCases(entry.name, entry.name, null)
       readRoles(entry.name, entry.name)
     }
   }
@@ -81,21 +100,24 @@ function queryOf(fixture) {
 }
 
 // A candidate needs the same method and path and every query key it names equal in the request.
-// A fixture with a role is a candidate only for that role. Step and role win, then step only, then role only,
-// then runbook level, then more query keys, then the file name.
-export function matchFixture(fixtures, { method, path: requestPath, query = {} }, step, role = null) {
+// A fixture with a role is a candidate only for that role, and one with a case only for that case. The score is
+// step * 4 + role * 2 + case, so the order is step, role and case; step and role; step and case; step; role
+// and case; role; case; runbook level. Then more query keys, then the file name.
+export function matchFixture(fixtures, { method, path: requestPath, query = {} }, step, role = null, kase = null) {
   const candidates = []
   for (const fixture of fixtures) {
     if (String(fixture.request.method).toUpperCase() !== String(method).toUpperCase()) continue
     if (String(fixture.request.path).split('?')[0] !== requestPath) continue
     if (fixture.step !== null && fixture.step !== step) continue
     if (fixture.role != null && fixture.role !== role) continue
+    if (fixture.case != null && fixture.case !== kase) continue
     const named = queryOf(fixture)
     if (!Object.entries(named).every(([key, value]) => query[key] === value)) continue
     candidates.push({ fixture, keys: Object.keys(named).length })
   }
+  const score = ({ step: s, role: r, case: c }) => (s !== null) * 4 + (r != null) * 2 + (c != null)
   candidates.sort((a, b) =>
-    ((b.fixture.step !== null) * 2 + (b.fixture.role != null)) - ((a.fixture.step !== null) * 2 + (a.fixture.role != null)) ||
+    score(b.fixture) - score(a.fixture) ||
     b.keys - a.keys ||
     (a.fixture.file < b.fixture.file ? -1 : a.fixture.file > b.fixture.file ? 1 : 0))
   return candidates[0]?.fixture ?? null
@@ -132,8 +154,8 @@ function parseBody(raw, contentType) {
   return raw
 }
 
-export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders = [], log = () => {}, mode = 'mocked', runbook = null, role = null, step = null }) {
-  const state = { runbook, mode, role, step }
+export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders = [], log = () => {}, mode = 'mocked', runbook = null, role = null, case: kase = null, step = null }) {
+  const state = { runbook, mode, role, case: kase, step }
   let requests = []
   let unmatched = []
 
@@ -158,7 +180,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   const sendJson = (req, res, status, value) =>
     send(req, res, status, { 'content-type': 'application/json' }, JSON.stringify(value))
 
-  const snapshot = () => ({ runbook: state.runbook, mode: state.mode, role: state.role, step: state.step })
+  const snapshot = () => ({ runbook: state.runbook, mode: state.mode, role: state.role, case: state.case, step: state.step })
 
   async function control(req, res, pathname) {
     if (!localHost(req.headers.host)) {
@@ -189,16 +211,25 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
       if ('role' in body && body.role !== null && !(typeof body.role === 'string' && ROLE.test(body.role))) {
         return sendJson(req, res, 400, { error: 'role must be null or a role name like editor' })
       }
+      if ('case' in body && body.case !== null && !(typeof body.case === 'string' && ROLE.test(body.case))) {
+        return sendJson(req, res, 400, { error: 'case must be null or a case name like vip-team' })
+      }
       if ('step' in body && body.step !== null && !(typeof body.step === 'string' && STEP_DIR.test(body.step))) {
         return sendJson(req, res, 400, { error: 'step must be null or a step id like S01' })
       }
       if ('runbook' in body) {
         state.runbook = body.runbook
         if (!('role' in body)) state.role = null
+        if (!('case' in body)) state.case = null
         if (!('step' in body)) state.step = null
       }
       if ('role' in body) {
         state.role = body.role
+        if (!('case' in body)) state.case = null
+        if (!('step' in body)) state.step = null
+      }
+      if ('case' in body) {
+        state.case = body.case
         if (!('step' in body)) state.step = null
       }
       if ('step' in body) state.step = body.step
@@ -220,7 +251,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   function mocked(req, res, request) {
     if (!state.runbook) return { status: 501, send: () => sendJson(req, res, 501, { error: 'no runbook selected' }) }
     const dir = fixtureDir()
-    const fixture = dir ? matchFixture(readFixtures(dir), request, state.step, state.role) : null
+    const fixture = dir ? matchFixture(readFixtures(dir), request, state.step, state.role, state.case) : null
     if (!fixture) {
       unmatched.push({ method: request.method, path: request.path, step: state.step })
       return {
@@ -262,7 +293,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
 
   // Saves the response as a fixture of the selected runbook. Writes nothing when the runbook already has an
   // equal one, and puts a differing response in the current step's folder. With a role selected, the file goes in
-  // that role's folder inside the folder it would otherwise use.
+  // that role's folder inside the folder it would otherwise use, and with a case selected, in the +<case> folder inside that.
   function saveFixture(request, upRes, raw) {
     const dir = state.runbook ? fixtureDir() : null
     if (!dir) return
@@ -273,7 +304,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     }
     const body = parseBody(raw, upRes.headers['content-type'])
     const response = { status: upRes.statusCode, ...(Object.keys(headers).length ? { headers } : {}), ...(body === null ? {} : { body }) }
-    const existing = matchFixture(readFixtures(dir), request, state.step, state.role)
+    const existing = matchFixture(readFixtures(dir), request, state.step, state.role, state.case)
     let folder = dir
     if (existing) {
       const stored = existing.response
@@ -281,6 +312,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
       if (state.step) folder = path.join(dir, state.step)
     }
     if (state.role) folder = path.join(folder, `@${state.role}`)
+    if (state.case) folder = path.join(folder, `+${state.case}`)
     const saved = {
       request: { method: request.method, path: request.path, ...(Object.keys(request.query).length ? { query: request.query } : {}) },
       response,
@@ -458,6 +490,7 @@ function cliOptions(argv) {
   const mode = flags.mode ?? 'mocked'
   if (!MODES.includes(mode)) throw new Error(`--mode must be one of ${MODES.join(', ')}`)
   if (flags.role !== undefined && !ROLE.test(flags.role)) throw new Error('--role must be a role name like editor')
+  if (flags.case !== undefined && !ROLE.test(flags.case)) throw new Error('--case must be a case name like vip-team')
   if (!flags.fixtures) throw new Error('--fixtures <dir> is required')
   return {
     fixturesRoot: path.resolve(flags.fixtures),
@@ -467,6 +500,7 @@ function cliOptions(argv) {
     mode,
     runbook: flags.runbook ?? null,
     role: flags.role ?? null,
+    case: flags.case ?? null,
     step: flags.step ?? null,
   }
 }

@@ -64,7 +64,7 @@ test('matchFixture ranks the step folder first, then more query keys, then file 
 test('a selected runbook serves its fixture and logs the request', async (t) => {
   const s = await start(t, FILES)
   const res = await s.select({ runbook: 'billing.list' })
-  assert.deepEqual(await res.json(), { runbook: 'billing.list', mode: 'mocked', role: null, step: null })
+  assert.deepEqual(await res.json(), { runbook: 'billing.list', mode: 'mocked', role: null, case: null, step: null })
   const r = await fetch(`${s.base}/invoices`)
   assert.equal(r.status, 200)
   assert.match(r.headers.get('content-type'), /application\/json/)
@@ -216,7 +216,7 @@ test('select rejects a runbook or step that is not an id and changes nothing', a
   const state = await s.state()
   assert.deepEqual([state.runbook, state.mode, state.step], ['billing.list', 'mocked', 'S01'])
   const cleared = await s.select({ runbook: null, step: null })
-  assert.deepEqual(await cleared.json(), { runbook: null, mode: 'mocked', role: null, step: null })
+  assert.deepEqual(await cleared.json(), { runbook: null, mode: 'mocked', role: null, case: null, step: null })
 })
 
 // Sends a request with a chosen Host header, which fetch does not allow.
@@ -592,7 +592,7 @@ test('select validates role and resets it with a new runbook', async (t) => {
   assert.equal(bad.status, 400)
   assert.deepEqual(await bad.json(), { error: 'role must be null or a role name like editor' })
   await s.select({ runbook: 'billing.list', role: 'viewer', step: 'S02' })
-  assert.deepEqual(await s.state(), { runbook: 'billing.list', mode: 'mocked', role: 'viewer', step: 'S02', requests: [], unmatched: [] })
+  assert.deepEqual(await s.state(), { runbook: 'billing.list', mode: 'mocked', role: 'viewer', case: null, step: 'S02', requests: [], unmatched: [] })
   await s.select({ role: 'editor' })
   assert.equal((await s.state()).step, null)
   assert.equal((await s.state()).role, 'editor')
@@ -616,4 +616,94 @@ test('record saves under the selected role', async (t) => {
   await s.select({ step: null })
   await fetch(`${s.base}/invoices`)
   assert.deepEqual(readJson(s.fixturesRoot, '@viewer/get--invoices.json').response.body, { items: [2] })
+})
+
+test('matchFixture prefers step, role and case, and falls back when the case has no folder', () => {
+  const f = (file, step, role, kase) => ({ file, step, role, case: kase, request: { method: 'GET', path: '/clients/1' }, response: { status: 200 } })
+  const all = [f('root.json', null, null, null), f('+vip.json', null, null, 'vip-team'), f('@m.json', null, 'manager', null),
+    f('@m+vip.json', null, 'manager', 'vip-team'), f('S02.json', 'S02', null, null), f('S02+vip.json', 'S02', null, 'vip-team'),
+    f('S02@m.json', 'S02', 'manager', null), f('S02@m+vip.json', 'S02', 'manager', 'vip-team')]
+  const req = { method: 'GET', path: '/clients/1' }
+  assert.equal(matchFixture(all, req, 'S02', 'manager', 'vip-team').file, 'S02@m+vip.json')
+  assert.equal(matchFixture(all.filter((x) => x.file !== 'S02@m+vip.json'), req, 'S02', 'manager', 'vip-team').file, 'S02@m.json')
+  assert.equal(matchFixture(all.filter((x) => !x.step), req, 'S02', 'manager', 'vip-team').file, '@m+vip.json')
+  assert.equal(matchFixture(all, req, 'S02', 'manager', 'regular').file, 'S02@m.json')
+  assert.equal(matchFixture(all, req, null, null, 'regular').file, 'root.json')
+})
+
+const CASE_FILES = {
+  'clients/view/client.json': fixture('GET', '/clients/1', { status: 200, body: { who: 'root' } }),
+  'clients/view/+vip-team/client.json': fixture('GET', '/clients/1', { status: 200, body: { who: 'case' } }),
+  'clients/view/@manager/client.json': fixture('GET', '/clients/1', { status: 200, body: { who: 'role' } }),
+  'clients/view/@manager/+vip-team/client.json': fixture('GET', '/clients/1', { status: 200, body: { who: 'role+case' } }),
+  'clients/view/S02/+vip-team/client.json': fixture('GET', '/clients/1', { status: 200, body: { who: 'step+case' } }),
+  'clients/view/S03/@manager/+vip-team/client.json': fixture('GET', '/clients/1', { status: 200, body: { who: 'step+role+case' } }),
+}
+
+test('the case layer serves +<case> folders at the four levels', async (t) => {
+  const s = await start(t, CASE_FILES)
+  const who = async () => (await (await fetch(`${s.base}/clients/1`)).json()).who
+  await s.select({ runbook: 'clients.view', role: 'manager', case: 'vip-team' })
+  assert.equal(await who(), 'role+case')
+  await s.select({ step: 'S02' })
+  assert.equal(await who(), 'step+case')
+  await s.select({ role: 'manager', case: 'vip-team', step: 'S03' })
+  assert.equal(await who(), 'step+role+case')
+  await s.select({ role: null, case: 'vip-team', step: 'S02' })
+  assert.equal(await who(), 'step+case')
+  await s.select({ case: 'vip-team' })
+  assert.equal(await who(), 'case')
+  await s.select({ case: null })
+  assert.equal(await who(), 'root')
+})
+
+test('a case without a folder serves the role fixture, not 501', async (t) => {
+  const s = await start(t, CASE_FILES)
+  await s.select({ runbook: 'clients.view', role: 'manager', case: 'gold' })
+  const r = await fetch(`${s.base}/clients/1`)
+  assert.equal(r.status, 200)
+  assert.deepEqual(await r.json(), { who: 'role' })
+})
+
+test('select validates case, and resets follow runbook, role and case', async (t) => {
+  const s = await start(t, CASE_FILES)
+  const bad = await s.select({ case: 'Bad!' })
+  assert.equal(bad.status, 400)
+  assert.deepEqual(await bad.json(), { error: 'case must be null or a case name like vip-team' })
+  await s.select({ runbook: 'clients.view', role: 'manager', case: 'vip-team', step: 'S02' })
+  assert.deepEqual(await s.state(), { runbook: 'clients.view', mode: 'mocked', role: 'manager', case: 'vip-team', step: 'S02', requests: [], unmatched: [] })
+  await s.select({ case: 'regular' })
+  const afterCase = await s.state()
+  assert.equal(afterCase.case, 'regular')
+  assert.equal(afterCase.step, null)
+  assert.equal(afterCase.role, 'manager')
+  await s.select({ case: 'vip-team', step: 'S02' })
+  await s.select({ role: 'admin' })
+  const afterRole = await s.state()
+  assert.equal(afterRole.case, null)
+  assert.equal(afterRole.step, null)
+  await s.select({ case: 'vip-team' })
+  await s.select({ runbook: 'clients.view' })
+  assert.equal((await s.state()).case, null)
+  assert.equal((await s.state()).role, null)
+})
+
+test('select clears the request log', async (t) => {
+  const s = await start(t, CASE_FILES)
+  await s.select({ runbook: 'clients.view' })
+  await fetch(`${s.base}/clients/1`)
+  assert.equal((await s.state()).requests.length, 1)
+  await s.select({ case: 'vip-team' })
+  assert.deepEqual((await s.state()).requests, [])
+})
+
+test('record saves under the selected role and case', async (t) => {
+  const fake = await recordApi(t, (req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"items":[1]}') })
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', role: 'viewer', case: 'vip-team', step: 'S03' })
+  await fetch(`${s.base}/invoices`)
+  assert.deepEqual(readJson(s.fixturesRoot, '@viewer/+vip-team/get--invoices.json').response.body, { items: [1] })
+  await s.select({ role: null, case: 'regular' })
+  await fetch(`${s.base}/invoices`)
+  assert.deepEqual(readJson(s.fixturesRoot, '+regular/get--invoices.json').response.body, { items: [1] })
 })

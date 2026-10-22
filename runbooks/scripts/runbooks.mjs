@@ -42,7 +42,7 @@ Commands:
                 roles on, one state per step and role (tests named "S01 title as editor @ mobile")
   fixtures      <id> loads the fixtures of a mocked ui runbook, counts them by source and, with
                 upstream.schema set, checks each JSON response against the OpenAPI schema
-  upstream      [--port n] [--mode mocked|live|record] [--runbook id] [--role name] [--step Sxx]
+  upstream      [--port n] [--mode mocked|live|record] [--runbook id] [--role name] [--case name] [--step Sxx]
                 starts the upstream server from the config in the foreground and prints its address; stop it with Ctrl+C
   contract      [--strict] checks the calls of every ui runbook against upstream.schema, and the fixtures of
                 every mocked one against its calls and the schema (docs/adr/0005); --strict exits 1 on a finding
@@ -191,7 +191,7 @@ function commandFixtures(root, config, options, positionals) {
   if (!runbook) throw new Error(`no runbook with id "${id}"`)
   if (runbook.surface !== 'ui') throw new Error(`${id} is not a ui runbook: only ui runbooks have fixtures`)
   const dir = fixturesDir(config, runbook)
-  const { fixtures, problems } = loadFixtures(root, dir, { roles: loadRoles(root, config)?.names ?? null })
+  const { fixtures, problems } = loadFixtures(root, dir, { roles: loadRoles(root, config)?.names ?? null, cases: runbook.context ? (runbook.cases ?? []) : null })
   if (config.upstream?.schema) problems.push(...checkFixtures(fixtures, readSchema(root, config.upstream.schema)))
   const result = { id, dir, fixtures, sources: sourceCounts(fixtures), problems }
   return options.json ? json(result) : fixturesMarkdown(result)

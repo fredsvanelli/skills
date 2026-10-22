@@ -136,3 +136,34 @@ test('loadFixtures reports role folders without tracking and unregistered roles'
   assert.deepEqual(problems, ['f/S01/@ghost: role ghost is not registered'])
   assert.equal(fixtures.length, 1)
 })
+
+test('loadFixtures reads +case folders at the four levels', () => {
+  const root = tmp({
+    'f/me.json': fixture('GET', '/me', 200, {}),
+    'f/+vip-team/me.json': fixture('GET', '/me', 200, {}),
+    'f/@viewer/+vip-team/me.json': fixture('GET', '/me', 200, {}),
+    'f/S02/+regular/me.json': fixture('GET', '/me', 200, {}),
+    'f/S02/@viewer/+vip-team/me.json': fixture('GET', '/me', 200, {}),
+  })
+  const { fixtures, problems } = loadFixtures(root, 'f', { roles: ['anonymous', 'viewer'], cases: ['vip-team', 'regular'] })
+  assert.deepEqual(problems, [])
+  assert.deepEqual(fixtures.map((x) => [x.file, x.step, x.role, x.case]), [
+    ['f/me.json', null, null, null],
+    ['f/+vip-team/me.json', null, null, 'vip-team'],
+    ['f/@viewer/+vip-team/me.json', null, 'viewer', 'vip-team'],
+    ['f/S02/+regular/me.json', 'S02', null, 'regular'],
+    ['f/S02/@viewer/+vip-team/me.json', 'S02', 'viewer', 'vip-team'],
+  ])
+})
+
+test('loadFixtures reports unknown cases, case folders without a context and bad case names', () => {
+  const root = tmp({
+    'f/+gold/me.json': fixture('GET', '/me', 200, {}),
+    'f/+vip-team/me.json': fixture('GET', '/me', 200, {}),
+    'f/S01/+Bad/me.json': fixture('GET', '/me', 200, {}),
+  })
+  assert.deepEqual(loadFixtures(root, 'f', { cases: ['vip-team'] }).problems,
+    ["f/+gold: case gold is not one of the runbook's cases", 'f/S01/+Bad: not a case folder'])
+  assert.deepEqual(loadFixtures(root, 'f').problems,
+    ['f/+gold: case folders need a context', 'f/+vip-team: case folders need a context', 'f/S01/+Bad: not a case folder'])
+})

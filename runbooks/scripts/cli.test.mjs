@@ -191,6 +191,7 @@ test('upstreamOptions resolves the config and the flags', () => {
     mode: 'mocked',
     runbook: null,
     role: null,
+    case: null,
     step: null,
   })
   const flags = upstreamOptions(dir, config, { port: '0', mode: 'record', runbook: 'billing.issue', role: 'editor', step: 'S02' })
@@ -205,6 +206,8 @@ test('upstreamOptions rejects bad flags and a missing upstream block', () => {
   assert.throws(() => upstreamOptions(dir, config, { mode: 'fake' }), /--mode/)
   assert.throws(() => upstreamOptions(dir, config, { role: 'Bad Role' }), /--role/)
   assert.throws(() => upstreamOptions(dir, config, { role: true }), /--role/)
+  assert.equal(upstreamOptions(dir, config, { case: 'vip-team' }).case, 'vip-team')
+  assert.throws(() => upstreamOptions(dir, config, { case: 'Bad!' }), /--case/)
   const none = upstreamProject(null)
   assert.throws(() => upstreamOptions(none, configOf(none), {}), /the config has no upstream block\. Run \/runbooks:setup/)
 })

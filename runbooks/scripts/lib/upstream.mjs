@@ -21,6 +21,9 @@ export function upstreamOptions(root, config, options) {
   if (options.role !== undefined && !(typeof options.role === 'string' && ROLE_NAME.test(options.role))) {
     throw new Error('--role must be a role name like editor')
   }
+  if (options.case !== undefined && !(typeof options.case === 'string' && ROLE_NAME.test(options.case))) {
+    throw new Error('--case must be a case name like vip-team')
+  }
   return {
     fixturesRoot: path.resolve(root, upstream.fixtures),
     target: upstream.baseUrl,
@@ -29,6 +32,7 @@ export function upstreamOptions(root, config, options) {
     mode,
     runbook: typeof options.runbook === 'string' ? options.runbook : null,
     role: options.role ?? null,
+    case: options.case ?? null,
     step: typeof options.step === 'string' ? options.step : null,
   }
 }
