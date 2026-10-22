@@ -34,10 +34,13 @@ export function passPlan(registry, config, runbook, steps, { roles, cases } = {}
     const items = entry === null ? [{ case: null, dataCase: null }]
       : entry.once ? [{ case: '*', dataCase: entry.cases[0] ?? null }]
         : entry.cases.map((kase) => ({ case: kase, dataCase: kase }))
-    for (const item of items) {
+    for (let item of items) {
       if (cases && item.case !== null) {
-        const keep = item.case === '*' ? (runbook.cases ?? []).some((kase) => cases.includes(kase)) : cases.includes(item.case)
-        if (!keep) continue
+        if (item.case === '*') {
+          const dataCase = (runbook.cases ?? []).find((kase) => cases.includes(kase))
+          if (dataCase === undefined) continue
+          item = { ...item, dataCase }
+        } else if (!cases.includes(item.case)) continue
       }
       for (const viewport of viewports) {
         passes.push({ role, case: item.case, dataCase: item.dataCase, viewport, noAccount: noAccount.includes(role) })

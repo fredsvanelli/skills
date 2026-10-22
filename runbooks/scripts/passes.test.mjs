@@ -31,6 +31,7 @@ test('passPlan runs a role per case only when its actions or lines change by cas
   assert.deepEqual(plan.filter((p) => p.role === 'manager').map((p) => p.case), ['vip-team', 'vip-outside', 'regular'])
   assert.deepEqual(plan.find((p) => p.role === 'admin'), { role: 'admin', case: '*', dataCase: 'vip-team', viewport: null, noAccount: false })
   assert.equal(plan.find((p) => p.role === 'viewer').noAccount, true)
+  assert.deepEqual(passPlan(registry, loadConfig(CONTEXTS), runbook, steps, { roles: ['admin'], cases: ['regular'] }), [{ role: 'admin', case: '*', dataCase: 'regular', viewport: null, noAccount: false }])
   assert.deepEqual(passPlan(registry, loadConfig(CONTEXTS), runbook, steps, { roles: ['manager'], cases: ['regular'] }).map((p) => p.case), ['regular'])
 })
 
