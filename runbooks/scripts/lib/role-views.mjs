@@ -115,7 +115,7 @@ export function citingRole(root, registry, runbooks, name) {
     const parts = splitFrontmatter(fs.readFileSync(path.resolve(root, rb.path), 'utf8'))
     const steps = parts ? parseSteps(parts.body) : []
     if (steps.some((step) => step.roles.includes(name))) places.push('Roles:')
-    if (steps.some((step) => Object.hasOwn(step.outcomes, name))) places.push('role line')
+    if (steps.some((step) => Object.hasOwn(step.outcomes, name) || Object.hasOwn(step.caseOutcomes, name))) places.push('role line')
     if (steps.some((step) => step.as === name)) places.push('As:')
     if ((rb.review || []).some((entry) => entry.role === name)) places.push('review')
     if (places.length > 0) cited.push({ id: rb.id, path: rb.path, places })

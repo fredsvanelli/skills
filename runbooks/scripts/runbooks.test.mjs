@@ -478,3 +478,62 @@ test('tracking off keeps 1.5.0 behavior', () => {
   }
   assert.deepEqual(Object.fromEntries(runbooks.map((r) => [r.id, { problems: r.problems, warnings: r.warnings }])), recorded)
 })
+
+const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
+
+function copyContexts() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-contexts-'))
+  fs.cpSync(CONTEXTS, dir, { recursive: true })
+  return dir
+}
+
+function withEditClient(transform) {
+  const dir = copyContexts()
+  const file = path.join(dir, 'docs/runbooks/clients/edit-client.md')
+  fs.writeFileSync(file, transform(fs.readFileSync(file, 'utf8')))
+  return loadRunbooks(dir, loadConfig(dir)).find((rb) => rb.id === 'clients.edit-client').problems
+}
+
+test('loadRunbooks reads cases and their outcomes', () => {
+  const byId = new Map(loadRunbooks(CONTEXTS, loadConfig(CONTEXTS)).map((rb) => [rb.id, rb]))
+  const edit = byId.get('clients.edit-client')
+  assert.deepEqual(edit.problems, [])
+  assert.equal(edit.context, 'client-access')
+  assert.deepEqual(edit.cases, ['vip-team', 'vip-outside', 'regular'])
+  assert.equal(edit.casesAll, true)
+  assert.deepEqual(edit.outcomesByCase.manager, { 'vip-outside': ['read-only'] })
+  assert.deepEqual(edit.outcomesByCase.viewer, { 'vip-team': ['read-only'], 'vip-outside': ['read-only'], regular: ['read-only'] })
+  assert.deepEqual(edit.roleOutcomes.manager, ['read-only'])
+  assert.equal(byId.get('clients.list-clients').casesAll, true)
+  assert.deepEqual(byId.get('clients.list-clients').problems, [])
+  assert.equal(byId.get('billing.list-invoices').context, null)
+  assert.deepEqual(byId.get('billing.list-invoices').cases, [])
+})
+
+test('loadRunbooks reports case problems', () => {
+  const has = (transform, problem) => assert.ok(withEditClient(transform).includes(problem), problem)
+  has((t) => t.replace('cases: all', 'cases: []'), 'cases must list at least one case, or be all')
+  has((t) => t.replace('cases: all', 'cases: [vip-team, toString]'), 'case "toString" is not a case of client-access')
+  has((t) => t.replace(/ {2}- vip-team:.*\r?\n/, ''), 'Preconditions: case "vip-team" has no line under Cases:')
+  has((t) => t.replace('Parents: S01', 'Parents: S01\nCases: gold'), 'S02: Cases: "gold" is not one of the runbook\'s cases')
+  has((t) => t.replace('Parents: S01', 'Parents: S01\nCases: regular'), 'S02: role line "manager in vip-outside" names a case the step does not run')
+  has((t) => t.replace('- viewer: read-only.', '- viewer: hidden. Twice.\n- viewer: read-only.'), 'S02: two role lines for viewer')
+  has((t) => t.replace('- viewer: read-only.', '- viewer in regular: hidden. A.\n- viewer in regular: hidden. B.\n- viewer: read-only.'), 'S02: two role lines for viewer in regular')
+  has((t) => t.replace('  - regular:', '  - gold: client "Zed".\n  - regular:'), 'Preconditions: Cases: "gold" is not one of the runbook\'s cases')
+})
+
+test('cases need a context and role tracking', () => {
+  const dir = copyContexts()
+  const file = path.join(dir, 'docs/runbooks/billing/list-invoices.md')
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('roles: all', 'roles: all\ncases: all'))
+  const billing = loadRunbooks(dir, loadConfig(dir)).find((rb) => rb.id === 'billing.list-invoices')
+  assert.ok(billing.problems.includes('cases needs a context: billing/invoices belongs to no context'))
+
+  const off = copyContexts()
+  const cfgPath = path.join(off, 'docs/runbooks/runbooks.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.roles = { enabled: false }
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  const edit = loadRunbooks(off, loadConfig(off)).find((rb) => rb.id === 'clients.edit-client')
+  assert.ok(edit.problems.includes('cases needs role tracking (roles.enabled)'))
+})

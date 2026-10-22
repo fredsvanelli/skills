@@ -5,8 +5,8 @@ import { splitFrontmatter, parseYaml } from './yaml.mjs'
 import { surfacesOf, upstreamModeOf } from './config.mjs'
 import { fixturesDir } from './fixtures.mjs'
 import { normalizeCall } from './calls.mjs'
-import { loadRoles, API_OUTCOMES, REVIEW_REASONS, REVIEW_FIELDS } from './roles.mjs'
-import { parseSteps } from './steps.mjs'
+import { loadRoles, contextOfRunbook, API_OUTCOMES, REVIEW_REASONS, REVIEW_FIELDS } from './roles.mjs'
+import { parseSteps, parsePreconditionCases } from './steps.mjs'
 
 const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
 
@@ -94,6 +94,42 @@ function readRoles(runbook, data, registry) {
   }
 }
 
+// cases lists the cases the runbook runs: "all" (or no key) expands to the cases of its context.
+function readCases(runbook, data, body, registry) {
+  const written = data.cases
+  const given = written !== undefined && written !== null
+  if (registry === null) {
+    if (given) runbook.problems.push('cases needs role tracking (roles.enabled)')
+    return
+  }
+  // The fields exist only under role tracking, so a project without roles keeps the runbook shape it had.
+  runbook.context = null
+  runbook.cases = []
+  runbook.casesAll = false
+  const context = contextOfRunbook(registry, runbook.capability, runbook.feature)
+  if (context === null) {
+    if (given) runbook.problems.push(`cases needs a context: ${runbook.capability}/${runbook.feature} belongs to no context`)
+    return
+  }
+  runbook.context = context
+  const known = registry.contexts[context].cases
+  runbook.casesAll = !given || written === 'all'
+  runbook.cases = runbook.casesAll ? [...known] : asList(written)
+  if (!runbook.casesAll && runbook.cases.length === 0) runbook.problems.push('cases must list at least one case, or be all')
+  if (!runbook.casesAll) {
+    for (const name of runbook.cases) {
+      if (!known.includes(name)) runbook.problems.push(`case "${name}" is not a case of ${context}`)
+    }
+  }
+  const lines = parsePreconditionCases(body)
+  for (const name of runbook.cases) {
+    if (!Object.hasOwn(lines, name)) runbook.problems.push(`Preconditions: case "${name}" has no line under Cases:`)
+  }
+  for (const name of Object.keys(lines)) {
+    if (!runbook.cases.includes(name)) runbook.problems.push(`Preconditions: Cases: "${name}" is not one of the runbook's cases`)
+  }
+}
+
 function readReview(runbook, review, registry) {
   if (review === undefined || review === null) return
   if (registry === null) {
@@ -128,6 +164,11 @@ function readReview(runbook, review, registry) {
 // Checks the steps against the registry and the runbook's roles; collects the outcomes each role's lines use.
 function readStepRoles(runbook, body, registry) {
   const outcomes = {}
+  const byCaseOutcomes = {}
+  const addOutcome = (map, role, outcome) => {
+    const seen = Object.hasOwn(map, role) ? map[role] : []
+    map[role] = [...new Set([...seen, outcome])].sort()
+  }
   const unknown = new Set()
   const unregistered = (role) => {
     if (registry.names.includes(role) || unknown.has(role)) return
@@ -149,14 +190,47 @@ function readStepRoles(runbook, body, registry) {
       if (runbook.surface === 'api' && !API_OUTCOMES.includes(outcome)) {
         runbook.problems.push(`${step.step}: outcome "${outcome}" does not apply to api steps`)
       }
-      const seen = Object.hasOwn(outcomes, role) ? outcomes[role] : []
-      outcomes[role] = [...new Set([...seen, outcome])].sort()
+      addOutcome(outcomes, role, outcome)
+    }
+    const stepCases = step.cases.length > 0 ? step.cases : runbook.cases
+    for (const name of step.cases) {
+      if (!runbook.cases.includes(name)) runbook.problems.push(`${step.step}: Cases: "${name}" is not one of the runbook's cases`)
+    }
+    for (const label of step.duplicates) runbook.problems.push(`${step.step}: two role lines for ${label}`)
+    for (const [role, byCase] of Object.entries(step.caseOutcomes)) {
+      unregistered(role)
+      if (registry.names.includes(role) && !stepRoles.includes(role)) {
+        runbook.problems.push(`${step.step}: role line "${role}" is not one of the step's roles`)
+      }
+      for (const [name, outcome] of Object.entries(byCase)) {
+        if (runbook.context === null) {
+          runbook.problems.push(`${step.step}: role line "${role} in ${name}": the runbook has no context`)
+          continue
+        }
+        if (!stepCases.includes(name)) {
+          runbook.problems.push(`${step.step}: role line "${role} in ${name}" names a case the step does not run`)
+        }
+        if (runbook.surface === 'api' && !API_OUTCOMES.includes(outcome)) {
+          runbook.problems.push(`${step.step}: outcome "${outcome}" does not apply to api steps`)
+        }
+        addOutcome(outcomes, role, outcome)
+        const roleCases = Object.hasOwn(byCaseOutcomes, role) ? byCaseOutcomes[role] : (byCaseOutcomes[role] = {})
+        roleCases[name] = [...new Set([...(Object.hasOwn(roleCases, name) ? roleCases[name] : []), outcome])]
+      }
+    }
+    for (const [role, outcome] of Object.entries(step.outcomes)) {
+      if (!registry.names.includes(role)) continue
+      const roleCases = Object.hasOwn(byCaseOutcomes, role) ? byCaseOutcomes[role] : (byCaseOutcomes[role] = {})
+      for (const name of stepCases) {
+        roleCases[name] = [...new Set([...(Object.hasOwn(roleCases, name) ? roleCases[name] : []), outcome])]
+      }
     }
     if (step.as !== null && !runbook.review.some((entry) => entry.reason === 'roles-enabled')) {
       runbook.warnings.push(`${step.step}: As: is replaced by role lines; /runbooks:update rewrites it`)
     }
   }
   runbook.roleOutcomes = outcomes
+  runbook.outcomesByCase = byCaseOutcomes
 }
 
 function readRunbook(file, rel, config, projectRoot, registry) {
@@ -225,6 +299,7 @@ function readRunbook(file, rel, config, projectRoot, registry) {
   runbook.feature = data.feature ?? null
   runbook.tags = asList(data.tags)
   readRoles(runbook, data, registry)
+  readCases(runbook, data, parts.body, registry)
   readReview(runbook, data.review, registry)
   runbook.covers = { entries: asList(data.covers?.entries), requirements: asList(data.covers?.requirements) }
   readCalls(runbook, data, surface, config)

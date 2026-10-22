@@ -96,3 +96,11 @@ test('citingRole lists a runbook whose only link to the role is a review entry',
   const cited = citingRole(ROLES, registry, [only], 'editor')
   assert.deepEqual(cited.runbooks, [{ id: only.id, path: only.path, places: ['review'] }])
 })
+
+test('citingRole counts role lines with a case', () => {
+  const dir = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
+  const cfg = loadConfig(dir)
+  const cited = citingRole(dir, loadRoles(dir, cfg), loadRunbooks(dir, cfg), 'manager')
+  const edit = cited.runbooks.find((rb) => rb.id === 'clients.edit-client')
+  assert.ok(edit.places.includes('role line'))
+})
