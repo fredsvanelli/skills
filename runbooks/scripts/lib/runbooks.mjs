@@ -102,10 +102,12 @@ function readCases(runbook, data, body, registry) {
     if (given) runbook.problems.push('cases needs role tracking (roles.enabled)')
     return
   }
-  // The fields exist only under role tracking, so a project without roles keeps the runbook shape it had.
-  runbook.context = null
-  runbook.cases = []
-  runbook.casesAll = false
+  // The fields exist only when the registry has contexts, so a project without contexts keeps the runbook shape it had.
+  if (Object.keys(registry.contexts).length > 0) {
+    runbook.context = null
+    runbook.cases = []
+    runbook.casesAll = false
+  }
   const context = contextOfRunbook(registry, runbook.capability, runbook.feature)
   if (context === null) {
     if (given) runbook.problems.push(`cases needs a context: ${runbook.capability}/${runbook.feature} belongs to no context`)
@@ -163,6 +165,8 @@ function readReview(runbook, review, registry) {
 
 // Checks the steps against the registry and the runbook's roles; collects the outcomes each role's lines use.
 function readStepRoles(runbook, body, registry) {
+  const runbookCases = runbook.cases ?? []
+  const runbookContext = runbook.context ?? null
   const outcomes = {}
   const byCaseOutcomes = {}
   const addOutcome = (map, role, outcome) => {
@@ -192,9 +196,9 @@ function readStepRoles(runbook, body, registry) {
       }
       addOutcome(outcomes, role, outcome)
     }
-    const stepCases = step.cases.length > 0 ? step.cases : runbook.cases
+    const stepCases = step.cases.length > 0 ? step.cases : runbookCases
     for (const name of step.cases) {
-      if (!runbook.cases.includes(name)) runbook.problems.push(`${step.step}: Cases: "${name}" is not one of the runbook's cases`)
+      if (!runbookCases.includes(name)) runbook.problems.push(`${step.step}: Cases: "${name}" is not one of the runbook's cases`)
     }
     for (const label of step.duplicates) runbook.problems.push(`${step.step}: two role lines for ${label}`)
     for (const [role, byCase] of Object.entries(step.caseOutcomes)) {
@@ -203,7 +207,7 @@ function readStepRoles(runbook, body, registry) {
         runbook.problems.push(`${step.step}: role line "${role}" is not one of the step's roles`)
       }
       for (const [name, outcome] of Object.entries(byCase)) {
-        if (runbook.context === null) {
+        if (runbookContext === null) {
           runbook.problems.push(`${step.step}: role line "${role} in ${name}": the runbook has no context`)
           continue
         }
@@ -233,7 +237,7 @@ function readStepRoles(runbook, body, registry) {
     }
   }
   runbook.roleOutcomes = outcomes
-  runbook.outcomesByCase = byCaseOutcomes
+  if (Object.keys(registry.contexts).length > 0) runbook.outcomesByCase = byCaseOutcomes
 }
 
 function readRunbook(file, rel, config, projectRoot, registry) {

@@ -567,3 +567,14 @@ test('outcomesByCase keeps the outcome that applies in each step', () => {
   const limited = by((t) => t.replace('Parents: S01', 'Parents: S01\nCases: regular'))
   assert.deepEqual(limited.outcomesByCase.viewer, { regular: ['read-only'] })
 })
+
+test('a registry with no contexts gives runbooks without the case fields', () => {
+  const fields = ['context', 'cases', 'casesAll', 'outcomesByCase']
+  const runbooks = loadRunbooks(ROLES, loadConfig(ROLES))
+  assert.ok(runbooks.length > 0)
+  for (const rb of runbooks) assert.deepEqual(fields.filter((field) => Object.hasOwn(rb, field)), [], rb.id)
+  const dir = rolesCopy('billing/cancel-invoice.md', (t) => t.replace('roles: all', 'roles: all\ncases: [regular]'))
+  const rb = roleRunbook(dir, 'billing.cancel-invoice')
+  assert.ok(rb.problems.includes('cases needs a context: billing/invoices belongs to no context'))
+  assert.deepEqual(fields.filter((field) => Object.hasOwn(rb, field)), [])
+})
