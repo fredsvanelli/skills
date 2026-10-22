@@ -40,7 +40,8 @@ Commands:
   junit         <id> --file <junit.xml> [--waive S03,S04] maps the JUnit report of an api runbook's
                 script onto its steps: one state per step, parents resolved; a ui runbook with
                 viewports gets one state per step and viewport (tests named "S01 title @ mobile"); with
-                roles on, one state per step and role (tests named "S01 title as editor @ mobile")
+                roles on, one state per step and role (tests named "S01 title as editor @ mobile");
+                with cases, one per step, role and case ("S01 title as manager in vip-team @ mobile")
   fixtures      <id> loads the fixtures of a mocked ui runbook, counts them by source and, with
                 upstream.schema set, checks each JSON response against the OpenAPI schema
   upstream      [--port n] [--mode mocked|live|record] [--runbook id] [--role name] [--case name] [--step Sxx]

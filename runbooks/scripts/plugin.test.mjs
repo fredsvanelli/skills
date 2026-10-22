@@ -71,7 +71,7 @@ test('all fifteen commands exist and none is a stub', () => {
   }
 })
 
-test('all five roles commands exist and none is a stub', () => {
+test('all six roles commands exist and none is a stub', () => {
   const commands = findFiles(PLUGIN_ROOT, 'commands/roles/*.md').map((rel) => path.basename(rel, '.md'))
   assert.deepEqual(commands, ROLES_COMMANDS)
   for (const name of commands) {
