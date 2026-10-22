@@ -39,6 +39,7 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 | `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
 | `/runbooks:upgrade` | updates the installed plugin to its latest version |
 | `/runbooks:help` | answers a question about the plugin, optionally limited to one area (`--about roles`) |
+| `/runbooks:whats-next` | suggests the three commands that make the most sense to run now, from the state of the runbooks and the latest changes |
 | `/runbooks:roles:create` | registers a role with its parents, account and permissions |
 | `/runbooks:roles:update` | changes a role's description, parents or account, or renames it |
 | `/runbooks:roles:delete` | removes a role from the registry, the config and the runbooks that cite it |
