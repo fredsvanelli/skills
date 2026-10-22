@@ -175,7 +175,7 @@ Print the summary in the conversation before any commit question:
 
 ## 5. Commit
 
-Commit by the `setup` policy, and `roles.json` and the runbooks changed by `enable-roles` or `move-to-calls` by the `runbooks` policy. The files written in the UI tests repository get a commit of their own there, by the `setup` policy (`commits.md`, Another repository). Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
+Commit by the `setup` policy, and `roles.json` and the runbooks changed by `enable-roles` or `move-to-calls` by the `runbooks` policy. The files written in the UI tests repository get a commit of their own there, by the `setup` policy (`commits.md`, UI tests repository). Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
 
 ## 6. Close
 

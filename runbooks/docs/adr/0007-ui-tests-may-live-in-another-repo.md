@@ -16,4 +16,4 @@ We accept the sibling path for the scripts, and not for the sources, because not
 - Every developer clones the UI tests repository at the same path relative to the app. `run` in mode `test` and `to-test` stop when `tests.ui.root` does not exist and say where to clone it.
 - `setup` and `settings` may read the UI tests repository, but only the folder the user named: its manifest, its framework config and two or three of its tests.
 - `setup` copies the upstream server to `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`, inside the UI tests repository, so its CI runs mocked scripts without the plugin. The fixtures stay in the app's repository, and that CI reads them from its checkout of the app. `list` and `coverage` do not warn about a missing copy when the UI tests repository is not cloned.
-- A command that writes files in the UI tests repository commits them there, in a commit of its own, by the same policy as the files it writes here (`commits.md`, Another repository).
+- A command that writes files in the UI tests repository commits them there, in a commit of its own, by the same policy as the files it writes here (`commits.md`, UI tests repository).
