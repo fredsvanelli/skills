@@ -153,7 +153,7 @@ With role tracking on, a runbook whose `capability/feature` matches a key of a c
   ```
 
   A `live` runbook builds this data with the run suffix. A `mocked` runbook gets it from its `+<case>` fixture folders (`upstream.md`, "Case layer"). An `api` script builds it in each test, with the project's factories.
-- `Cases:` is an optional line on a step, like `Roles:` and `Viewports:`. It limits the step to some of the runbook's cases (`Cases: vip-team, regular`). Missing means every case of the runbook.
+- `Cases:` is an optional line on a step, like `Roles:` and `Viewports:`. It limits the step to some of the runbook's cases (`Cases: vip-team, regular`). Missing means every case of the runbook. A runbook with a `Cases:` line on any step runs every role once per case ("Roles that run once" below).
 - A role line can name cases: `- <role> in <case>[, <case>...]: <outcome>. <text>`. A line with no case applies to every case the step runs. For one role and one case, the line with the case wins over the line without one. A case adds no outcome keyword.
 
   ```markdown
@@ -172,7 +172,7 @@ With role tracking on, a runbook whose `capability/feature` matches a key of a c
 
   `manager` has no line for `vip-team` and `regular`, so it is `allowed` there. `viewer` has the same actions in every case, so one line covers all of them.
 
-**Roles that run once.** A role runs once, not once per case, when its effective actions on the runbook's key are the same in every case of `cases` and no role line names that role with a case. Its pass builds the data of the first case of `cases`, and its states carry the case `*`. Under `run --case`, it builds the first case of `cases` that the run selected. `anonymous` usually runs once. Every other role runs once per case of `cases`. `runbooks.mjs passes <id>` lists the passes: role, case, the case whose data the pass builds, viewport and account.
+**Roles that run once.** A role runs once, not once per case, when its effective actions on the runbook's key are the same in every case of `cases`, no role line names that role with a case, and no step of the runbook has a `Cases:` line. Its pass builds the data of the first case of `cases`, and its states carry the case `*`. Under `run --case`, it builds the first case of `cases` that the run selected. `anonymous` usually runs once. Every other role runs once per case of `cases`. `runbooks.mjs passes <id>` lists the passes: role, case, the case whose data the pass builds, viewport and account.
 
 Problems the loader reports:
 

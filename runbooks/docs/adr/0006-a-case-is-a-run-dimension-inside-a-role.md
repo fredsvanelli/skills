@@ -7,7 +7,7 @@ Many systems decide access from the record as well as from the role: on a VIP cl
 - A fake role per situation (`manager-vip-team`, `manager-vip-outside`). Rejected: each one needs an account that is really the same login, and the registry stops matching the roles the code defines.
 - Splitting the feature by record kind (`clients/vip-edit`, `clients/regular-edit`). Rejected: it works only when the runbooks split the same way, and the team question has no feature to split on.
 - The outcome `partial` on the step. Rejected: it says access is limited without saying where, so no step can test it, and coverage cannot tell which records the role reaches.
-- Running every role in every case. Rejected as the default: a role whose actions do not change by case would repeat passes that prove nothing new. A role with the same actions in every case and no line naming a case runs once, under the case `*`.
+- Running every role in every case. Rejected as the default: a role whose actions do not change by case would repeat passes that prove nothing new. A role runs once, under the case `*`, when it has the same actions in every case, no role line names it with a case, and no step of the runbook has a `Cases:` line. A `Cases:` line limits a step to some cases, and a single pass builds only one case, so that step would never run for the role in the other cases.
 
 ## Consequences
 
