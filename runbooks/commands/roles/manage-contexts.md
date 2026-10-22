@@ -44,7 +44,7 @@ Ask with `AskUserQuestion`, in rounds of four. First ask which kind of change:
 - Create a context. Ask the name (kebab-case, not used by another context), the description (one line, the question about the record), the keys and the cases. Offer the keys of `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and of the matrix, as `<capability>/<feature>` or `<capability>/*`. Do not offer a key that already belongs to another context, because a key belongs to one context. Ask for at least two cases. Each case has a kebab-case name, unique across every context, and one sentence that says which record it describes.
 - Add a key. Offer the keys that no context lists. Check that the key does not belong to another context through a `<capability>/*` entry.
 - Remove a key. Offer the context's keys. Say that a role's map on that key must become a list, and ask which case's actions the list keeps, as for a deleted context below.
-- Add a case. Ask the name and the sentence. Say that a role with a map on a key of the context has no access in the new case until the user runs `/runbooks:roles:manage-permissions` for it.
+- Add a case. Ask the name and the sentence. Say that a role with a map on a key of the context has no access in the new case until the user runs `/runbooks:permissions:manage` for it.
 - Rename a case. Ask the new name. The rename runs through `roles.json`, the runbooks and the `+<case>` fixture folders in one write.
 - Delete a case. Say that the case leaves every `cases` list, `Cases:` line and role line, and that the entry of every role map on the context loses it. The loader warns about a context with fewer than two cases: when the delete would leave fewer, say so and ask whether to delete the whole context instead.
 - Change the description. Ask the new line.
@@ -148,4 +148,4 @@ Give the commit outcome: the short sha, or the paths left uncommitted. Then:
 - offer `/runbooks:update <id>` for each runbook marked for review, which writes `cases`, the Preconditions lines and the role lines, and clears the review;
 - after a case or context delete, list the `+<case>` folders left behind, and give the command the user can run to remove them: `git rm -r <folder>`, or a plain delete for untracked files;
 - after a key removal, offer `/runbooks:update <id>` for each runbook listed in step 3, to drop `cases`, the `Cases:` lines and the case role lines, and say that they show loader problems until then;
-- after a new case, say that `/runbooks:roles:manage-permissions <role>` gives each role its actions in it.
+- after a new case, say that `/runbooks:permissions:manage <role>` gives each role its actions in it.

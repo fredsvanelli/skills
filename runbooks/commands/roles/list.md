@@ -36,7 +36,7 @@ The script exits 2 with `role tracking is off; /runbooks:settings roles turns it
 
 Below the output, say in one line each:
 
-- a role with `guess` keys: `/runbooks:roles:manage-permissions <name>` confirms or edits them;
+- a role with `guess` keys: `/runbooks:permissions:manage <name>` confirms or edits them;
 - a role with pending reviews: `/runbooks:list --review` lists the runbooks, and `/runbooks:update <id>` clears each one;
 - a role with no account on a `ui` project: `/runbooks:roles:update <name>` adds one.
 

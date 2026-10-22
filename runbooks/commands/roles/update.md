@@ -16,7 +16,7 @@ Arguments: `$ARGUMENTS`
 
 Examples: `/runbooks:roles:update manager`, `/runbooks:roles:update editor`.
 
-Changes the role's entry in `<paths.runbooks>/roles.json` and, for an account or a rename, `accounts` in the config. Permissions have their own command, `/runbooks:roles:manage-permissions`. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Roles" and "Review", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
+Changes the role's entry in `<paths.runbooks>/roles.json` and, for an account or a rename, `accounts` in the config. Permissions have their own command, `/runbooks:permissions:manage`. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Roles" and "Review", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
@@ -58,7 +58,7 @@ Done when the files are written and the checks are clean.
 
 ## 5. Review the permission changes
 
-Skip this step when no key changed. Otherwise follow `${CLAUDE_PLUGIN_ROOT}/commands/roles/manage-permissions.md`, steps 4 and 5, for each key whose effective actions changed, with `--change "parents changed: <actions before> to <actions after>"`. For a key that changed for an heir, use the heir's name in `--role`. The dry run comes first, then the question, then `--write`.
+Skip this step when no key changed. Otherwise follow `${CLAUDE_PLUGIN_ROOT}/commands/permissions/manage.md`, steps 4 and 5, for each key whose effective actions changed, with `--change "parents changed: <actions before> to <actions after>"`. For a key that changed for an heir, use the heir's name in `--role`. The dry run comes first, then the question, then `--write`.
 
 Done when each chosen runbook has its entry, or the user chose none.
 

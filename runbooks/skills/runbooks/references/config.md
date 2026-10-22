@@ -151,7 +151,7 @@ Base actions are `view`, `create`, `edit` and `delete`. They are fixed and need 
 - `origins` stays per key, also on a key of a context.
 - A runbook whose `capability/feature` matches a key of a context runs once per case, and its text states what each role gets in each case (`format.md`, "Contexts and cases").
 
-**`found` and `origins`.** `found` is per role and `origins` is per key. A key the user typed has no `origins` entry. `manage-permissions` removes a key's entry when the user edits that key, and `import-permissions` removes it from each key the CSV adds, changes or removes. `roles` listings and `/runbooks:ui` flag the keys still marked `guess`. An `origins` key that is not in `permissions` is an error.
+**`found` and `origins`.** `found` is per role and `origins` is per key. A key the user typed has no `origins` entry. `/runbooks:permissions:manage` removes a key's entry when the user edits that key, and `import-permissions` removes it from each key the CSV adds, changes or removes. `roles` listings and `/runbooks:ui` flag the keys still marked `guess`. An `origins` key that is not in `permissions` is an error.
 
 **`anonymous`.** It is always present, even when the file omits it. It cannot be deleted, renamed or given an account, and it inherits nothing.
 

@@ -14,7 +14,7 @@ Arguments: `$ARGUMENTS`
 |---|---|
 | `<name>` | the role to change. Required. `anonymous` is allowed, and its matrix usually stays empty |
 
-Examples: `/runbooks:roles:manage-permissions editor`, `/runbooks:roles:manage-permissions manager`.
+Examples: `/runbooks:permissions:manage editor`, `/runbooks:permissions:manage manager`.
 
 Edits `<paths.runbooks>/roles.json` and marks affected runbooks with `review`. `create` runs the same questions for a new role (step 2). Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review". Commit policy: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 

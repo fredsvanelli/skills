@@ -16,7 +16,7 @@ Arguments: `$ARGUMENTS`
 
 Examples: `/runbooks:roles:create`, `/runbooks:roles:create support-agent`.
 
-Adds the role to `<paths.runbooks>/roles.json` and, for a `ui` stack, its login to `accounts` in the config. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The permission questions are those of `${CLAUDE_PLUGIN_ROOT}/commands/roles/manage-permissions.md` (step 2).
+Adds the role to `<paths.runbooks>/roles.json` and, for a `ui` stack, its login to `accounts` in the config. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The permission questions are those of `${CLAUDE_PLUGIN_ROOT}/commands/permissions/manage.md` (step 2).
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
@@ -41,7 +41,7 @@ Done when you hold the name, description, parents and account.
 
 ## 3. Ask the permissions
 
-Ask what the role may do with the questions of `manage-permissions.md`, step 2, starting from the effective matrix its parents give. A key typed here has no `origins` entry.
+Ask what the role may do with the questions of `/runbooks:permissions:manage`, step 2, starting from the effective matrix its parents give. A key typed here has no `origins` entry.
 
 Done when you hold the role's own entries, or the user chose to leave the matrix to the parents.
 
