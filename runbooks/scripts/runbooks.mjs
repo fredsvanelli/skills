@@ -17,10 +17,11 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, rolesMarkdown, roleMarkdown, affectedRolesMarkdown, citingMarkdown, importPermissionsMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, rolesMarkdown, roleMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, importPermissionsMarkdown } from './lib/format.mjs'
 import { roleRows, roleDetail, affectedByChange, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
+import { passPlan } from './lib/passes.mjs'
 import { loadRoles, noAccountRoles, REVIEW_REASONS, REVIEW_FIELDS } from './lib/roles.mjs'
 import { planReview, planEnableRoles } from './lib/review-edit.mjs'
 import { exportPermissions, planImport } from './lib/permissions-csv.mjs'
@@ -57,6 +58,8 @@ Commands:
                 results, or shows one role: effective permissions and its runbooks
   roles         --affected --role r --key k lists the runbooks a permission change reaches: the role and
                 its heirs, per role. Both flags are required
+  passes        <id> [--role a,b] [--case a,b] lists the passes of a runbook: role, case, the case whose data the
+                pass builds, viewport and account. A role whose permissions do not change by case runs once (case *)
   roles         --citing r lists the runbooks that cite the role (roles, Roles:, role line, As:) and its heirs
   export-permissions [--role r] [--out <csv>] prints the own permissions of each role as CSV: one row per
                 role and key, one column per action marked x, and the origin of the key. --out writes the file
@@ -265,6 +268,28 @@ function commandRoles(root, config, options, positionals) {
   return options.json ? json(rows) : rolesMarkdown(rows)
 }
 
+function commandPasses(root, config, options, positionals) {
+  requireTracking(config)
+  const id = positionals[0]
+  if (!id) throw new Error('passes needs a runbook id')
+  const registry = loadRoles(root, config)
+  const runbook = loadRunbooks(root, config).find((rb) => rb.id === id)
+  if (!runbook) throw new Error(`no runbook with id "${id}"`)
+  const list = (flag, known, label) => {
+    if (options[flag] === undefined) return undefined
+    if (typeof options[flag] !== 'string') throw new Error(`--${flag} needs ${label} names, separated by commas`)
+    const names = options[flag].split(',').map((n) => n.trim()).filter(Boolean)
+    for (const name of names) if (!known.includes(name)) throw new Error(`${runbook.id} has no ${label} "${name}"`)
+    return names
+  }
+  const roles = list('role', runbook.roles ?? [], 'role')
+  const cases = list('case', runbook.cases ?? [], 'case')
+  const parts = splitFrontmatter(fs.readFileSync(path.resolve(root, runbook.path), 'utf8'))
+  const steps = parseSteps(parts ? parts.body : '')
+  const result = { id, context: runbook.context ?? null, passes: passPlan(registry, config, runbook, steps, { roles, cases }) }
+  return options.json ? json(result) : passesMarkdown(result)
+}
+
 function commandExportPermissions(root, config, options) {
   requireTracking(config)
   const registry = loadRoles(root, config)
@@ -290,7 +315,7 @@ function commandImportPermissions(root, config, options) {
   return options.json ? json(plan) : importPermissionsMarkdown(plan)
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'export-permissions', 'import-permissions']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'passes', 'export-permissions', 'import-permissions']
 
 export function run(argv) {
   const stderr = []
@@ -318,6 +343,7 @@ export function run(argv) {
     else if (command === 'mark-review') stdout = commandMarkReview(root, config, options, positionals)
     else if (command === 'enable-roles') stdout = commandEnableRoles(root, config, options)
     else if (command === 'roles') stdout = commandRoles(root, config, options, positionals)
+    else if (command === 'passes') stdout = commandPasses(root, config, options, positionals)
     else if (command === 'export-permissions') stdout = commandExportPermissions(root, config, options)
     else if (command === 'import-permissions') stdout = commandImportPermissions(root, config, options)
     else stdout = commandItems(root, config, options, command, warnings)

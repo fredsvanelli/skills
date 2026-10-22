@@ -234,3 +234,10 @@ export function importPermissionsMarkdown({ file, csv, actionsAdded, changes, ke
   else lines.push('Dry run: nothing written. Run again with --write to apply.')
   return `${lines.join('\n')}\n`
 }
+
+export function passesMarkdown({ id, context, passes }) {
+  const head = `## ${id}\n\n${context ? `Context: ${context}.` : 'No context.'}\n\n`
+  if (passes.length === 0) return `${head}No passes.\n`
+  return `${head}${table(['Role', 'Case', 'Data case', 'Viewport', 'Account'],
+    passes.map((p) => [p.role, p.case ?? '-', p.dataCase ?? '-', p.viewport ?? '-', p.noAccount ? 'none' : 'yes']))}\n`
+}
