@@ -548,8 +548,15 @@ test('two case-created marks for different cases both stay, and roles --affected
   assert.match(text, /case: vip-team/)
   const all = JSON.parse(run(['roles', '--affected', '--role', 'viewer', '--key', 'clients/list', '--json', '--root', dir]).stdout)
   assert.ok(all.length > 0)
-  const none = JSON.parse(run(['roles', '--affected', '--role', 'viewer', '--key', 'clients/list', '--case', 'nope', '--json', '--root', dir]).stdout)
-  assert.deepEqual(none, [])
+  const regular = JSON.parse(run(['roles', '--affected', '--role', 'viewer', '--key', 'clients/list', '--case', 'regular', '--json', '--root', dir]).stdout)
+  assert.deepEqual(regular, [{ role: 'viewer', runbooks: ['clients.list-clients'] }])
+  for (const kase of ['nope', 'constructor']) {
+    const unknown = run(['roles', '--affected', '--role', 'viewer', '--key', 'clients/list', '--case', kase, '--json', '--root', dir])
+    assert.deepEqual([unknown.code, unknown.stdout], [2, ''])
+    assert.match(unknown.stderr, new RegExp(`no case "${kase}"`))
+  }
+  assert.match(run(['roles', '--affected', '--role', 'viewer', '--key', 'clients/list', '--case', '--root', dir]).stderr, /--case needs a case name/)
+  assert.match(run(['roles', '--affected', '--role', 'editor', '--key', 'billing/invoices', '--case', 'regular', '--root', fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))]).stderr, /no case "regular"/)
 })
 
 test('roles prints the Case keys column and one row per case for a context', () => {

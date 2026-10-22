@@ -111,8 +111,9 @@ export function roleDetail(root, config, registry, runbooks, name) {
 }
 
 // The role and its heirs, for the runbooks the key reaches. Deprecated runbooks and placeholders are left out.
-// With kase, only the runbooks that run that case.
+// With kase, only the runbooks that run that case. A case no context has is an error.
 export function affectedByChange(registry, runbooks, role, key, kase = null) {
+  if (kase !== null && !(registry.caseNames ?? []).includes(kase)) throw new Error(`no case "${kase}"`)
   const candidates = runbooks.filter((rb) => rb.status !== 'deprecated' && rb.status !== 'placeholder' && keyMatches(key, rb.capability, rb.feature)
     && (kase === null || (rb.cases ?? []).includes(kase)))
   return [role, ...heirsOf(registry, role)]

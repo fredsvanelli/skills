@@ -268,6 +268,7 @@ function commandRoles(root, config, options, positionals) {
     for (const flag of ['role', 'key']) {
       if (typeof options[flag] !== 'string') throw new Error(`roles --affected needs --${flag}`)
     }
+    if (options.case !== undefined && typeof options.case !== 'string') throw new Error('roles --affected --case needs a case name')
     const groups = affectedByChange(registry, runbooks, known(options.role), options.key, typeof options.case === 'string' ? options.case : null)
     return options.json ? json(groups) : affectedRolesMarkdown(groups, options)
   }
