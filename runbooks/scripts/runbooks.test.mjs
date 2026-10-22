@@ -412,7 +412,7 @@ test('loadRunbooks checks a role line against the step roles and the review entr
   assert.ok(rb.problems.includes('S02: role line "viewer" is not one of the step\'s roles'))
   assert.ok(rb.problems.includes('review[0]: date is required'))
   assert.ok(rb.problems.includes('review[0]: role-created needs role'))
-  assert.ok(rb.problems.includes('review[1]: reason "bogus" must be one of roles-enabled, role-permissions, role-created, role-deleted'))
+  assert.ok(rb.problems.includes('review[1]: reason "bogus" must be one of roles-enabled, role-permissions, role-created, role-deleted, context-created, case-created'))
   assert.equal(rb.problems.some((p) => p.startsWith('review[2]')), false)
 })
 

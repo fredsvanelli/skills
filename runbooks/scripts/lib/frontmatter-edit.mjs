@@ -106,7 +106,7 @@ export function setListKeys(text, edits) {
 // A value inside a flow map also breaks on "key: value" colons.
 const mapValue = (value) => (needsQuotes(value) || /:(\s|$)/.test(value) ? JSON.stringify(value) : value)
 
-const REVIEW_ORDER = ['reason', 'role', 'key', 'change', 'date']
+const REVIEW_ORDER = ['reason', 'role', 'key', 'case', 'context', 'change', 'date']
 
 const reviewLine = (entry) => {
   const fields = REVIEW_ORDER.filter((field) => entry[field] !== undefined && entry[field] !== '')
@@ -115,8 +115,8 @@ const reviewLine = (entry) => {
 
 const asEntries = (value) => (Array.isArray(value) ? value : []).map((raw) => Object.fromEntries(Object.entries(raw).map(([key, item]) => [key, String(item)])))
 
-// edits: { roles?: 'all' | [...], review?: [{ reason, role?, key?, change?, date }, ...] }. An empty review removes the key;
-// a new review key goes after roles.
+// edits: { roles?: 'all' | [...], cases?: 'all' | [...] | null, review?: [{ reason, role?, key?, case?, context?, change?, date }, ...] }.
+// A null cases and an empty review remove the key; a new cases or review key goes after roles.
 export function setRoleKeys(text, edits) {
   const bom = text.startsWith('﻿') ? '﻿' : ''
   const eol = text.includes('\r\n') ? '\r\n' : '\n'
@@ -128,6 +128,17 @@ export function setRoleKeys(text, edits) {
     const line = `roles: ${edits.roles === 'all' ? 'all' : flowList(edits.roles)}`
     const span = keySpan(lines, 0, lines.length, 0, 'roles')
     lines = span ? spliced(lines, span.start, span.end - span.start, line) : [...lines, line]
+  }
+  if (edits.cases !== undefined) {
+    const span = keySpan(lines, 0, lines.length, 0, 'cases')
+    if (edits.cases === null) {
+      if (span) lines = spliced(lines, span.start, span.end - span.start)
+    } else {
+      const line = `cases: ${edits.cases === 'all' ? 'all' : flowList(edits.cases)}`
+      const roles = keySpan(lines, 0, lines.length, 0, 'roles')
+      if (span) lines = spliced(lines, span.start, span.end - span.start, line)
+      else lines = roles ? spliced(lines, roles.end, 0, line) : [...lines, line]
+    }
   }
   if (edits.review !== undefined) {
     const span = keySpan(lines, 0, lines.length, 0, 'review')
@@ -146,6 +157,10 @@ export function setRoleKeys(text, edits) {
   const after = parseYaml(splitFrontmatter(out).yaml)
   const expected = structuredClone(before)
   if (edits.roles !== undefined) expected.roles = edits.roles
+  if (edits.cases !== undefined) {
+    if (edits.cases === null) delete expected.cases
+    else expected.cases = edits.cases
+  }
   if (edits.review !== undefined) {
     if (edits.review.length > 0) expected.review = edits.review
     else delete expected.review

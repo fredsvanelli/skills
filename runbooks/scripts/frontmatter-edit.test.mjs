@@ -71,3 +71,16 @@ test('setRoleKeys quotes values that need it, orders the fields and replaces an 
   assert.deepEqual(data(out).review, [entry])
   assert.equal(setRoleKeys(text, { roles: ['admin'] }), text.replace('[admin, partner]', '[admin]'))
 })
+
+test('setRoleKeys writes and removes cases after roles', () => {
+  const text = '---\nid: clients.x\nroles: all\nstatus: draft\n---\nbody\n'
+  assert.equal(setRoleKeys(text, { cases: ['vip-team'] }), '---\nid: clients.x\nroles: all\ncases: [vip-team]\nstatus: draft\n---\nbody\n')
+  assert.equal(setRoleKeys(setRoleKeys(text, { cases: 'all' }), { cases: null }), text)
+  assert.equal(setRoleKeys(text, { cases: 'all' }), '---\nid: clients.x\nroles: all\ncases: all\nstatus: draft\n---\nbody\n')
+})
+
+test('setRoleKeys orders case and context in review entries', () => {
+  const text = '---\nid: clients.x\nroles: all\n---\nbody\n'
+  const out = setRoleKeys(text, { review: [{ reason: 'role-permissions', role: 'viewer', key: 'clients/edit', case: 'regular', change: 'edit removed', date: '2026-10-22' }] })
+  assert.match(out, /\{ reason: role-permissions, role: viewer, key: clients\/edit, case: regular, change: edit removed, date: 2026-10-22 \}/)
+})

@@ -519,3 +519,35 @@ test('list filters by role and review, and coverage reports roles', () => {
   assert.equal(JSON.parse(run(['coverage', '--json', '--root', FIXTURE]).stdout).roles, undefined)
   assert.equal(run(['list', '--role', 'admin', '--root', FIXTURE]).code, 0)
 })
+
+const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
+function copyContexts() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-contexts-'))
+  fs.cpSync(CONTEXTS, dir, { recursive: true })
+  return dir
+}
+
+test('mark-review takes case-created and contexts lists the affected runbooks', () => {
+  const dir = copyContexts()
+  const dry = JSON.parse(run(['mark-review', 'clients.edit-client', '--reason', 'case-created', '--case', 'regular', '--date', '2026-10-22', '--json', '--root', dir]).stdout)
+  assert.deepEqual(dry.runbooks[0].review.at(-1), { reason: 'case-created', case: 'regular', date: '2026-10-22' })
+  assert.match(run(['mark-review', 'clients.edit-client', '--reason', 'context-created', '--root', dir]).stderr, /--reason context-created needs --context/)
+  assert.deepEqual(JSON.parse(run(['contexts', '--affected', 'client-access', '--json', '--root', dir]).stdout), ['clients.edit-client', 'clients.list-clients'])
+  assert.deepEqual(JSON.parse(run(['contexts', '--affected', 'client-access', '--key', 'clients/list', '--json', '--root', dir]).stdout), ['clients.list-clients'])
+  assert.equal(JSON.parse(run(['contexts', '--json', '--root', dir]).stdout)[0].runbooks, 2)
+  assert.match(run(['contexts', '--affected', 'gold', '--root', dir]).stderr, /no context "gold"/)
+  assert.match(run(['contexts', '--root', dir]).stdout, /client-access/)
+  assert.match(run(['contexts', 'toString', '--root', dir]).stderr, /no context "toString"/)
+})
+
+test('two case-created marks for different cases both stay, and roles --affected takes --case', () => {
+  const dir = copyContexts()
+  for (const kase of ['regular', 'vip-team']) run(['mark-review', 'clients.edit-client', '--reason', 'case-created', '--case', kase, '--date', '2026-10-22', '--write', '--root', dir])
+  const text = fs.readFileSync(path.join(dir, 'docs/runbooks/clients/edit-client.md'), 'utf8')
+  assert.match(text, /case: regular/)
+  assert.match(text, /case: vip-team/)
+  const all = JSON.parse(run(['roles', '--affected', '--role', 'viewer', '--key', 'clients/list', '--json', '--root', dir]).stdout)
+  assert.ok(all.length > 0)
+  const none = JSON.parse(run(['roles', '--affected', '--role', 'viewer', '--key', 'clients/list', '--case', 'nope', '--json', '--root', dir]).stdout)
+  assert.deepEqual(none, [])
+})

@@ -17,8 +17,8 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, rolesMarkdown, roleMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, importPermissionsMarkdown } from './lib/format.mjs'
-import { roleRows, roleDetail, affectedByChange, citingRole } from './lib/role-views.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, importPermissionsMarkdown } from './lib/format.mjs'
+import { roleRows, roleDetail, affectedByChange, affectedByContext, contextRows, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
 import { casePlan, passPlan } from './lib/passes.mjs'
@@ -49,15 +49,18 @@ Commands:
   move-to-calls [--source n] [--write] moves the endpoint ids of an upstream API in another repository
                 from covers.entries to calls (docs/adr/0005): the ids of entries[n], or without --source the
                 orphan ids shaped "METHOD /path". A dry run unless --write, which edits only those two keys
-  mark-review   <id...> --reason r [--role n] [--key k] [--change text] [--date YYYY-MM-DD] [--write]
-                adds a review entry to each runbook; r is roles-enabled, role-permissions, role-created or
-                role-deleted. <id...> --clear [--write] removes the review key. A dry run unless --write
+  mark-review   <id...> --reason r [--role n] [--key k] [--case c] [--context x] [--change text]
+                [--date YYYY-MM-DD] [--write] adds a review entry to each runbook; r is roles-enabled,
+                role-permissions, role-created, role-deleted, context-created (needs --context) or
+                case-created (needs --case). <id...> --clear [--write] removes the review key. A dry run unless --write
   enable-roles  [--date YYYY-MM-DD] [--write] sets roles: all on every runbook that is not deprecated and
                 adds a roles-enabled review entry to those that are not placeholders. A dry run unless --write
   roles         [name] lists the roles with their account, runbook count, reviews, guessed keys and last
                 results, or shows one role: effective permissions and its runbooks
-  roles         --affected --role r --key k lists the runbooks a permission change reaches: the role and
-                its heirs, per role. Both flags are required
+  roles         --affected --role r --key k [--case c] lists the runbooks a permission change reaches: the role
+                and its heirs, per role. --role and --key are required; --case keeps the runbooks that run it
+  contexts      [--json] lists the contexts with their keys, cases and runbook count
+  contexts      --affected <name> [--key k] lists the runbooks of a context, narrowed to one key
   passes        <id> [--role a,b] [--case a,b] lists the passes of a runbook: role, case, the case whose data the
                 pass builds, viewport and account. A role whose permissions do not change by case runs once (case *)
   roles         --citing r lists the runbooks that cite the role (roles, Roles:, role line, As:) and its heirs
@@ -226,7 +229,7 @@ function commandMarkReview(root, config, options, ids) {
   if (typeof reason !== 'string') throw new Error(`mark-review needs --reason, one of ${REVIEW_REASONS.join(', ')}`)
   if (!REVIEW_REASONS.includes(reason)) throw new Error(`--reason "${reason}" must be one of ${REVIEW_REASONS.join(', ')}`)
   const entry = { reason }
-  for (const field of ['role', 'key', 'change']) if (typeof options[field] === 'string') entry[field] = options[field]
+  for (const field of ['role', 'key', 'case', 'context', 'change']) if (typeof options[field] === 'string') entry[field] = options[field]
   const missing = REVIEW_FIELDS[reason].filter((field) => !entry[field])
   if (missing.length > 0) throw new Error(`--reason ${reason} needs ${missing.map((field) => `--${field}`).join(', ')}`)
   entry.date = dateOption(options)
@@ -253,7 +256,7 @@ function commandRoles(root, config, options, positionals) {
     for (const flag of ['role', 'key']) {
       if (typeof options[flag] !== 'string') throw new Error(`roles --affected needs --${flag}`)
     }
-    const groups = affectedByChange(registry, runbooks, known(options.role), options.key)
+    const groups = affectedByChange(registry, runbooks, known(options.role), options.key, typeof options.case === 'string' ? options.case : null)
     return options.json ? json(groups) : affectedRolesMarkdown(groups, options)
   }
   if (options.citing !== undefined) {
@@ -267,6 +270,21 @@ function commandRoles(root, config, options, positionals) {
   }
   const rows = roleRows(root, config, registry, runbooks)
   return options.json ? json(rows) : rolesMarkdown(rows)
+}
+
+function commandContexts(root, config, options, positionals) {
+  requireTracking(config)
+  const registry = loadRoles(root, config)
+  const runbooks = loadRunbooks(root, config)
+  if (options.affected !== undefined) {
+    const name = typeof options.affected === 'string' ? options.affected : positionals[0]
+    if (typeof name !== 'string') throw new Error('contexts --affected needs a context name')
+    const ids = affectedByContext(registry, runbooks, name, { key: typeof options.key === 'string' ? options.key : undefined })
+    return options.json ? json(ids) : affectedContextMarkdown(ids, name)
+  }
+  if (positionals.length > 0 && !Object.hasOwn(registry.contexts ?? {}, positionals[0])) throw new Error(`no context "${positionals[0]}"`)
+  const rows = contextRows(registry, runbooks).filter((row) => positionals.length === 0 || row.name === positionals[0])
+  return options.json ? json(rows) : contextsMarkdown(rows)
 }
 
 function commandPasses(root, config, options, positionals) {
@@ -316,7 +334,7 @@ function commandImportPermissions(root, config, options) {
   return options.json ? json(plan) : importPermissionsMarkdown(plan)
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'passes', 'export-permissions', 'import-permissions']
+const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'export-permissions', 'import-permissions']
 
 export function run(argv) {
   const stderr = []
@@ -344,6 +362,7 @@ export function run(argv) {
     else if (command === 'mark-review') stdout = commandMarkReview(root, config, options, positionals)
     else if (command === 'enable-roles') stdout = commandEnableRoles(root, config, options)
     else if (command === 'roles') stdout = commandRoles(root, config, options, positionals)
+    else if (command === 'contexts') stdout = commandContexts(root, config, options, positionals)
     else if (command === 'passes') stdout = commandPasses(root, config, options, positionals)
     else if (command === 'export-permissions') stdout = commandExportPermissions(root, config, options)
     else if (command === 'import-permissions') stdout = commandImportPermissions(root, config, options)

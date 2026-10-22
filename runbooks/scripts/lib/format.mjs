@@ -205,9 +205,20 @@ export function roleMarkdown(detail) {
   return `${lines.join('\n')}\n`
 }
 
-export function affectedRolesMarkdown(groups, { role, key }) {
-  if (groups.length === 0) return `No runbook is affected by ${key} for ${role}.\n`
+export function affectedRolesMarkdown(groups, { role, key, case: kase }) {
+  if (groups.length === 0) return `No runbook is affected by ${key} for ${role}${typeof kase === 'string' ? ` in ${kase}` : ''}.\n`
   return `${table(['Role', 'Runbooks'], groups.map((g) => [g.role, g.runbooks.join(', ')]))}\n`
+}
+
+export function contextsMarkdown(rows) {
+  if (rows.length === 0) return 'No contexts.\n'
+  return `${table(['Context', 'Description', 'Keys', 'Cases', 'Runbooks'],
+    rows.map((r) => [r.name, r.description, r.keys.join(', '), r.cases.join(', '), r.runbooks]))}\n`
+}
+
+export function affectedContextMarkdown(ids, name) {
+  if (ids.length === 0) return `No runbook belongs to ${name}.\n`
+  return `${table(['Runbook'], ids.map((id) => [id]))}\n`
 }
 
 export function citingMarkdown(result, name) {

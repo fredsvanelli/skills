@@ -15,6 +15,8 @@ export const REVIEW_FIELDS = {
   'role-permissions': ['role', 'key', 'change'],
   'role-created': ['role'],
   'role-deleted': ['role'],
+  'context-created': ['context'],
+  'case-created': ['case'],
 }
 export const REVIEW_REASONS = Object.keys(REVIEW_FIELDS)
 export const ROLE_NAME = /^[a-z0-9][a-z0-9-]*$/

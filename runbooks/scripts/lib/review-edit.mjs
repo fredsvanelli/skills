@@ -9,7 +9,7 @@ import { splitFrontmatter, parseYaml } from './yaml.mjs'
 // Runbooks whose frontmatter did not parse cannot be edited; the loader already reports them.
 const unreadableProblem = (rb) => rb.problems.find((problem) => problem.startsWith('frontmatter:') || problem === 'missing frontmatter block')
 
-const sameEntry = (a, b) => a.reason === b.reason && a.role === b.role && a.key === b.key
+const sameEntry = (a, b) => a.reason === b.reason && a.role === b.role && a.key === b.key && a.case === b.case && a.context === b.context
 
 // Computes every edit first, so a runbook the editor refuses leaves every file unwritten.
 function writeEdits(root, edits) {

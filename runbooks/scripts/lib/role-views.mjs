@@ -104,11 +104,35 @@ export function roleDetail(root, config, registry, runbooks, name) {
 }
 
 // The role and its heirs, for the runbooks the key reaches. Deprecated runbooks and placeholders are left out.
-export function affectedByChange(registry, runbooks, role, key) {
-  const candidates = runbooks.filter((rb) => rb.status !== 'deprecated' && rb.status !== 'placeholder' && keyMatches(key, rb.capability, rb.feature))
+// With kase, only the runbooks that run that case.
+export function affectedByChange(registry, runbooks, role, key, kase = null) {
+  const candidates = runbooks.filter((rb) => rb.status !== 'deprecated' && rb.status !== 'placeholder' && keyMatches(key, rb.capability, rb.feature)
+    && (kase === null || (rb.cases ?? []).includes(kase)))
   return [role, ...heirsOf(registry, role)]
     .map((name) => ({ role: name, runbooks: candidates.filter((rb) => rb.roles.includes(name)).map((rb) => rb.id).sort() }))
     .filter((group) => group.runbooks.length > 0)
+}
+
+const reachable = (rb) => rb.status !== 'deprecated' && rb.status !== 'placeholder'
+
+// One row per context with the number of runbooks that belong to it, deprecated and placeholders left out.
+export function contextRows(registry, runbooks) {
+  return Object.values(registry.contexts ?? {}).map((context) => ({
+    name: context.name,
+    description: context.description,
+    keys: context.keys,
+    cases: [...context.cases],
+    runbooks: runbooks.filter((rb) => reachable(rb) && rb.context === context.name).length,
+  }))
+}
+
+// The ids of the runbooks of a context, narrowed to one key when given.
+export function affectedByContext(registry, runbooks, name, { key } = {}) {
+  if (!Object.hasOwn(registry.contexts ?? {}, name)) throw new Error(`no context "${name}"`)
+  return runbooks
+    .filter((rb) => reachable(rb) && rb.context === name && (key === undefined || keyMatches(key, rb.capability, rb.feature)))
+    .map((rb) => rb.id)
+    .sort()
 }
 
 export function citingRole(root, registry, runbooks, name) {
