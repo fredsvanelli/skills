@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "stack": "fullstack",
+  "roles": { "enabled": true },
+  "accounts": {
+    "admin": { "emailEnv": "UAT_ADMIN_EMAIL", "passwordEnv": "UAT_ADMIN_PASSWORD", "loginPath": "/signin" },
+    "manager": { "emailEnv": "UAT_MANAGER_EMAIL", "passwordEnv": "UAT_MANAGER_PASSWORD", "loginPath": "/signin" }
+  },
+  "viewports": {
+    "desktop": { "width": 1280, "height": 800 },
+    "mobile": { "width": 390, "height": 844 }
+  },
+  "slices": { "clients": ["src/clients/**"], "billing": ["src/billing/**"] },
+  "tests": { "api": { "framework": "jest", "dir": "tests", "command": "npx jest {files}" } }
+}

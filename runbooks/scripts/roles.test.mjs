@@ -15,8 +15,12 @@ import {
   heirsOf,
   noAccountRoles,
   matrixWarnings,
+  contextOfKey,
+  contextOfRunbook,
+  actionsByCase,
 } from './lib/roles.mjs'
 
+const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
 
 function tmpProject(files) {
@@ -62,7 +66,7 @@ test('parseRoles explains a broken registry', () => {
   assert.throws(() => parseRoles({ version: 1, roles: {} }, { accounts: { anonymous: {} } }), /accounts\.anonymous is not allowed/)
   assert.throws(() => parseRoles({ version: 1, roles: { a: { permissions: { 'billing/*': ['view'] }, origins: { 'billing/x': 'guess' } } } }), /a: origins key "billing\/x" is not in permissions/)
   assert.throws(() => parseRoles({ version: 1, roles: { a: { permissions: { 'billing/*': ['view'] }, origins: { 'billing/*': 'hunch' } } } }), /a: origin "hunch" for "billing\/\*" must be one of code, contract, guess/)
-  assert.throws(() => parseRoles({ version: 2, roles: {} }), /unsupported version 2, expected 1/)
+  assert.throws(() => parseRoles({ version: 3, roles: {} }), /unsupported version 3, expected 1 or 2/)
   assert.throws(() => parseRoles({ version: 1, roles: { a: { inherits: ['constructor'] } } }), /a inherits "constructor", which is not a registered role/)
   assert.throws(() => parseRoles({ version: 1, roles: {} }, { accounts: { constructor: {} } }), /accounts\.constructor is not a registered role/)
   assert.throws(() => parseRoles({ version: 1, roles: { a: { permissions: {}, origins: { toString: 'guess' } } } }), /a: origins key "toString" is not in permissions/)
@@ -97,4 +101,47 @@ test('matrixWarnings flags keys that match no runbook or slice', () => {
   assert.deepEqual(matrixWarnings(registry, runbooks, { reports: ['src/reports/**'] }), [
     'roles.json: editor "billing/invocies" matches no runbook or slice',
   ])
+})
+
+test('parseRoles reads contexts and resolves the matrix per case', () => {
+  const registry = loadRoles(CONTEXTS, loadConfig(CONTEXTS))
+  assert.equal(registry.version, 2)
+  assert.deepEqual(registry.caseNames, ['vip-team', 'vip-outside', 'regular'])
+  assert.equal(contextOfKey(registry, 'clients/edit'), 'client-access')
+  assert.equal(contextOfKey(registry, 'billing/*'), null)
+  assert.equal(contextOfRunbook(registry, 'clients', null), 'client-access')
+  const admin = effectivePermissions(registry, 'admin')['clients/*']
+  assert.deepEqual(admin.cases, { 'vip-team': ['view', 'create', 'edit', 'delete'], 'vip-outside': ['view', 'create', 'edit', 'delete'], regular: ['view', 'create', 'edit', 'delete'] })
+  assert.equal(admin.source, 'overridden')
+  assert.deepEqual(allowedActions(registry, 'manager', 'clients', 'edit', 'vip-outside'), ['view'])
+  assert.throws(() => allowedActions(registry, 'manager', 'clients', 'edit'), /"clients\/\*" depends on context client-access; pass a case/)
+  assert.deepEqual(actionsByCase(registry, 'viewer', 'clients', 'edit'), { 'vip-team': ['view'], 'vip-outside': ['view'], regular: ['view'] })
+  assert.deepEqual(actionsByCase(registry, 'anonymous', 'clients', 'edit'), { 'vip-team': [], 'vip-outside': [], regular: [] })
+  assert.equal(actionsByCase(registry, 'viewer', 'billing', 'invoices'), null)
+})
+
+test('a child map replaces the inherited key for every case', () => {
+  const registry = parseRoles({ version: 2, contexts: { c: { keys: ['x/*'], cases: { a: '', b: '' } } },
+    roles: { p: { permissions: { 'x/*': ['view'] } }, k: { inherits: ['p'], permissions: { 'x/*': { a: ['view', 'edit'] } } } } })
+  assert.deepEqual(effectivePermissions(registry, 'k')['x/*'].cases, { a: ['view', 'edit'], b: [] })
+})
+
+test('parseRoles explains a broken context', () => {
+  const ctx = (contexts, roles = {}) => () => parseRoles({ version: 2, contexts, roles })
+  assert.throws(() => parseRoles({ version: 1, contexts: {}, roles: {} }), /contexts need version 2/)
+  assert.throws(() => parseRoles({ version: 3, roles: {} }), /unsupported version 3, expected 1 or 2/)
+  assert.throws(ctx({ Bad: { keys: ['x/*'], cases: { a: '' } } }), /context "Bad" must be kebab-case/)
+  assert.throws(ctx({ c: { keys: ['x/*'], cases: { A: '' } } }), /case "A" must be kebab-case/)
+  assert.throws(ctx({ c: { keys: ['x/*'], cases: { a: '' } }, d: { keys: ['y/*'], cases: { a: '' } } }), /case "a" appears in contexts c and d/)
+  assert.throws(ctx({ c: { keys: ['x/*'], cases: { a: '' } }, d: { keys: ['x/edit'], cases: { b: '' } } }), /key "x\/edit" belongs to contexts c and d/)
+  assert.throws(ctx({ c: { keys: ['x/*'], cases: { a: '' } } }, { r: { permissions: { 'y/*': { a: ['view'] } } } }), /r "y\/\*": a map of cases needs a key that belongs to a context/)
+  assert.throws(ctx({ c: { keys: ['x/*'], cases: { a: '' } } }, { r: { permissions: { 'x/*': { constructor: ['view'] } } } }), /r "x\/\*": case "constructor" is not a case of c/)
+  assert.throws(ctx({ c: { keys: 'x/*', cases: { a: '' } } }), /context "c": keys must be a list of matrix keys/)
+  assert.throws(ctx({ c: { keys: ['x'], cases: { a: '' } } }), /context "c": key "x" must be <capability>\/<feature> or <capability>\/\*/)
+  assert.throws(ctx({ c: { keys: ['x/*'], cases: ['a'] } }), /context "c": cases must map each case to a description/)
+})
+
+test('matrixWarnings flags a context key that matches nothing and a context with one case', () => {
+  const registry = parseRoles({ version: 2, contexts: { c: { keys: ['x/*'], cases: { a: '' } } }, roles: {} })
+  assert.deepEqual(matrixWarnings(registry, [], {}), ['roles.json: context c key "x/*" matches no runbook or slice', 'roles.json: context c has fewer than two cases'])
 })

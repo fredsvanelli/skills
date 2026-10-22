@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "actions": [],
+  "contexts": {
+    "client-access": {
+      "description": "How the user relates to the client the record belongs to",
+      "keys": ["clients/*"],
+      "cases": {
+        "vip-team": "VIP client, the user is on its team",
+        "vip-outside": "VIP client, the user is not on its team",
+        "regular": "client that is not VIP"
+      }
+    }
+  },
+  "roles": {
+    "viewer": { "permissions": { "clients/*": ["view"], "billing/*": ["view"] } },
+    "manager": {
+      "permissions": {
+        "clients/*": {
+          "vip-team": ["view", "create", "edit", "delete"],
+          "vip-outside": ["view"],
+          "regular": ["view", "create", "edit"]
+        }
+      }
+    },
+    "admin": { "inherits": ["manager"], "permissions": { "clients/*": ["view", "create", "edit", "delete"] } }
+  }
+}
