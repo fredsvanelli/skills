@@ -10,12 +10,19 @@ import { loadRoles } from './lib/roles.mjs'
 import { exportPermissions, parseCsv, planImport } from './lib/permissions-csv.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
+const CONTEXTS = fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url))
 const ROLES_FILE = 'docs/runbooks/roles.json'
 
 // A copy of the roles fixture, so a write never touches the fixture.
 function copyFixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-permissions-'))
   fs.cpSync(FIXTURE, dir, { recursive: true })
+  return dir
+}
+
+function copyContexts() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-permissions-'))
+  fs.cpSync(CONTEXTS, dir, { recursive: true })
   return dir
 }
 
@@ -143,4 +150,45 @@ test('export-permissions and import-permissions run from the CLI and need tracki
   const off = run(['export-permissions', '--root', PROJECT])
   assert.equal(off.code, 2)
   assert.match(off.stderr, /role tracking is off/)
+})
+
+test('exportPermissions writes one row per case for a map', () => {
+  const csv = exportPermissions(loadRoles(CONTEXTS, loadConfig(CONTEXTS))).split('\r\n')
+  assert.equal(csv[0], 'role,key,case,view,create,edit,delete,origin')
+  assert.ok(csv.includes('manager,clients/*,vip-outside,x,,,,'))
+  assert.ok(csv.includes('viewer,clients/*,,x,,,,'))
+})
+
+test('an exported CSV with cases imports back with no change, and a partial map lists its missing cases', () => {
+  const dir = copyContexts()
+  assert.deepEqual(plan(dir, run(['export-permissions', '--root', dir]).stdout).changes, [])
+  const result = plan(dir, 'role,key,case,view,create,edit,delete,origin\nmanager,clients/*,vip-team,x,,,,\n')
+  assert.deepEqual(result.missingCases, [{ role: 'manager', key: 'clients/*', cases: ['vip-outside', 'regular'] }])
+  assert.throws(() => plan(dir, 'role,key,case,view,create,edit,delete\nmanager,clients/*,,x,,,\nmanager,clients/*,regular,x,,,\n'), /line 3: manager "clients\/\*" mixes a row with no case and rows with cases/)
+  assert.throws(() => plan(dir, 'role,key,view,create,edit,delete\n'), /the header needs a "case" column/)
+})
+
+test('a list and an equal full map count as unchanged, a changed case writes a map and bad cases name the line', () => {
+  const dir = copyContexts()
+  const head = 'role,key,case,view,create,edit,delete\n'
+  const same = plan(dir, `${head}viewer,clients/*,vip-team,x,,,\nviewer,clients/*,vip-outside,x,,,\nviewer,clients/*,regular,x,,,\nviewer,billing/*,,x,,,\n`)
+  assert.deepEqual(same.changes, [])
+  const changed = plan(dir, `${head}viewer,clients/*,vip-team,x,x,,\nviewer,clients/*,vip-outside,x,,,\nviewer,clients/*,regular,x,,,\nviewer,billing/*,,x,,,\n`, { write: true })
+  assert.deepEqual(changed.changes, [{ role: 'viewer', key: 'clients/*', before: ['view'], after: { 'vip-team': ['view', 'create'], 'vip-outside': ['view'], regular: ['view'] } }])
+  assert.deepEqual(changed.missingCases, [])
+  assert.deepEqual(readRoles(dir).roles.viewer.permissions['clients/*'], { 'vip-team': ['view', 'create'], 'vip-outside': ['view'], regular: ['view'] })
+  const flat = plan(dir, `${head}manager,clients/*,,x,,,\n`)
+  assert.deepEqual(flat.changes[0].after, ['view'])
+  assert.throws(() => plan(dir, `${head}manager,clients/*,gold,x,,,\n`), /line 2: case "gold" is not registered; \/runbooks:roles:manage-contexts adds it/)
+  assert.throws(() => plan(dir, `${head}manager,billing/*,regular,x,,,\n`), /line 2: key "billing\/\*" belongs to no context, so its case must be empty/)
+  assert.throws(() => plan(dir, `${head}manager,clients/*,regular,x,,,\nmanager,clients/*,regular,x,,,\n`), /line 3: manager "clients\/\*" in regular repeats line 2/)
+})
+
+test('a case of another context is named as such', () => {
+  const dir = copyContexts()
+  const file = path.join(dir, ROLES_FILE)
+  const roles = JSON.parse(fs.readFileSync(file, 'utf8'))
+  roles.contexts['billing-access'] = { description: 'x', keys: ['billing/*'], cases: { paid: 'paid' } }
+  fs.writeFileSync(file, JSON.stringify(roles))
+  assert.throws(() => plan(dir, 'role,key,case,view,create,edit,delete\nmanager,clients/*,paid,x,,,\n'), /line 2: case "paid" is not a case of client-access/)
 })

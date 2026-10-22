@@ -259,11 +259,16 @@ export function contractMarkdown({ schema, runbooks, findings }) {
   return `${lines.join('\n')}\n`
 }
 
-export function importPermissionsMarkdown({ file, csv, actionsAdded, changes, kept, written }) {
-  const list = (actions) => (actions === null ? 'absent' : actions.join(', ') || 'none')
+export function importPermissionsMarkdown({ file, csv, actionsAdded, changes, kept, written, missingCases = [] }) {
+  const names = (actions) => actions.join(', ') || 'none'
+  const list = (actions) => (actions === null ? 'absent' : Array.isArray(actions)
+    ? names(actions)
+    : Object.entries(actions).map(([kase, items]) => `${kase}: ${names(items)}`).join('; ') || 'none')
   const lines = [`Imports ${csv} into ${file}.`, '']
   lines.push(changes.length === 0 ? 'No key changes.' : table(['Role', 'Key', 'Before', 'After'],
     changes.map((c) => [c.role, c.key, list(c.before), list(c.after)])), '')
+  for (const m of missingCases) lines.push(`${m.role} "${m.key}" has no row for ${m.cases.join(', ')}, so those cases get no access.`)
+  if (missingCases.length > 0) lines.push('')
   if (actionsAdded.length > 0) lines.push(`Project actions added: ${actionsAdded.join(', ')}.`, '')
   if (kept.length > 0) lines.push(`Roles with no row, left as they are: ${kept.join(', ')}.`, '')
   if (written) lines.push(`Written: ${file}.`)

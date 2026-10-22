@@ -1,7 +1,7 @@
 // The own permissions of every role as a CSV matrix, one row per role and key and one column per action,
 // and the way back: a CSV edited in a spreadsheet replaces the matrix of each role it has rows for.
 import fs from 'node:fs'
-import { parseRoles, readRolesFile, splitKey, RolesError } from './roles.mjs'
+import { parseRoles, readRolesFile, splitKey, contextOfKey, RolesError } from './roles.mjs'
 
 const YES = ['x', '1', 'true', 'yes']
 const NO = ['', '0', 'false', 'no', '-']
@@ -14,15 +14,26 @@ function csvField(value, delimiter) {
 
 const csvLine = (fields, delimiter) => fields.map((field) => csvField(field, delimiter)).join(delimiter)
 
+const hasContexts = (registry) => Object.keys(registry.contexts ?? {}).length > 0
+
 export function exportPermissions(registry, { role } = {}) {
-  const header = ['role', 'key', ...registry.actions, 'origin']
+  const withCases = hasContexts(registry)
+  const header = ['role', 'key', ...(withCases ? ['case'] : []), ...registry.actions, 'origin']
   const lines = [csvLine(header, ',')]
   for (const name of registry.names) {
     if (role !== undefined && name !== role) continue
     const { permissions, origins } = registry.roles[name]
     for (const [key, actions] of Object.entries(permissions)) {
-      const marks = registry.actions.map((action) => (actions.includes(action) ? 'x' : ''))
-      lines.push(csvLine([name, key, ...marks, Object.hasOwn(origins, key) ? origins[key] : ''], ','))
+      const origin = Object.hasOwn(origins, key) ? origins[key] : ''
+      const row = (kase, list) => {
+        const marks = registry.actions.map((action) => (list.includes(action) ? 'x' : ''))
+        lines.push(csvLine([name, key, ...(withCases ? [kase] : []), ...marks, origin], ','))
+      }
+      if (Array.isArray(actions)) {
+        row('', actions)
+      } else {
+        for (const kase of registry.contexts[contextOfKey(registry, key)].cases) row(kase, Object.hasOwn(actions, kase) ? actions[kase] : [])
+      }
     }
   }
   return `${lines.join('\r\n')}\r\n`
@@ -82,7 +93,7 @@ export function parseCsv(text) {
   return { delimiter, rows: rows.filter((r) => r.cells.some((cell) => cell.trim() !== '')) }
 }
 
-function readHeader(header, actions) {
+function readHeader(header, actions, withCases) {
   const names = header.cells.map((cell) => cell.trim())
   const seen = new Set()
   for (const name of names) {
@@ -93,7 +104,9 @@ function readHeader(header, actions) {
   for (const required of ['role', 'key']) {
     if (!seen.has(required)) throw new RolesError(`line ${header.line}: the header has no "${required}" column`)
   }
-  const columns = names.map((name, index) => ({ name, index })).filter(({ name }) => !['role', 'key', 'origin'].includes(name))
+  if (withCases && !seen.has('case')) throw new RolesError(`line ${header.line}: the registry has contexts, so the header needs a "case" column`)
+  const skipped = withCases ? ['role', 'key', 'case', 'origin'] : ['role', 'key', 'origin']
+  const columns = names.map((name, index) => ({ name, index })).filter(({ name }) => !skipped.includes(name))
   for (const { name } of columns) {
     if (!actions.includes(name) && !ACTION_NAME.test(name)) {
       throw new RolesError(`line ${header.line}: column "${name}" is not an action; a new action is lowercase English, like approve`)
@@ -103,10 +116,10 @@ function readHeader(header, actions) {
   if (missing.length > 0) {
     throw new RolesError(`line ${header.line}: the header has no column for ${missing.join(', ')}; a missing column would remove that action from every key`)
   }
-  return { role: names.indexOf('role'), key: names.indexOf('key'), columns }
+  return { role: names.indexOf('role'), key: names.indexOf('key'), case: names.indexOf('case'), columns }
 }
 
-function readRows(rows, header, registry) {
+function readRows(rows, header, registry, withCases) {
   const byRole = new Map()
   const seen = new Map()
   for (const { line, cells } of rows) {
@@ -115,9 +128,25 @@ function readRows(rows, header, registry) {
     const key = cell(header.key)
     if (!registry.names.includes(role)) throw new RolesError(`line ${line}: role "${role}" is not registered; /runbooks:roles:create adds it`)
     if (!splitKey(key)) throw new RolesError(`line ${line}: key "${key}" must be <capability>/<feature> or <capability>/*`)
+    const kase = withCases ? cell(header.case) : ''
+    let context = null
+    if (kase !== '') {
+      context = contextOfKey(registry, key)
+      if (context === null) throw new RolesError(`line ${line}: key "${key}" belongs to no context, so its case must be empty`)
+      if (!registry.contexts[context].cases.includes(kase)) {
+        throw new RolesError(registry.caseNames.includes(kase)
+          ? `line ${line}: case "${kase}" is not a case of ${context}`
+          : `line ${line}: case "${kase}" is not registered; /runbooks:roles:manage-contexts adds it`)
+      }
+    }
     const id = `${role}\n${key}`
-    if (seen.has(id)) throw new RolesError(`line ${line}: ${role} "${key}" repeats line ${seen.get(id)}`)
-    seen.set(id, line)
+    const rowId = `${id}\n${kase}`
+    if (seen.has(rowId)) throw new RolesError(`line ${line}: ${role} "${key}"${kase === '' ? '' : ` in ${kase}`} repeats line ${seen.get(rowId)}`)
+    seen.set(rowId, line)
+    const earlier = byRole.get(role)?.get(key)
+    if (earlier && (earlier.cases === undefined) !== (kase === '')) {
+      throw new RolesError(`line ${line}: ${role} "${key}" mixes a row with no case and rows with cases`)
+    }
     const actions = []
     for (const { name, index } of header.columns) {
       const value = cell(index).toLowerCase()
@@ -125,16 +154,38 @@ function readRows(rows, header, registry) {
       else if (!NO.includes(value)) throw new RolesError(`line ${line}, column ${name}: "${cell(index)}" must be x or empty`)
     }
     if (!byRole.has(role)) byRole.set(role, new Map())
-    byRole.get(role).set(key, actions)
+    if (kase === '') {
+      byRole.get(role).set(key, { list: actions })
+    } else {
+      if (!earlier) byRole.get(role).set(key, { cases: new Map() })
+      byRole.get(role).get(key).cases.set(kase, actions)
+    }
   }
   return byRole
 }
 
 const sameSet = (a, b) => a.length === b.length && a.every((item) => b.includes(item))
 
+// Both entries expanded to a map over the cases of the key's context, so a list equals the full map of that list.
+function sameEntry(registry, key, a, b) {
+  if (Array.isArray(a) && Array.isArray(b)) return sameSet(a, b)
+  const context = contextOfKey(registry, key)
+  if (context === null) return false
+  const at = (value, kase) => (Array.isArray(value) ? value : Object.hasOwn(value, kase) ? value[kase] : [])
+  return registry.contexts[context].cases.every((kase) => sameSet(at(a, kase), at(b, kase)))
+}
+
+// The new entry of one key from its CSV rows: a list, or a map with the cases the CSV has, in context order.
+function entryOf(registry, key, row, order) {
+  const sorted = (actions) => order.filter((action) => actions.includes(action))
+  if (row.list) return sorted(row.list)
+  const cases = registry.contexts[contextOfKey(registry, key)].cases.filter((kase) => row.cases.has(kase))
+  return Object.fromEntries(cases.map((kase) => [kase, sorted(row.cases.get(kase))]))
+}
+
 // Keys keep their order in the file and new keys follow in CSV order. An unchanged key keeps its list and
 // its origin; a key added, changed or removed loses its origin, because the CSV replaces what the scanner deduced.
-function replaceMatrix(entry, rows, order) {
+function replaceMatrix(entry, rows, order, registry) {
   const before = entry.permissions ?? {}
   const origins = { ...(entry.origins ?? {}) }
   const permissions = {}
@@ -143,18 +194,18 @@ function replaceMatrix(entry, rows, order) {
     if (!rows.has(key)) {
       changes.push({ key, before: actions, after: null })
       delete origins[key]
-    } else if (sameSet(actions, rows.get(key))) {
+    } else if (sameEntry(registry, key, actions, entryOf(registry, key, rows.get(key), order))) {
       permissions[key] = actions
     } else {
-      const after = order.filter((action) => rows.get(key).includes(action))
+      const after = entryOf(registry, key, rows.get(key), order)
       permissions[key] = after
       changes.push({ key, before: actions, after })
       delete origins[key]
     }
   }
-  for (const [key, actions] of rows) {
+  for (const [key, row] of rows) {
     if (Object.hasOwn(before, key)) continue
-    const after = order.filter((action) => actions.includes(action))
+    const after = entryOf(registry, key, row, order)
     permissions[key] = after
     changes.push({ key, before: null, after })
   }
@@ -168,17 +219,24 @@ export function planImport(root, config, registry, csvText, { write = false } = 
   const { rel, file, raw } = readRolesFile(root, config)
   const { delimiter, rows } = parseCsv(csvText)
   if (rows.length === 0) throw new RolesError('the CSV is empty')
-  const header = readHeader(rows[0], registry.actions)
-  const byRole = readRows(rows.slice(1), header, registry)
+  const withCases = hasContexts(registry)
+  const header = readHeader(rows[0], registry.actions, withCases)
+  const byRole = readRows(rows.slice(1), header, registry, withCases)
   const actionsAdded = header.columns.map(({ name }) => name).filter((name) => !registry.actions.includes(name))
   const order = [...registry.actions, ...actionsAdded]
 
   const next = { ...raw, roles: { ...(raw.roles ?? {}) } }
   if (actionsAdded.length > 0) next.actions = [...(raw.actions ?? []), ...actionsAdded]
   const changes = []
+  const missingCases = []
   for (const [role, keys] of byRole) {
+    for (const [key, row] of keys) {
+      if (!row.cases) continue
+      const missing = registry.contexts[contextOfKey(registry, key)].cases.filter((kase) => !row.cases.has(kase))
+      if (missing.length > 0) missingCases.push({ role, key, cases: missing })
+    }
     const entry = Object.hasOwn(next.roles, role) ? next.roles[role] : { description: registry.roles[role].description }
-    const result = replaceMatrix(entry, keys, order)
+    const result = replaceMatrix(entry, keys, order, registry)
     if (result.changes.length === 0) continue
     next.roles[role] = result.next
     changes.push(...result.changes.map((change) => ({ role, ...change })))
@@ -194,6 +252,7 @@ export function planImport(root, config, registry, csvText, { write = false } = 
     delimiter,
     actionsAdded,
     changes,
+    ...(withCases ? { missingCases } : {}),
     kept: registry.names.filter((name) => !byRole.has(name)),
     written: false,
   }
