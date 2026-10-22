@@ -59,7 +59,7 @@ export function rewriteCases(text, mapCases, { emptyStepLine = 'skip' } = {}) {
   let inPreconditions = false
   let inCases = false
   let bullet = null // { index in out, kept, removed }
-  let dropIndent = null // indent of a removed Preconditions case line whose continuation lines go with it
+  let dropIndent = null // indent of a removed case bullet or role line whose continuation lines go with it
 
   const endBullet = () => {
     if (bullet && bullet.kept === 0 && bullet.removed > 0) out[bullet.index] = null
@@ -144,7 +144,10 @@ export function rewriteCases(text, mapCases, { emptyStepLine = 'skip' } = {}) {
       if (role && OUTCOMES.includes(role[4])) {
         const list = role[2].split(',').map((c) => c.trim())
         const mapped = unique(mapCases(list))
-        if (mapped.length === 0) continue
+        if (mapped.length === 0) {
+          dropIndent = indentOf(raw)
+          continue
+        }
         if (!sameList(mapped, list)) {
           out.push(`${role[1]}${mapped.join(', ')}${raw.slice(role[1].length + role[2].length)}${eol}`)
           continue

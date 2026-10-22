@@ -117,3 +117,16 @@ test('delete-context strips cases from runbooks of the context', () => {
   assert.match(text, /- viewer: read-only/)
   assert.match(run(['delete-context', 'gold', '--root', dir]).stderr, /no context "gold"/)
 })
+
+test('deleting a wrapped role line removes its continuation lines too', () => {
+  const dir = copyContexts()
+  const wrapped = fixtureText().replace('- manager in vip-outside: read-only. The "Edit" button does not appear.', '- manager in vip-outside: read-only. The "Edit" button\n  does not appear.')
+  assert.match(wrapped, /button\n  does not appear\.\n- viewer:/)
+  fs.writeFileSync(path.join(dir, EDIT), wrapped)
+  run(['delete-case', 'vip-outside', '--write', '--root', dir])
+  const text = read(dir)
+  assert.doesNotMatch(text, /vip-outside|^  does not appear/m)
+  assert.match(text, /Expected: the page shows "Saved" and the phone "555-0100"\.\n- viewer: read-only\. The "Edit" button does not appear\.\n/)
+  const removed = rewriteCases(wrapped, () => [], { emptyStepLine: 'remove' }).text
+  assert.match(removed, /"555-0100"\.\n- viewer: read-only/)
+})
