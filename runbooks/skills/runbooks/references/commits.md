@@ -4,7 +4,7 @@ Each command commits its own files by the policy in `commits.<type>` of the conf
 
 | Type | Files |
 |---|---|
-| `runbooks` | runbook files written or edited by `map`, `create`, `update`, `audit-runbooks --fix`, `to-test` (with its spec file), and `status`/`last_run` updates from `run`. With role tracking on, also `<paths.runbooks>/roles.json` and the runbook edits of `setup`, `settings` and the `roles:*` commands |
+| `runbooks` | runbook files written or edited by `map`, `create`, `update`, `audit --fix`, `to-test` (with its spec file), and `status`/`last_run` updates from `run`. With role tracking on, also `<paths.runbooks>/roles.json` and the runbook edits of `setup`, `settings` and the `roles:*` commands |
 | `setup` | the config, `README.md`, the root `.gitignore` and the two in `_runs/` and `_coverage/`, the agents block, `.mcp.json`, `.claude/settings.json` |
 
 Run reports in `_runs/` and coverage reports in `_coverage/` stay local: each folder holds a `.gitignore` that ignores everything but itself, so no command commits them.

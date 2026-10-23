@@ -43,7 +43,7 @@ The change goes through `update`.
 - To `mocked`: record the fixtures, rewrite persistence steps as request checks, and list persistence under "Not covered".
 - To `live`: delete the fixtures, restore the persistence steps, and move exact values into Preconditions with the run suffix.
 
-`audit-runbooks` flags a hand-edited `upstream:` whose runbook content no longer fits its mode.
+`audit` flags a hand-edited `upstream:` whose runbook content no longer fits its mode.
 
 ## Fixtures
 

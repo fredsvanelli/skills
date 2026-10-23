@@ -13,7 +13,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:run` | runs runbooks: `ui` ones guided, headless, headed, in Claude in Chrome or as a prompt for the Chrome extension, once per screen size, comparing each linked screen with its design; `api` ones through their test script |
 | `/runbooks:check` | shows the result of a runbook's latest run, or says it was never run |
 | `/runbooks:to-test` | writes or adopts the test script of a runbook, in the project's test library |
-| `/runbooks:audit-runbooks` | checks runbooks still match the code |
+| `/runbooks:audit` | checks runbooks still match the code |
 | `/runbooks:coverage` | coverage report, overall or per capability, feature, slice or path |
 | `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
 | `/runbooks:upgrade` | updates the installed plugin to the latest version from its marketplace |

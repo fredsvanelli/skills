@@ -19,7 +19,7 @@ Pick one of `<id>`, `--capability` or `--all`; `--fix` goes with any of them.
 | `--all` | audit every runbook that is not `deprecated` |
 | `--fix` | after the report, show the edits as a diff and apply them once the user approves. Without it the command only reports and writes nothing |
 
-Examples: `/runbooks:audit-runbooks billing.issue-invoice`, `/runbooks:audit-runbooks --capability billing`, `/runbooks:audit-runbooks --all --fix`.
+Examples: `/runbooks:audit billing.issue-invoice`, `/runbooks:audit --capability billing`, `/runbooks:audit --all --fix`.
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, and for a `ui` runbook `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 

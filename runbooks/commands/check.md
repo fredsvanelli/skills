@@ -33,7 +33,7 @@ By default the latest run is the newest report of the id, partial runs (`--steps
    - the report's Notes, shortened to the items that change how to read the result.
    - With role tracking on and a `review` entry in the runbook, say that its Expected may be out of date and offer `/runbooks:update <id>`. The latest run does not clear it.
 4. When `lastRunIsLatest` is `false`, the newest report is a partial run, or a report the runbook's `last_run` does not cite. Say so, and name the full run that `last_run` records (`lastRun.date`, `lastRun.result`, `lastRun.report`), or say there is none.
-5. When `lastRun.outdated` is `true`, say that `update` or `audit-runbooks --fix` changed the runbook after its last full run, so that run verified the old text.
+5. When `lastRun.outdated` is `true`, say that `update` or `audit --fix` changed the runbook after its last full run, so that run verified the old text.
 6. End with the report path and the next command that fits the result. After a failure or a block, offer `/runbooks:run <id>` once the cause is fixed. After a partial run, or when `last_run` is outdated, offer a full run, because only a full run moves `status` and `last_run`.
 
 Write in the config `language`.

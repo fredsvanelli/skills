@@ -105,7 +105,7 @@ Each signal from steps 1 to 4 gives one candidate: a command with its arguments 
 | 3. Text that is wrong | `invalid`, `review`, contract findings | a run of a wrong runbook proves nothing |
 | 4. Unproven work | `never-run`, `outdated`, `failing`, `no-script`, `refactor` changes from step 4 | these runbooks exist and do not count yet, or may no longer hold |
 | 5. Gaps | uncovered entries (`/runbooks:map`), `placeholder` (`/runbooks:create --from placeholder <id>`), roles with 0 runbooks, guessed permissions, roles with no account, unfinished setup items from step 1 | coverage the project planned and did not write, or never planned |
-| 6. Upkeep | `stale` (`/runbooks:run <id...>`), then `/runbooks:audit-runbooks --all` and `/runbooks:coverage` | nothing is broken, and these show whether the runbooks still match the code |
+| 6. Upkeep | `stale` (`/runbooks:run <id...>`), then `/runbooks:audit --all` and `/runbooks:coverage` | nothing is broken, and these show whether the runbooks still match the code |
 
 Inside a tier, rank higher a candidate that reaches `critical` runbooks, then one the diff reaches, then the one with more runbooks or entries behind it.
 

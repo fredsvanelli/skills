@@ -18,7 +18,7 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 1. `map` writes a `placeholder` for each flow no runbook cites: a title and goal, no steps. `create` writes a runbook as `draft`, filling the placeholder of its flow when there is one. When the behavior changes, `update` edits its steps and keeps its status until the next full run.
 2. `run` executes it (an `api` runbook gets its script from `to-test` first, when it has none). A full run where every step passes (or is waived, with at least one pass) makes it `active`.
 3. Only `active` runbooks count as coverage; `draft` ones count as pending, placeholders as planned.
-4. `audit-runbooks` checks runbooks against the code; `coverage` measures coverage.
+4. `audit` checks runbooks against the code; `coverage` measures coverage.
 5. `deprecated` runbooks stay for history and never count.
 
 ## Commands
@@ -32,7 +32,7 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 | `/runbooks:run` | runs runbooks: `ui` ones with `--mode guided`, `headless`, `headed`, `chrome` or `prompt`; `api` ones through their test script |
 | `/runbooks:check` | shows the result of a runbook's latest run, or says it was never run |
 | `/runbooks:to-test` | writes or adopts the test script of a runbook |
-| `/runbooks:audit-runbooks` | checks runbooks still match the code |
+| `/runbooks:audit` | checks runbooks still match the code |
 | `/runbooks:coverage` | coverage report |
 | `/runbooks:setup` | (re)configures this folder |
 | `/runbooks:settings` | changes part of the config, such as the test library, the design reference or the commit policy |

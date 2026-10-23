@@ -31,7 +31,7 @@ Read-only. It runs no runbook, writes no file and commits nothing. It answers fr
 | `run` | `skills/runbooks/references/run-modes.md`, `commands/run.md`, `commands/check.md` |
 | `scripts` | `commands/to-test.md`, `skills/runbooks/references/format.md` (What a step can verify, Scripts of api runbooks), `docs/adr/0001-api-runbooks-run-through-their-script.md`, `docs/adr/0007-ui-tests-may-live-in-another-repo.md` |
 | `coverage` | `skills/runbooks/references/coverage.md`, `commands/coverage.md`, `docs/adr/0002-endpoint-coverage-by-surface.md`, `docs/adr/0004-mocked-runbooks-never-cover-endpoints.md` |
-| `audit` | `commands/audit-runbooks.md`, `commands/list.md` (`--affected`) |
+| `audit` | `commands/audit.md`, `commands/list.md` (`--affected`) |
 | `upstream` | `skills/runbooks/references/upstream.md`, `docs/adr/0003-mocked-upstream-served-by-plugin-server.md`, `docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`, `docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md` |
 | `design` | `skills/runbooks/references/config.md` (Design), `skills/runbooks/references/run-modes.md` (Design), `skills/runbooks/references/format.md` (Frontmatter) |
 | `viewports` | `skills/runbooks/references/config.md` (Viewports), `skills/runbooks/references/run-modes.md` (Viewports) |
