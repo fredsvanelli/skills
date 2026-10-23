@@ -197,6 +197,14 @@
   .step .block-label { color: var(--muted); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
   .step .exp { padding: 10px 14px; border-radius: 8px; background: color-mix(in srgb, var(--fg) 4%, transparent); font-size: 14px; }
   .step .exp .block-label { display: block; margin-bottom: 2px; }
+  .dep-tree { margin: 0; padding: 16px 22px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font: 14px var(--mono); }
+  .dep-tree ul { margin: 0; padding-left: 22px; list-style: none; }
+  .dep-tree > ul { padding-left: 0; }
+  .dep-tree li { position: relative; padding: 3px 0; }
+  .dep-tree ul ul li::before { content: ''; position: absolute; top: 0; left: -14px; width: 10px; height: 15px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .dep-tree ul ul li:not(:last-child)::after { content: ''; position: absolute; top: 15px; bottom: 0; left: -14px; border-left: 1px solid var(--line); }
+  .dep-tree .id { margin-right: 8px; color: var(--accent); }
+  .dep-tree .muted { margin-left: 8px; font-size: 12px; }
 
   .runs td { padding: 14px 16px; font: 14px var(--mono); white-space: nowrap; }
   .runs td .muted { font-size: 13px; }
@@ -631,6 +639,32 @@
       el('p', null, 'Check the role lines, then run ', el('code', null, `/runbooks:update ${rb.id}`), '.'))]
   }
 
+  // Steps as a tree from their Parents lines. A step with two parents shows under each one; a parent missing from the runbook counts as none.
+  function dependencyTree(steps) {
+    const ids = new Set(steps.map((step) => step.step))
+    const parentsOf = (step) => (step.parents ?? []).filter((p) => ids.has(p) && p !== step.step)
+    if (steps.every((step) => parentsOf(step).length === 0)) {
+      return [el('h4', null, 'Dependency tree'), el('p', 'none', 'No step depends on another: a failed step never blocks the others, and the steps can run in any order.')]
+    }
+    // The path guards against a cycle in Parents, which would otherwise never end.
+    const reached = new Set()
+    const branch = (step, path) => {
+      reached.add(step.step)
+      const cycle = path.includes(step.step)
+      const others = parentsOf(step).filter((p) => p !== path.at(-1))
+      const children = cycle ? [] : steps.filter((child) => parentsOf(child).includes(step.step))
+      return el('li', null, el('span', 'id', step.step), step.title,
+        others.length > 0 ? el('span', 'muted', `also after ${others.join(', ')}`) : null,
+        cycle ? el('span', 'muted', 'cycle') : null,
+        children.length > 0 ? el('ul', null, ...children.map((child) => branch(child, [...path, step.step]))) : null)
+    }
+    const items = steps.filter((step) => parentsOf(step).length === 0).map((step) => branch(step, []))
+    // Steps that only a cycle reaches have no root, so the first of each starts its own branch.
+    for (const step of steps) if (!reached.has(step.step)) items.push(branch(step, []))
+    return [el('h4', null, 'Dependency tree'), el('div', 'dep-tree', el('ul', null, ...items)),
+      el('p', 'legend', 'A step runs only when all its parents passed. A parent that failed or was blocked makes its children blocked-by-parent.')]
+  }
+
   function bodyNodes(rb) {
     const { sections, steps } = rb.body
     if (sections.length === 0 && steps.length === 0) return [el('h4', null, 'Body'), el('p', 'none', 'This runbook has no sections yet.')]
@@ -639,7 +673,8 @@
       // Steps go right after Preconditions (or Goal when there are no Preconditions), as in the runbook template.
       const anchor = ['Preconditions', 'Goal'].map((name) => sections.findIndex((s) => s.heading === name)).find((index) => index >= 0)
       const byRole = Object.values(rb.stepStates).some((states) => states.some((s) => s.role))
-      const stepsBlock = [el('h4', null, 'Steps'), ...(byRole ? roleGrid(rb) : []),
+      // The dependency tree goes right before Steps, so it sits between Goal and Steps.
+      const stepsBlock = [...dependencyTree(steps), el('h4', null, 'Steps'), ...(byRole ? roleGrid(rb) : []),
         ...steps.map((step) => stepCard(step, rb.stepStates[step.step] ?? [], !byRole))]
       blocks.splice(anchor === undefined ? 0 : anchor + 1, 0, stepsBlock)
     }

@@ -38,10 +38,12 @@ function parseStep(heading, lines) {
       fields.push({ name: match[1], value: match[2].replace(/`/g, '').trim() })
     }
   }
+  const parentsField = fields.find((field) => field.name === 'Parents')
   return {
     step: heading[1],
     title: heading[2].trim(),
     fields,
+    parents: (parentsField?.value ?? '').split(',').map((p) => p.trim()).filter((p) => p && p !== 'none'),
     actions: renderOrNull(blocks.actions),
     request: renderOrNull(blocks.request),
     expected: renderOrNull(blocks.expected),

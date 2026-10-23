@@ -124,6 +124,12 @@ test('reads the fields and actions of a UI step', () => {
   assert.equal(steps[0].request, null)
 })
 
+test('reads the parents of each step, none as an empty list', () => {
+  assert.deepEqual(parseBody(UI_BODY).steps.map((s) => s.parents), [[], ['S01']])
+  const body = '## Steps\n\n### S01. a\n\n### S02. b\n\nParents: `S01`, S03\n'
+  assert.deepEqual(parseBody(body).steps.map((s) => s.parents), [[], ['S01', 'S03']])
+})
+
 test('a step without Actions has actions null', () => {
   const { steps } = parseBody(UI_BODY)
   assert.equal(steps[1].actions, null)
