@@ -69,6 +69,9 @@ For the three rows on calls, the edit is the `calls` list to write, or the fixtu
 | the fields in `Request:` and `Expected:` match the validation rules and the response shape in the code (form requests, DTOs, schemas, resources, serializers) | `drift` |
 | `scripts` is not empty, unless the runbook is a placeholder | `drift`, suggesting `/runbooks:run <id>`, which writes it |
 | every step has one test with its id in the script, and every runbook test asserts its step's Expected | `drift` |
+| every step writes its request as an `http` block under `Request:`, and the body its Expected checks as a `json` block (`references/format.md`, Request and response of api steps). A status alone, such as `Expected: 204.`, needs no block | `old-format`, suggesting the conversion |
+
+`old-format` does not change the runbook's verdict: the step still says what it checks, only in the format of older versions. Its edit is the step rewritten in blocks with the same checks. A sentence that cannot become a block without adding or dropping a check stays as text after the block, such as "at least these items" or "in any order". Values the old text named by type become placeholders (`"<uuid>"`, `"<ISO 8601>"`).
 
 With role tracking on, two more checks run:
 
@@ -91,15 +94,15 @@ Read a role's actions per case from `roles <name> --json`: the `cases` map of th
 
 `role-missing` and `role-gone` belong to no runbook and are reported once. `role-contradiction` has the verdict `drift`, with or without a case; the two registry findings do not change a runbook's verdict.
 
-The runbook's verdict is the worst of its findings; none means `in-sync`.
+The runbook's verdict is the worst of its findings, leaving out `old-format`; none means `in-sync`.
 
 ## 3. Report
 
-A table (runbook, verdict, findings count), then the findings per runbook. Print it in the chat; write no file.
+A table (runbook, verdict, findings count), then the findings per runbook. Print it in the chat; write no file. When any runbook has `old-format` findings, end with the count of steps to convert and offer `--fix` for them.
 
 ## 4. Fix (with `--fix`)
 
-Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`. When its `last_run` is set and a fix changed a step, a precondition, `viewports` or `design`, add `outdated: true` to `last_run` and keep its other fields: the run verified the old text. A fix that touches only `sources`, `scripts` paths or a script file leaves `last_run` as it is. With role tracking on, `--fix` never edits `roles.json`, and it does not rewrite a role line against the matrix. A `role-missing` finding offers `/runbooks:roles:create`, a `role-gone` finding offers `/runbooks:roles:delete`, and a `role-contradiction` offers `/runbooks:update <id>` or `/runbooks:permissions:manage`, because the matrix or the runbook can be the wrong side. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbooks:update` for it.
+Show the proposed edits as a diff per runbook and apply them after the user approves. An edited runbook keeps its `status`. When its `last_run` is set and a fix changed a step, a precondition, `viewports` or `design`, add `outdated: true` to `last_run` and keep its other fields: the run verified the old text. A fix that touches only `sources`, `scripts` paths or a script file, or that only converts `old-format` steps, leaves `last_run` as it is, because the checks did not change. When the old text is too vague to convert without changing a check, leave the step as it is and offer `/runbooks:update <id>` for it. With role tracking on, `--fix` never edits `roles.json`, and it does not rewrite a role line against the matrix. A `role-missing` finding offers `/runbooks:roles:create`, a `role-gone` finding offers `/runbooks:roles:delete`, and a `role-contradiction` offers `/runbooks:update <id>` or `/runbooks:permissions:manage`, because the matrix or the runbook can be the wrong side. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbooks:update` for it.
 
 ## 5. Show the fixes (with `--fix`)
 
