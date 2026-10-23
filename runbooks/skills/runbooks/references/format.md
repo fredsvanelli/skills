@@ -102,8 +102,8 @@ Each step:
 - `api` steps:
   - `Endpoint:` the endpoint called, as an entry id (`POST /admin/internal/invoices`).
   - `As:` the role making the call, or `anonymous`. With role tracking on, role lines replace it (see "Roles" below and "As: during the migration").
-  - `Request:` the body, query and headers that matter, with data named after the Preconditions.
-  - `Expected:` the status and the body fields, plus the effects below.
+  - `Request:` the request as an `http` code block: method, path and query, the headers that matter, and the JSON body, with data named after the Preconditions (see "Request and response of api steps").
+  - `Expected:` the status, the body fields as a `json` code block, then the effects below (see "Request and response of api steps").
 
 Number steps `S01`, `S02`, and keep numbers stable: a removed step leaves a gap.
 
@@ -229,6 +229,46 @@ Only `update` of that runbook clears `review`, after the user confirms each role
 Items 3 and 4 live only in the script, in the project's isolated test environment. The agent itself still reads no database and writes no SQL.
 
 An `api` runbook covers at least: the main path, invalid input (422 with the fields), a role that must not get in (403), no authentication (401), and a read-back for anything it saves. With role tracking on, the 403 and 401 cases become role lines on the main step instead of steps of their own: `denied` for a signed-in role and `denied` for `anonymous`, each with its status and body. The 422 step and the read-back stay steps. Its Preconditions say how the script creates each piece of data (factory, seed, a call to another endpoint), and Cleanup names the isolation that undoes it (`RefreshDatabase`, a transaction per test).
+
+### Request and response of api steps
+
+`Request:` stands alone on its line, followed by an `http` code block: the request line with the method, the path and the query string, then the headers that matter, a blank line and the JSON body. A value known only at run time goes in angle brackets and names its source in the Preconditions (`/invoices/<id of the draft invoice>`). Credentials stay out of the block: `As:` or the role lines name who calls, and the helper from the agents block signs the call. A body that is not JSON, such as a file upload, is a sentence after the block.
+
+`Expected:` gives the status on its line (`Expected: 200.`), followed by a `json` code block with the body fields the step checks:
+
+- A key left out is not checked.
+- An array lists its items in the order the response returns them, and the script checks that order and the length. When only some items matter, or the order does not, a sentence after the block says so.
+- A value in angle brackets is checked by its type or its source, not as text: `"<uuid>"`, `"<ISO 8601>"`, `"<integer>"`, `"<id of the draft invoice>"`. It is always a JSON string, so the block stays valid JSON.
+- A response with no body (204) has no block.
+
+The effects (a read-back call, a fake) and the role lines come after the block, as text. A role line that states a body puts its block under the line, indented. Lines inside a code block are never fields or role lines.
+
+````markdown
+Request:
+
+```http
+GET /quotes/airports?page=1&perPage=50&sortBy=name&sortOrder=asc
+```
+
+Expected: 200.
+
+```json
+{
+  "meta": { "total": 3, "page": 1, "perPage": 50, "totalPages": 1 },
+  "data": [
+    { "id": "<uuid>", "iataCode": "MIA", "name": "Miami International", "createdAt": "<ISO 8601>" },
+    { "id": "<uuid>", "iataCode": "GIG", "name": "Rio de Janeiro/Galeão", "createdAt": "<ISO 8601>" },
+    { "id": "<uuid>", "iataCode": "GRU", "name": "São Paulo/Guarulhos", "createdAt": "<ISO 8601>" }
+  ]
+}
+```
+
+- viewer: denied. 403 with
+
+  ```json
+  { "message": "Forbidden" }
+  ```
+````
 
 ### Preconditions and the upstream mode
 

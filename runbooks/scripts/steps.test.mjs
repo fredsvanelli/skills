@@ -88,3 +88,13 @@ test('parsePreconditionCases reads the Cases: bullets of Preconditions', () => {
   assert.deepEqual(parsePreconditionCases('## Preconditions\n\n- Data: one client.\n'), {})
   assert.deepEqual(parsePreconditionCases('## Preconditions\n\n- Cases:\n  - a: x\n## Steps\n  - b: y\n'), { a: 'x' })
 })
+
+test('lines inside a code block are never fields or role lines', () => {
+  const [s] = parseSteps([
+    '### S01. A', 'Parents: none', 'Request:', '', '```http', 'GET /quotes/airports', 'Authorization: Bearer <token>', 'Parents: S09', '```', '',
+    'Expected: 200.', '', '```json', '{ "status": "paid" }', 'Note: inside', '- viewer: denied.', '```', '',
+    'The items come in this order.', '- editor: denied. 403 with', '', '  ```json', '  { "error": "forbidden" }', '  ```',
+  ].join('\n'))
+  assert.deepEqual(s.parents, [])
+  assert.deepEqual(s.outcomes, { editor: 'denied' })
+})

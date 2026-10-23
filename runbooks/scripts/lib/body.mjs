@@ -7,6 +7,7 @@ const SECTION_HEADING = /^##\s+(.*?)\s*$/
 const SEPARATOR = /^\s*---\s*$/
 const FIELD_LINE = /^([A-Za-z][A-Za-z ]*):\s*(.*)$/
 const BLOCK_NAMES = { Actions: 'actions', Request: 'request', Expected: 'expected' }
+const FENCE = /^\s*```/
 
 function renderOrNull(lines) {
   const text = lines.join('\n').trim()
@@ -17,7 +18,14 @@ function parseStep(heading, lines) {
   const fields = []
   const blocks = { actions: [], request: [], expected: [] }
   let current = null
+  let inFence = false
   for (const line of lines) {
+    // A code block stays whole in its block: no line of it is a field or a separator.
+    if (FENCE.test(line) || inFence) {
+      if (FENCE.test(line)) inFence = !inFence
+      if (current) blocks[current].push(line)
+      continue
+    }
     if (SEPARATOR.test(line)) continue
     const match = FIELD_LINE.exec(line)
     const block = match && BLOCK_NAMES[match[1]]

@@ -12,6 +12,8 @@ const EXPECTED_LINE = /^Expected:/
 const FIELD_LINE = /^[A-Z][A-Za-z ]*:/
 // A --- rule or any heading ends Expected, so Not covered and Cleanup bullets never read as role lines.
 const SECTION_END = /^(---\s*$|#)/
+// A code block (a Request or a response body) holds text that is never a field or a role line.
+const FENCE = /^\s*```/
 const ROLE_OUTCOME_LINE = /^\s*-\s+([a-z0-9][a-z0-9-]*)(?:\s+in\s+([a-z0-9][a-z0-9-]*(?:\s*,\s*[a-z0-9][a-z0-9-]*)*))?:\s+([a-z-]+)\b/
 const PRECONDITIONS_HEADING = /^##\s+Preconditions\s*$/
 const CASES_BULLET = /^-\s+Cases:\s*$/
@@ -44,8 +46,11 @@ const addOnce = (list, item) => {
 export function parseSteps(body) {
   const steps = []
   let inExpected = false
+  let inFence = false
   let seen = new Set()
   for (const line of body.split(/\r?\n/)) {
+    if (FENCE.test(line)) inFence = !inFence
+    if (inFence || FENCE.test(line)) continue
     const heading = line.match(STEP_HEADING)
     if (heading) {
       steps.push({ step: heading[1], title: heading[2].trim(), parents: [], viewports: [], roles: [], cases: [], outcomes: {}, caseOutcomes: {}, duplicates: [], as: null })

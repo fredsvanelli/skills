@@ -149,3 +149,14 @@ test('escapes HTML in step text', () => {
   const { steps } = parseBody('## Steps\n\n### S01. t\n\nExpected: <img src=x onerror=y>\n')
   assert.ok(!steps[0].expected.includes('<img'))
 })
+
+test('keeps a code block whole inside Request and Expected', () => {
+  const body = [
+    '## Steps', '', '### S01. Lists airports', '', 'Endpoint: `GET /quotes/airports`', 'Request:', '', '```http',
+    'GET /quotes/airports?page=1', 'Authorization: Bearer <token>', '```', '', 'Expected: 200.', '', '```json', '{', '  "total": 3', '}', '---', '```',
+  ].join('\n')
+  const [step] = parseBody(body).steps
+  assert.deepEqual(step.fields, [{ name: 'Endpoint', value: 'GET /quotes/airports' }])
+  assert.match(step.request, /<pre><code>GET \/quotes\/airports\?page=1\nAuthorization: Bearer &lt;token&gt;<\/code><\/pre>/)
+  assert.match(step.expected, /<p>200\.<\/p><pre><code>\{\n {2}&quot;total&quot;: 3\n\}\n---<\/code><\/pre>/)
+})

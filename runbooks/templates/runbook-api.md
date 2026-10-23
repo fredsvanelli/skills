@@ -47,9 +47,22 @@ Requirement: <requirement id or none>
 Endpoint: `<METHOD /path>`
 As: <role or anonymous. Only with role tracking off: with role tracking (roles.enabled), leave the line out, because the role lines below replace it>
 Cases: <only with cases, when the step runs in fewer cases than the runbook; else leave the line out>
-Request: <body, query and headers that matter>
+Request:
 
-Expected: <status; body fields; effects through a read-back call or the framework's fakes>
+```http
+<METHOD /path?query>
+<Header: value, only the headers that matter>
+
+<JSON body, when the endpoint takes one>
+```
+
+Expected: <status>.
+
+```json
+<the body fields this step checks: a key left out is not checked, an array lists its items in order, a value known only at run time is a string in angle brackets ("<uuid>", "<ISO 8601>")>
+```
+
+<effects through a read-back call or the framework's fakes; a sentence when only some items matter or the order does not>
 <Only with role tracking (roles.enabled): one line per role whose behavior differs, starting with allowed, denied or partial. denied states the status and the body: 403 for a signed-in role, 401 for anonymous. Leave them out when tracking is off.>
 - <role>: denied. 403 with <body>.
 - anonymous: denied. 401 with <body>.
