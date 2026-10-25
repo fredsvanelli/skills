@@ -707,3 +707,199 @@ test('record saves under the selected role and case', async (t) => {
   await fetch(`${s.base}/invoices`)
   assert.deepEqual(readJson(s.fixturesRoot, '+regular/get--invoices.json').response.body, { items: [1] })
 })
+
+test('matchFixture prefers a fixture naming the operation in its folder, and a request without one skips such fixtures', () => {
+  const f = (file, step, operationName, query) =>
+    ({ file, step, request: { method: 'POST', path: '/graphql', ...(operationName ? { operationName } : {}), ...(query ? { query } : {}) }, response: { status: 200 } })
+  const any = f('any.json', null)
+  const groups = f('groups.json', null, 'GroupsByPartyId')
+  const client = f('client.json', null, 'Client')
+  const req = { method: 'POST', path: '/graphql', query: { v: '1' } }
+  assert.equal(matchFixture([any, groups, client], { ...req, operationName: 'GroupsByPartyId' }, null), groups)
+  assert.equal(matchFixture([any, groups, client], { ...req, operationName: 'Client' }, null), client)
+  assert.equal(matchFixture([any, groups, client], { ...req, operationName: 'Other' }, null), any)
+  assert.equal(matchFixture([groups, client], { ...req, operationName: 'Other' }, null), null)
+  assert.equal(matchFixture([groups, client], req, null), null)
+  assert.equal(matchFixture([f('keyed.json', null, null, { v: '1' }), groups], { ...req, operationName: 'GroupsByPartyId' }, null), groups)
+  assert.equal(matchFixture([groups, f('S02/any.json', 'S02')], { ...req, operationName: 'GroupsByPartyId' }, 'S02').file, 'S02/any.json')
+})
+
+const gqlFixture = (operationName, response) =>
+  JSON.stringify({ request: { method: 'POST', path: '/graphql', operationName }, response, source: 'hand-written: test' })
+
+const GQL_FILES = {
+  'clients/edit/groups.json': gqlFixture('GroupsByPartyId', { status: 200, headers: { 'x-shared': 'groups' }, body: { data: { groupsByPartyId: [] } } }),
+  'clients/edit/client.json': gqlFixture('Client', { status: 200, headers: { 'X-Shared': 'client', 'x-from': 'client' }, body: { data: { client: { id: 1 } } } }),
+  'clients/edit/S02/client.json': gqlFixture('Client', { status: 500, headers: { 'content-type': 'text/plain' }, body: 'boom' }),
+  'clients/edit/S03/client.json': gqlFixture('Client', { status: 200, body: 'not json' }),
+}
+
+const gql = (base, body) => fetch(`${base}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+
+test('a fixture with operationName answers only that operation and the 501 names an unknown one', async (t) => {
+  const s = await start(t, GQL_FILES)
+  await s.select({ runbook: 'clients.edit' })
+  const groups = await gql(s.base, { operationName: 'GroupsByPartyId', query: 'query GroupsByPartyId { x }' })
+  assert.equal(groups.status, 200)
+  assert.deepEqual(await groups.json(), { data: { groupsByPartyId: [] } })
+  assert.deepEqual(await (await gql(s.base, { operationName: 'Client' })).json(), { data: { client: { id: 1 } } })
+  const other = await gql(s.base, { operationName: 'Other' })
+  assert.equal(other.status, 501)
+  assert.deepEqual(await other.json(), { error: 'no fixture', method: 'POST', path: '/graphql', operationName: 'Other', runbook: 'clients.edit', step: null })
+  const none = await fetch(`${s.base}/graphql`, { method: 'POST', body: '{"operationName":"Client"}' })
+  assert.equal(none.status, 501)
+  assert.deepEqual(await none.json(), { error: 'no fixture', method: 'POST', path: '/graphql', runbook: 'clients.edit', step: null })
+  const state = await s.state()
+  assert.deepEqual(state.unmatched, [{ method: 'POST', path: '/graphql', operationName: 'Other', step: null }, { method: 'POST', path: '/graphql', step: null }])
+  assert.deepEqual(state.requests[0].body, { operationName: 'GroupsByPartyId', query: 'query GroupsByPartyId { x }' })
+})
+
+test('a fixture without operationName answers any body and loses to one naming the operation', async (t) => {
+  const s = await start(t, {
+    ...GQL_FILES,
+    'clients/edit/any.json': fixture('POST', '/graphql', { status: 200, body: { any: true } }),
+    'clients/edit/blank.json': JSON.stringify({ request: { method: 'POST', path: '/graphql', operationName: '' }, response: { status: 200, body: { blank: true } } }),
+  })
+  await s.select({ runbook: 'clients.edit' })
+  assert.deepEqual(await (await gql(s.base, { operationName: 'Other' })).json(), { any: true })
+  assert.deepEqual(await (await gql(s.base, { query: '{ x }' })).json(), { any: true })
+  assert.deepEqual(await (await fetch(`${s.base}/graphql`, { method: 'POST' })).json(), { any: true })
+  assert.deepEqual(await (await gql(s.base, { operationName: 'GroupsByPartyId' })).json(), { data: { groupsByPartyId: [] } })
+})
+
+test('a batch is answered item by item with merged headers', async (t) => {
+  const s = await start(t, GQL_FILES)
+  await s.select({ runbook: 'clients.edit' })
+  const r = await gql(s.base, [{ operationName: 'GroupsByPartyId' }, { operationName: 'Client' }])
+  assert.equal(r.status, 200)
+  assert.equal(r.headers.get('content-type'), 'application/json')
+  assert.equal(r.headers.get('x-shared'), 'groups')
+  assert.equal(r.headers.get('x-from'), 'client')
+  assert.deepEqual(await r.json(), [{ data: { groupsByPartyId: [] } }, { data: { client: { id: 1 } } }])
+  assert.equal((await s.state()).requests[0].status, 200)
+})
+
+test('a batch item without a fixture makes the whole batch a 501 that lists the missing operations', async (t) => {
+  const s = await start(t, GQL_FILES)
+  await s.select({ runbook: 'clients.edit', step: 'S01' })
+  const r = await gql(s.base, [{ operationName: 'GroupsByPartyId' }, { operationName: 'Other' }, { query: '{ x }' }])
+  assert.equal(r.status, 501)
+  assert.deepEqual(await r.json(), { error: 'no fixture', method: 'POST', path: '/graphql', operationNames: ['Other', null], runbook: 'clients.edit', step: 'S01' })
+  assert.deepEqual((await s.state()).unmatched, [
+    { method: 'POST', path: '/graphql', operationName: 'Other', step: 'S01' },
+    { method: 'POST', path: '/graphql', operationName: null, step: 'S01' },
+  ])
+})
+
+test('a batch item whose fixture fails answers the whole batch, unless another item has no fixture', async (t) => {
+  const s = await start(t, GQL_FILES)
+  await s.select({ runbook: 'clients.edit', step: 'S02' })
+  const r = await gql(s.base, [{ operationName: 'GroupsByPartyId' }, { operationName: 'Client' }])
+  assert.equal(r.status, 500)
+  assert.equal(r.headers.get('content-type'), 'text/plain')
+  assert.equal(await r.text(), 'boom')
+  assert.equal((await gql(s.base, [{ operationName: 'Client' }, { operationName: 'Other' }])).status, 501)
+})
+
+test('a batch item whose 2xx fixture has no JSON body gets a 500 naming the file', async (t) => {
+  const s = await start(t, GQL_FILES)
+  await s.select({ runbook: 'clients.edit', step: 'S03' })
+  const r = await gql(s.base, [{ operationName: 'Client' }])
+  assert.equal(r.status, 500)
+  assert.deepEqual(await r.json(), { error: 'S03/client.json answers an item of a batch, so its response needs a JSON body' })
+  const single = await gql(s.base, { operationName: 'Client' })
+  assert.equal(single.status, 200)
+  assert.equal(await single.text(), 'not json')
+})
+
+test('an array body with no operation fixture matches as a whole, as before', async (t) => {
+  const s = await start(t, { ...GQL_FILES, 'clients/edit/bulk.json': fixture('POST', '/graphql', { status: 200, body: [{ whole: true }] }) })
+  await s.select({ runbook: 'clients.edit' })
+  assert.deepEqual(await (await gql(s.base, [{ operationName: 'Other' }])).json(), [{ whole: true }])
+  assert.deepEqual(await (await gql(s.base, [])).json(), [{ whole: true }])
+  assert.deepEqual(await (await gql(s.base, [{ a: 1 }])).json(), [{ whole: true }])
+})
+
+// A fake GraphQL API: answer(sent) gives [status, body] for the parsed request body.
+async function graphqlApi(t, answer) {
+  let api = null
+  api = await fakeApi(t, (req, res) => {
+    const [status, body] = answer(JSON.parse(api.seen.at(-1).body))
+    res.writeHead(status, { 'content-type': 'application/json', 'set-cookie': 'sid=1', 'x-keep': 'yes' })
+    res.end(JSON.stringify(body))
+  })
+  return api
+}
+
+const RESULTS = { GroupsByPartyId: { data: { groupsByPartyId: [] } }, Client: { data: { client: { id: 1 } } } }
+const result = (item) => RESULTS[item.operationName] ?? { data: null }
+const listed = (root) => fs.readdirSync(path.join(root, 'billing/list'), { recursive: true }).filter((name) => name.endsWith('.json')).sort()
+
+test('record names each operation in its file and request, and a second recording writes nothing', async (t) => {
+  const fake = await graphqlApi(t, (sent) => [200, Array.isArray(sent) ? sent.map(result) : result(sent)])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  for (let pass = 0; pass < 2; pass++) {
+    await gql(s.base, { operationName: 'GroupsByPartyId' })
+    await gql(s.base, { operationName: 'Client' })
+  }
+  assert.deepEqual(listed(s.fixturesRoot), ['post--graphql-Client.json', 'post--graphql-GroupsByPartyId.json'])
+  const saved = readJson(s.fixturesRoot, 'post--graphql-GroupsByPartyId.json')
+  assert.deepEqual(saved.request, { method: 'POST', path: '/graphql', operationName: 'GroupsByPartyId' })
+  assert.deepEqual(saved.response.body, RESULTS.GroupsByPartyId)
+  await s.select({ step: 'S02' })
+  await gql(s.base, [{ operationName: 'GroupsByPartyId' }, { operationName: 'Client' }])
+  assert.deepEqual(listed(s.fixturesRoot), ['post--graphql-Client.json', 'post--graphql-GroupsByPartyId.json'])
+  assert.ok(!s.logs.some((line) => line.startsWith('overwrote')))
+})
+
+test('record saves a batch item by item with the batch headers', async (t) => {
+  const fake = await graphqlApi(t, (sent) => [200, sent.map(result)])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  const r = await gql(s.base, [{ operationName: 'GroupsByPartyId' }, { operationName: 'Client' }, { query: '{ x }' }])
+  assert.deepEqual(await r.json(), [RESULTS.GroupsByPartyId, RESULTS.Client, { data: null }])
+  assert.deepEqual(listed(s.fixturesRoot), ['post--graphql-Client.json', 'post--graphql-GroupsByPartyId.json'])
+  const client = readJson(s.fixturesRoot, 'post--graphql-Client.json')
+  assert.deepEqual(client.request, { method: 'POST', path: '/graphql', operationName: 'Client' })
+  assert.deepEqual(client.response.body, RESULTS.Client)
+  assert.deepEqual(Object.keys(client.response.headers).sort(), ['content-type', 'date', 'x-keep'])
+  assert.ok(s.logs.includes('not recording item 3 of POST /graphql (GroupsByPartyId, Client, unnamed): it has no operationName'))
+})
+
+test('record writes nothing for a failed batch or a response that is not one result per item', async (t) => {
+  let reply = [500, { errors: [{ message: 'down' }] }]
+  const fake = await graphqlApi(t, () => reply)
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  const batch = [{ operationName: 'GroupsByPartyId' }, { operationName: 'Client' }]
+  assert.equal((await gql(s.base, batch)).status, 500)
+  reply = [200, [RESULTS.Client]]
+  await gql(s.base, batch)
+  reply = [200, { data: {} }]
+  await gql(s.base, batch)
+  assert.deepEqual(listed(s.fixturesRoot), [])
+  assert.ok(s.logs.includes("not recording POST /graphql (GroupsByPartyId, Client): the batch answered 500; write the failing operation's fixture by hand"))
+  assert.equal(s.logs.filter((line) => line === 'not recording POST /graphql (GroupsByPartyId, Client): the response is not an array of 2 results').length, 2)
+})
+
+test('record puts an operation in the runbook folder when only a fixture without operationName answers it', async (t) => {
+  const fake = await graphqlApi(t, (sent) => [200, result(sent)])
+  const s = await start(t, { ...RECORD_FILES, 'billing/list/any.json': fixture('POST', '/graphql', { status: 200, body: { any: true } }) },
+    { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', step: 'S02' })
+  await gql(s.base, { operationName: 'Client' })
+  assert.deepEqual(listed(s.fixturesRoot), ['any.json', 'post--graphql-Client.json'])
+})
+
+test('record keeps an array body without operations as one request, and logs an overwritten operation', async (t) => {
+  let n = 0
+  const fake = await graphqlApi(t, (sent) => [200, Array.isArray(sent) && sent[0]?.operationName ? sent.map(() => ({ n: ++n })) : { bulk: true }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await fetch(`${s.base}/bulk`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '[{"a":1}]' })
+  assert.deepEqual(readJson(s.fixturesRoot, 'post--bulk.json').request, { method: 'POST', path: '/bulk' })
+  await gql(s.base, [{ operationName: 'Client' }, { operationName: 'Client' }])
+  assert.deepEqual(readJson(s.fixturesRoot, 'post--graphql-Client.json').response.body, { n: 2 })
+  assert.ok(s.logs.includes('overwrote post--graphql-Client.json with a different response'))
+})

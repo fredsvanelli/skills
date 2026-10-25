@@ -167,3 +167,35 @@ test('loadFixtures reports unknown cases, case folders without a context and bad
   assert.deepEqual(loadFixtures(root, 'f').problems,
     ['f/+gold: case folders need a context', 'f/+vip-team: case folders need a context', 'f/S01/+Bad: not a case folder'])
 })
+
+test('loadFixtures reports a request.operationName that is not a non-empty string', () => {
+  const op = (operationName) => JSON.stringify({ request: { method: 'POST', path: '/graphql', operationName }, response: { status: 200, body: {} } })
+  const root = tmp({ 'f/good.json': op('Client'), 'f/empty.json': op(''), 'f/number.json': op(5), 'f/null.json': op(null) })
+  const { fixtures, problems } = loadFixtures(root, 'f')
+  assert.deepEqual(fixtures.map((x) => [x.file, x.request.operationName]), [['f/good.json', 'Client']])
+  assert.deepEqual(problems, ['empty', 'null', 'number'].map((name) => `f/${name}.json: request.operationName must be a non-empty string`))
+})
+
+test('checkFixtures skips a fixture that names a GraphQL operation', () => {
+  const fx = { file: 'g', request: { method: 'POST', path: '/graphql', operationName: 'Client' }, response: { status: 200, body: {} } }
+  assert.deepEqual(checkFixtures([fx], DOC), [])
+  assert.deepEqual(checkFixtures([{ ...fx, request: { method: 'POST', path: '/graphql' } }], DOC), ['g: no operation for POST /graphql in the schema'])
+})
+
+test('runbooks.mjs fixtures accepts a good operationName and reports a bad one', () => {
+  const dir = 'docs/runbooks/_fixtures/clients/edit'
+  const op = (operationName) => JSON.stringify({ request: { method: 'POST', path: '/graphql', operationName }, response: { status: 200, body: {} }, source: 'hand-written: test' })
+  const root = tmp({
+    'docs/runbooks/runbooks.config.json': JSON.stringify({ version: 1, stack: 'frontend', upstream: { mode: 'mocked', urlEnv: 'API_URL', schema: 'openapi.json' } }),
+    'docs/runbooks/clients/edit.md': '---\nid: clients.edit\ncapability: clients\nstatus: active\n---\n',
+    'openapi.json': JSON.stringify(DOC),
+    [`${dir}/client.json`]: op('Client'),
+    [`${dir}/bad.json`]: op(''),
+  })
+  const result = run(['fixtures', 'clients.edit', '--root', root, '--json'])
+  assert.equal(result.code, 0, result.stderr)
+  const data = JSON.parse(result.stdout)
+  assert.deepEqual(data.fixtures.map((f) => f.file), [`${dir}/client.json`])
+  assert.deepEqual(data.problems, [`${dir}/bad.json: request.operationName must be a non-empty string`])
+  assert.match(run(['fixtures', 'clients.edit', '--root', root]).stdout, /POST \/graphql Client/)
+})

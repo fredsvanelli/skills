@@ -67,6 +67,7 @@ One fixture is one `.json` file:
 |---|---|
 | `request.method`, `request.path` | required. The path is the full path the app sends, including any prefix such as `/v1` |
 | `request.query` | optional. A request matches when it carries every key named here with an equal value. Extra keys in the request (`_t=123`) and a different key order do not matter |
+| `request.operationName` | optional, a non-empty string. The GraphQL operation the fixture answers ("GraphQL operations" below). A fixture without it answers any body |
 | `response.status` | required |
 | `response.headers` | optional |
 | `response.body` | optional. An object or array is sent as JSON. A string is sent as is, with `text/plain` unless `content-type` says otherwise. A `204`, or a missing body, sends no body |
@@ -80,6 +81,28 @@ Which command touches fixtures:
 - `to-test` only reads them.
 - `run <id> --record` records them from one live execution of the flow (see "Recording").
 - When the live API does not answer, fixtures come from `upstream.schema`, else they are written by hand.
+
+### GraphQL operations
+
+A GraphQL app sends every operation as `POST /graphql`, so method and path cannot tell `Client` from `GroupsByPartyId`. A fixture names the operation it answers in `request.operationName`, and a runbook holds one fixture per operation the page sends. Why the match stays on the request plus this one name: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0008-graphql-fixtures-match-on-the-operation-name.md`.
+
+```json
+{
+  "request": { "method": "POST", "path": "/graphql", "operationName": "GroupsByPartyId" },
+  "response": { "status": 200, "headers": { "content-type": "application/json" }, "body": { "data": { "groupsByPartyId": [] } } },
+  "source": "hand-written: client with no groups"
+}
+```
+
+The server reads `operationName` from a JSON request body, one whose `content-type` contains `json`. A fixture with `operationName` answers only a request whose body names that operation. A request with no JSON body, or with a body that names no operation, gets only fixtures without `operationName`. A GraphQL query sent with `GET` carries `operationName` in its query string, so its fixture uses `request.query` instead.
+
+A body that is a JSON array is a batch. It is answered item by item when at least one item has a fixture with `operationName`, and only those fixtures answer items:
+
+- An item without a fixture makes the whole batch a 501. Its body lists the missing operations in `operationNames`, in batch order, with `null` for an item that names none, and each one goes in `unmatched`.
+- Otherwise, the first item whose fixture has a status of 300 or more answers the whole batch with that fixture as is. A GraphQL server fails a whole HTTP request or none of it, and Apollo's `BatchHttpLink` rejects every operation of the batch on such a status. A mocked runbook simulates one failing operation with one fixture, `status: 500` and that `operationName`.
+- Otherwise, the batch gets a 200 with the items' bodies in batch order. Its headers merge the items' fixture headers, the first item winning a name both set, and `content-type` is `application/json`. A fixture whose body is a string, or that has no body, cannot be an item of an array, so the batch gets a 500 that names its file.
+
+A batch with no item that has such a fixture matches as one request, by method, path and query, as before. So does an empty array and an array of objects that name no operation, such as the body of a REST bulk endpoint.
 
 ### Role layer
 
@@ -137,7 +160,7 @@ Lookup goes from the most specific folder to the least: step, role and case; ste
 node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" fixtures <id> [--json]
 ```
 
-The command loads the fixtures of a `ui` runbook, counts them by `source`, and lists problems: a file that is not valid JSON, a missing `request.method`, `request.path` or `response.status`, and a folder that is not a step folder. With `upstream.schema` set, it also checks each JSON response body against the operation in the OpenAPI 3 JSON file. A fixture with no matching operation or status is a problem too. Problems are findings, so the command exits 0 with them. It exits 2 only when the id or the config is unusable (an unknown id, a runbook that is not `ui`, a missing schema file).
+The command loads the fixtures of a `ui` runbook, counts them by `source`, and lists problems: a file that is not valid JSON, a missing `request.method`, `request.path` or `response.status`, a `request.operationName` that is not a non-empty string, and a folder that is not a step folder. With `upstream.schema` set, it also checks each JSON response body against the operation in the OpenAPI 3 JSON file. A fixture with no matching operation or status is a problem too. A fixture with `request.operationName` answers a GraphQL operation, which an OpenAPI document does not describe, so it skips this check. Problems are findings, so the command exits 0 with them. It exits 2 only when the id or the config is unusable (an unknown id, a runbook that is not `ui`, a missing schema file).
 
 When `upstream.schema` is set, `run` runs this check before the first step. A runbook with a problem is `blocked`, not `failed`, and `run` offers `/runbooks:to-test <id>` or `/runbooks:update <id>` to re-record. The loader also warns, without invalidating the runbook, when a mocked runbook has no script or no fixtures.
 
@@ -155,7 +178,7 @@ The server answers in one of three modes, which a select call changes without a 
 
 | Mode | Behavior |
 |---|---|
-| `mocked` | Serves the selected runbook's fixtures. A request that matches none gets a 501 that names the method, path, runbook and step. The server logs it in `unmatched`. The step that needed it becomes `blocked`, and `run` offers `/runbooks:update <id>` to record it. It answers CORS preflights, and its own `access-control-allow-origin` (the request's origin, else `*`) and `access-control-allow-credentials` replace the same headers in a fixture |
+| `mocked` | Serves the selected runbook's fixtures. A request that matches none gets a 501 that names the method, path, runbook and step, and the GraphQL operation when the body names one. The server logs it in `unmatched`. The step that needed it becomes `blocked`, and `run` offers `/runbooks:update <id>` to record it. It answers CORS preflights, and its own `access-control-allow-origin` (the request's origin, else `*`) and `access-control-allow-credentials` replace the same headers in a fixture |
 | `live` | Proxies every request to `upstream.baseUrl`, SSE as a stream and WebSocket through Node's `upgrade` event. The target's path prefix is not added: the app sends it already |
 | `record` | Proxies like `live` and saves each response as a fixture (see "Recording") |
 
@@ -165,7 +188,8 @@ Matching in `mocked` mode:
 
 1. The method and the path (without query) must be equal.
 2. Every query key the fixture names must be equal in the request.
-3. Among the candidates, a fixture in the current step's folder wins over one in the runbook folder (with role and case folders, the order of "Case layer"), then the fixture naming more query keys, then the lower file name.
+3. A fixture with `request.operationName` must name the operation of the request body ("GraphQL operations").
+4. Among the candidates, a fixture in the current step's folder wins over one in the runbook folder (with role and case folders, the order of "Case layer"), then the fixture naming the operation, then the fixture naming more query keys, then the lower file name. So a fixture without `operationName` in `S02/` still wins over one with it in the runbook folder while `S02` is current.
 
 ### The copy in the project
 
@@ -199,7 +223,7 @@ Three rules keep web pages away from these routes:
 
 An invalid body, or a `runbook`, `role`, `case` or `step` that is not a valid name, gets a 400 and changes nothing. Any other control route gets a 404.
 
-`requests` lists every request the app made since the last select, in all three modes, as `{ method, path, query, body, step, status }`. An agent checks the request a mocked screen sent by reading it there. `unmatched` lists the mocked requests that had no fixture, as `{ method, path, step }`.
+`requests` lists every request the app made since the last select, in all three modes, as `{ method, path, query, body, step, status }`. An agent checks the request a mocked screen sent by reading it there. `unmatched` lists the mocked requests that had no fixture, as `{ method, path, step }`, with `operationName` when the body names a GraphQL operation. A batch adds one entry per item without a fixture, and `operationName` is `null` for an item that names none. A step that checks a GraphQL request finds it in `requests` by the `operationName` in its `body`, or in an item of the `body` of a batch.
 
 The agent selects the runbook, the role, the case and the step before each step, and scripts do it in `beforeEach`. The scripts get `RUNBOOKS_UPSTREAM_URL`, the server origin, to make these calls.
 
@@ -211,6 +235,9 @@ Rules for what is saved:
 
 - With a role selected, the file goes in that role's folder (`@<role>/`) inside the folder it would use otherwise, the runbook's or the current step's. Without a role, it goes in the runbook's or the step's folder. With a case selected, it goes in the case's folder (`+<case>/`) inside that one, so `@viewer/+vip-team/` with both. A run records each role's pass, and each case's pass, under its own folder.
 - Each file is named from the method, the path and a hash of the query, and holds `request`, `response` and `source` (`recorded <date> from <upstream.baseUrl origin>`).
+- When the request body names a GraphQL operation, `request.operationName` holds it and the file name carries it, as `post--graphql-GroupsByPartyId.json`, so two operations never share a file. Only a fixture naming the same operation counts as the one the server would serve, so an operation with none goes in the runbook's folder even while a step is current.
+- A batch that answers below 300 with an array of one result per item is saved item by item: each item that names an operation gets its own fixture with its result and the batch's headers. An item that names none is logged and not saved. A batch that answers 300 or more, or with anything but such an array, is logged and nothing of it is saved, because the server cannot tell which operation failed. Write that fixture by hand. An array body that names no operation is saved as one request, as before.
+- When the same operation comes twice with different results and no step is current, the second result overwrites the first, and the server logs `overwrote <file> with a different response`. Telling them apart needs a match on GraphQL variables, which fixtures do not have.
 - `set-cookie`, `authorization`, `cookie` and every header in `upstream.redactHeaders` are dropped, whatever the case. Transport headers (`content-length`, `content-encoding`, `transfer-encoding`, `connection`, `keep-alive`) are dropped too, and so are `vary` and every `access-control-*` header, because the server sends its own CORS headers in `mocked` mode.
 - When a fixture the server would serve for the selected role and case is equal to the response, the server writes nothing. That fixture can be in any folder of the lookup order. The server saves a response that differs in the current step's folder.
 - A `text/event-stream` response streams to the app and is not recorded.
@@ -260,9 +287,9 @@ The command checks every `ui` runbook that reaches the upstream API: the ones wi
 |---|---|
 | `call` | a call matches no operation of `upstream.schema`. Parameter names do not matter (`{id}` matches `{quoteId}`), and the server path of the document's first `servers` entry may lead the call (`/v1/quotes`) |
 | `fixture` | a fixture of a mocked runbook requests what none of its `calls`, and none of its `covers.entries`, names. A monorepo keeps its own endpoints in `covers.entries` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`) |
-| `fixture` | a fixture the schema rejects, as `fixtures <id>` reports it (`Fixtures`, "Checking fixtures"), or a fixture file that does not load |
+| `fixture` | a fixture the schema rejects, as `fixtures <id>` reports it (`Fixtures`, "Checking fixtures"), or a fixture file that does not load. A fixture with `request.operationName` is not checked against the schema |
 
-Without `upstream.schema`, only the fixtures are checked against the calls, and the report says so. Findings exit 0; with `--strict` they exit 1, so a CI job can fail on them. The command exits 2 when the config has no `upstream` block or the schema file is missing or not JSON.
+Without `upstream.schema`, only the fixtures are checked against the calls, and the report says so. A mocked runbook over a GraphQL API lists `POST /graphql` in `calls`. When `upstream.schema` is an OpenAPI file without that path, the call is a `call` finding. Findings exit 0; with `--strict` they exit 1, so a CI job can fail on them. The command exits 2 when the config has no `upstream` block or the schema file is missing or not JSON.
 
 `list --affected` reads the same file. When `upstream.schema` is among the changed files, it compares the version at the merge base with the working tree, operation by operation, with `$ref`s resolved and the path item's parameters merged in. Prose (`description`, `summary`, `title`, examples, tags) and `x-` keys change nothing. A runbook whose `calls` name an operation that was added, changed or removed is affected, with the reason `upstream schema: <METHOD /path> changed` (or `added`, `removed`). A schema that did not exist at the base gives no reason, because there is nothing to compare.
 

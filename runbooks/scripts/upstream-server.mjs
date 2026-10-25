@@ -1,4 +1,4 @@
-// runbooks upstream server, runbooks 1.10.0. Copied by /runbooks:setup; do not edit.
+// runbooks upstream server, runbooks 1.11.0. Copied by /runbooks:setup; do not edit.
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
@@ -9,7 +9,7 @@ import crypto from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
-export const VERSION = '1.10.0'
+export const VERSION = '1.11.0'
 
 const MODES = ['mocked', 'live', 'record']
 const STEP_DIR = /^S\d+$/
@@ -21,9 +21,20 @@ const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '[::1]']
 // Headers starting with access-control- are never recorded either: the server answers CORS itself.
 const NEVER_RECORDED = ['set-cookie', 'authorization', 'cookie', 'content-length', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'vary']
 
+const validOperation = (name) => typeof name === 'string' && name !== ''
+
+// The GraphQL operation a request body names: a JSON object with a non-empty string operationName. Else null.
+function operationOf(body) {
+  return body !== null && typeof body === 'object' && !Array.isArray(body) && validOperation(body.operationName) ? body.operationName : null
+}
+
+// A GraphQL batch is a JSON array body with at least one named operation. Any other array, such as the body of
+// a REST bulk endpoint, is recorded as one request.
+const isBatch = (body) => Array.isArray(body) && body.some((item) => operationOf(item) !== null)
+
 // Reads the .json files of a runbook folder (step null) and of its S<nn> subfolders, those of the @<role>
 // folders at both levels (role set), and those of the +<case> folders inside each of them (case set).
-// Invalid files are skipped.
+// Invalid files are skipped, a request.operationName that is not a non-empty string included.
 function readFixtures(dir) {
   const fixtures = []
   const readDir = (folder, step, role = null, kase = null) => {
@@ -38,6 +49,7 @@ function readFixtures(dir) {
       try {
         const data = JSON.parse(fs.readFileSync(path.join(dir, folder, name), 'utf8'))
         if (!data?.request?.method || !data?.request?.path || data?.response?.status === undefined) continue
+        if ('operationName' in data.request && !validOperation(data.request.operationName)) continue
         fixtures.push({ file: folder ? `${folder}/${name}` : name, step, role, case: kase, request: data.request, response: data.response })
       } catch {
         continue
@@ -99,11 +111,12 @@ function queryOf(fixture) {
   return query
 }
 
-// A candidate needs the same method and path and every query key it names equal in the request.
+// A candidate needs the same method and path and every query key it names equal in the request. A fixture
+// with an operationName is a candidate only for a request with that operationName; one without answers any body.
 // A fixture with a role is a candidate only for that role, and one with a case only for that case. The score is
 // step * 4 + role * 2 + case, so the order is step, role and case; step and role; step and case; step; role
-// and case; role; case; runbook level. Then more query keys, then the file name.
-export function matchFixture(fixtures, { method, path: requestPath, query = {} }, step, role = null, kase = null) {
+// and case; role; case; runbook level. Then a fixture naming the operation, then more query keys, then the file name.
+export function matchFixture(fixtures, { method, path: requestPath, query = {}, operationName = null }, step, role = null, kase = null) {
   const candidates = []
   for (const fixture of fixtures) {
     if (String(fixture.request.method).toUpperCase() !== String(method).toUpperCase()) continue
@@ -111,13 +124,16 @@ export function matchFixture(fixtures, { method, path: requestPath, query = {} }
     if (fixture.step !== null && fixture.step !== step) continue
     if (fixture.role != null && fixture.role !== role) continue
     if (fixture.case != null && fixture.case !== kase) continue
+    const operation = fixture.request.operationName !== undefined
+    if (operation && fixture.request.operationName !== operationName) continue
     const named = queryOf(fixture)
     if (!Object.entries(named).every(([key, value]) => query[key] === value)) continue
-    candidates.push({ fixture, keys: Object.keys(named).length })
+    candidates.push({ fixture, operation, keys: Object.keys(named).length })
   }
   const score = ({ step: s, role: r, case: c }) => (s !== null) * 4 + (r != null) * 2 + (c != null)
   candidates.sort((a, b) =>
     score(b.fixture) - score(a.fixture) ||
+    b.operation - a.operation ||
     b.keys - a.keys ||
     (a.fixture.file < b.fixture.file ? -1 : a.fixture.file > b.fixture.file ? 1 : 0))
   return candidates[0]?.fixture ?? null
@@ -248,19 +264,62 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     return path.join(fixturesRoot, text.slice(0, dot), text.slice(dot + 1))
   }
 
-  function mocked(req, res, request) {
+  function mocked(req, res, request, sent) {
     if (!state.runbook) return { status: 501, send: () => sendJson(req, res, 501, { error: 'no runbook selected' }) }
     const dir = fixtureDir()
-    const fixture = dir ? matchFixture(readFixtures(dir), request, state.step, state.role, state.case) : null
+    const fixtures = dir ? readFixtures(dir) : []
+    const answer = Array.isArray(sent) ? batch(req, res, request, sent, fixtures) : null
+    if (answer) return answer
+    const operationName = operationOf(sent)
+    const fixture = matchFixture(fixtures, { ...request, operationName }, state.step, state.role, state.case)
     if (!fixture) {
-      unmatched.push({ method: request.method, path: request.path, step: state.step })
+      const operation = operationName === null ? {} : { operationName }
+      unmatched.push({ method: request.method, path: request.path, ...operation, step: state.step })
       return {
         status: 501,
-        send: () => sendJson(req, res, 501, { error: 'no fixture', method: request.method, path: request.path, runbook: state.runbook, step: state.step }),
+        send: () => sendJson(req, res, 501, { error: 'no fixture', method: request.method, path: request.path, ...operation, runbook: state.runbook, step: state.step }),
       }
     }
     const { status, headers = {}, body } = fixture.response
     return { status, send: () => sendFixture(req, res, status, headers, body) }
+  }
+
+  // Answers a GraphQL batch item by item from the fixtures that name an operation. Returns null when no item has
+  // such a fixture, so the request matches as a whole like any other. An item without a fixture makes the batch a
+  // 501. Else the first item whose fixture has a status of 300 or more answers the batch as is, and otherwise the
+  // batch gets a 200 with the items' bodies in order and their headers merged, the first item winning.
+  function batch(req, res, request, sent, fixtures) {
+    const named = fixtures.filter((fixture) => fixture.request.operationName !== undefined)
+    const names = sent.map(operationOf)
+    const found = names.map((operationName) =>
+      operationName === null ? null : matchFixture(named, { ...request, operationName }, state.step, state.role, state.case))
+    if (!found.some(Boolean)) return null
+    const missing = names.filter((_, i) => !found[i])
+    if (missing.length > 0) {
+      for (const operationName of missing) unmatched.push({ method: request.method, path: request.path, operationName, step: state.step })
+      return {
+        status: 501,
+        send: () => sendJson(req, res, 501, { error: 'no fixture', method: request.method, path: request.path, operationNames: missing, runbook: state.runbook, step: state.step }),
+      }
+    }
+    const failed = found.find((fixture) => fixture.response.status >= 300)
+    if (failed) {
+      const { status, headers = {}, body } = failed.response
+      return { status, send: () => sendFixture(req, res, status, headers, body) }
+    }
+    const textual = found.find(({ response }) => response.body === undefined || response.body === null || typeof response.body === 'string')
+    if (textual) {
+      return { status: 500, send: () => sendJson(req, res, 500, { error: `${textual.file} answers an item of a batch, so its response needs a JSON body` }) }
+    }
+    const headers = {}
+    for (const fixture of found) {
+      for (const [name, value] of Object.entries(fixture.response.headers ?? {})) {
+        const key = name.toLowerCase()
+        if (key !== 'content-type' && !(key in headers)) headers[key] = value
+      }
+    }
+    headers['content-type'] = 'application/json'
+    return { status: 200, send: () => sendFixture(req, res, 200, headers, found.map((fixture) => fixture.response.body)) }
   }
 
   function sendFixture(req, res, status, headers, body) {
@@ -285,16 +344,17 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     }
   }
 
-  const fixtureFile = ({ method, path: requestPath, query }) => {
+  const fixtureFile = ({ method, path: requestPath, query, operationName }) => {
     const base = `${method.toLowerCase()}-${requestPath.toLowerCase().replace(/[^a-z0-9]/g, '-')}`
+    const operation = operationName ? `-${operationName.replace(/[^A-Za-z0-9_]/g, '-')}` : ''
     const hash = Object.keys(query).length ? `-${crypto.createHash('sha1').update(new URLSearchParams(query).toString()).digest('hex').slice(0, 8)}` : ''
-    return `${base}${hash}.json`
+    return `${base}${operation}${hash}.json`
   }
 
-  // Saves the response as a fixture of the selected runbook. Writes nothing when the runbook already has an
-  // equal one, and puts a differing response in the current step's folder. With a role selected, the file goes in
-  // that role's folder inside the folder it would otherwise use, and with a case selected, in the +<case> folder inside that.
-  function saveFixture(request, upRes, raw) {
+  // Saves the response as fixtures of the selected runbook, given the request body the app sent. A GraphQL batch
+  // is saved item by item when it answered below 300 with an array of one result per item. Otherwise nothing of
+  // it is saved, because the failure or the results cannot be tied to an operation.
+  function saveFixture(request, upRes, raw, sent) {
     const dir = state.runbook ? fixtureDir() : null
     if (!dir) return
     const skip = new Set([...NEVER_RECORDED, ...redactHeaders.map((name) => String(name).toLowerCase())])
@@ -302,24 +362,52 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     for (const [name, value] of Object.entries(upRes.headers)) {
       if (!skip.has(name) && !name.startsWith('access-control-')) headers[name] = value
     }
+    const status = upRes.statusCode
+    const kept = Object.keys(headers).length ? { headers } : {}
     const body = parseBody(raw, upRes.headers['content-type'])
-    const response = { status: upRes.statusCode, ...(Object.keys(headers).length ? { headers } : {}), ...(body === null ? {} : { body }) }
-    const existing = matchFixture(readFixtures(dir), request, state.step, state.role, state.case)
+    if (!isBatch(sent)) {
+      return saveOne(dir, { ...request, operationName: operationOf(sent) }, { status, ...kept, ...(body === null ? {} : { body }) })
+    }
+    const label = `${request.method} ${request.path} (${sent.map((item) => operationOf(item) ?? 'unnamed').join(', ')})`
+    if (status >= 300) return log(`not recording ${label}: the batch answered ${status}; write the failing operation's fixture by hand`)
+    if (!Array.isArray(body) || body.length !== sent.length) return log(`not recording ${label}: the response is not an array of ${sent.length} results`)
+    sent.forEach((item, i) => {
+      const operationName = operationOf(item)
+      if (operationName === null) return log(`not recording item ${i + 1} of ${label}: it has no operationName`)
+      saveOne(dir, { ...request, operationName }, { status, ...kept, body: body[i] })
+    })
+  }
+
+  // Writes one fixture, unless the fixture the server would serve for the request is equal. For a request with an
+  // operationName, only a fixture naming that operation counts. A differing response goes in the current step's
+  // folder. With a role selected, the file goes in that role's folder inside the folder it would otherwise use, and
+  // with a case selected, in the +<case> folder inside that.
+  function saveOne(dir, request, response) {
+    const fixtures = readFixtures(dir)
+    const pool = request.operationName ? fixtures.filter((fixture) => fixture.request.operationName !== undefined) : fixtures
+    const existing = matchFixture(pool, request, state.step, state.role, state.case)
     let folder = dir
     if (existing) {
       const stored = existing.response
-      if (stored.status === response.status && isDeepStrictEqual(stored.body ?? null, body)) return
+      if (stored.status === response.status && isDeepStrictEqual(stored.body ?? null, response.body ?? null)) return
       if (state.step) folder = path.join(dir, state.step)
     }
     if (state.role) folder = path.join(folder, `@${state.role}`)
     if (state.case) folder = path.join(folder, `+${state.case}`)
     const saved = {
-      request: { method: request.method, path: request.path, ...(Object.keys(request.query).length ? { query: request.query } : {}) },
+      request: {
+        method: request.method,
+        path: request.path,
+        ...(request.operationName ? { operationName: request.operationName } : {}),
+        ...(Object.keys(request.query).length ? { query: request.query } : {}),
+      },
       response,
       source: `recorded ${new Date().toISOString().slice(0, 10)} from ${targetUrl().origin}`,
     }
+    const file = path.join(folder, fixtureFile(request))
+    if (fs.existsSync(file)) log(`overwrote ${path.relative(dir, file)} with a different response`)
     fs.mkdirSync(folder, { recursive: true })
-    fs.writeFileSync(path.join(folder, fixtureFile(request)), `${JSON.stringify(saved, null, 2)}\n`)
+    fs.writeFileSync(file, `${JSON.stringify(saved, null, 2)}\n`)
   }
 
   // Pipes the request to the target and streams the response back. In record mode (record true) it asks for an
@@ -358,7 +446,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
         const raw = Buffer.concat(parts)
         res.end(raw)
         try {
-          saveFixture(request, upRes, raw.toString('utf8'))
+          saveFixture(request, upRes, raw.toString('utf8'), parseBody(Buffer.concat(chunks).toString('utf8'), req.headers['content-type']))
         } catch (err) {
           log(`could not record ${request.method} ${request.path}: ${err?.message ?? err}`)
         }
@@ -395,8 +483,9 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const query = {}
     for (const [key, value] of url.searchParams) if (!(key in query)) query[key] = value
     const request = { method: req.method.toUpperCase(), path: url.pathname, query }
-    const answer = mocked(req, res, request)
-    requests.push({ ...request, body: parseBody(raw, req.headers['content-type']), step: state.step, status: answer.status })
+    const body = parseBody(raw, req.headers['content-type'])
+    const answer = mocked(req, res, request, body)
+    requests.push({ ...request, body, step: state.step, status: answer.status })
     log(`${request.method} ${request.path} -> ${answer.status}`)
     answer.send()
   }
