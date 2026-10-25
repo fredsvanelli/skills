@@ -12,6 +12,11 @@
       "name": "utils",
       "source": "./utils",
       "description": "Repo housekeeping: merged branches, Dependabot PR queue, PR descriptions."
+    },
+    {
+      "name": "pmkit",
+      "source": { "source": "github", "repo": "fredsvanelli/pmkit" },
+      "description": "Project management for development agents: issues, sprints and epics across trackers."
     }
   ]
 }
