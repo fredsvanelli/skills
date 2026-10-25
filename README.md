@@ -1,6 +1,6 @@
 # fredsvanelli/skills
 
-Claude Code plugin marketplace. Each folder is one plugin, installed on its own.
+Claude Code plugin marketplace. Each folder is one plugin, installed on its own. `pmkit` lives in its own repository, [fredsvanelli/pmkit](https://github.com/fredsvanelli/pmkit), and this marketplace lists it.
 
 | Plugin | Commands | Does |
 |---|---|---|
