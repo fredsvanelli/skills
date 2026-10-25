@@ -1,4 +1,4 @@
-// runbooks upstream server, runbooks 1.9.4. Copied by /runbooks:setup; do not edit.
+// runbooks upstream server, runbooks 1.10.0. Copied by /runbooks:setup; do not edit.
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
@@ -9,7 +9,7 @@ import crypto from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
-export const VERSION = '1.9.4'
+export const VERSION = '1.10.0'
 
 const MODES = ['mocked', 'live', 'record']
 const STEP_DIR = /^S\d+$/
