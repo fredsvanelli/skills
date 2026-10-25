@@ -60,7 +60,7 @@ test('templates parse', () => {
 })
 
 const COMMANDS = {
-  '': ['audit', 'check', 'coverage', 'create', 'help', 'list', 'map', 'run', 'settings', 'setup', 'to-test', 'ui', 'update', 'upgrade', 'whats-next'],
+  '': ['audit', 'check', 'coverage', 'create', 'help', 'list', 'map', 'orchestrator', 'run', 'settings', 'setup', 'to-test', 'ui', 'update', 'upgrade', 'whats-next'],
   roles: ['create', 'delete', 'generate', 'list', 'update'],
   contexts: ['create', 'delete', 'list', 'update'],
   permissions: ['manage'],

@@ -25,7 +25,7 @@ Read-only. It runs no runbook, writes no file and commits nothing. It answers fr
 |---|---|
 | `overview` | `README.md`, `skills/runbooks/SKILL.md`, `CONTEXT.md`, `templates/readme.md` |
 | `format` | `skills/runbooks/references/format.md`, `templates/runbook.md`, `templates/runbook-api.md`, `templates/placeholder.md` |
-| `lifecycle` | `templates/readme.md` (Lifecycle), `skills/runbooks/references/format.md` (Status, Placeholders, Step states), `commands/map.md`, `commands/create.md`, `commands/update.md` |
+| `lifecycle` | `templates/readme.md` (Lifecycle), `skills/runbooks/references/format.md` (Status, Placeholders, Step states), `commands/map.md`, `commands/create.md`, `commands/update.md`, `commands/orchestrator.md` |
 | `scenarios` | `skills/scenarios/SKILL.md`, `commands/create.md` |
 | `config` | `skills/runbooks/references/config.md`, `commands/setup.md`, `commands/settings.md`, `docs/adr/0007-ui-tests-may-live-in-another-repo.md` |
 | `run` | `skills/runbooks/references/run-modes.md`, `commands/run.md`, `commands/check.md` |

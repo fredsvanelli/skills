@@ -28,6 +28,7 @@ Each command file holds the full procedure. When the user asks for one of these 
 | update the installed runbooks plugin to its latest version | `/runbooks:upgrade` | `${CLAUDE_PLUGIN_ROOT}/commands/upgrade.md` |
 | explain how part of the plugin works, or answer a question about it | `/runbooks:help` | `${CLAUDE_PLUGIN_ROOT}/commands/help.md` |
 | decide what to do next with the runbooks, given the code and its latest changes | `/runbooks:whats-next` | `${CLAUDE_PLUGIN_ROOT}/commands/whats-next.md` |
+| take several runbooks through the whole flow in parallel, with agents, until a goal is met | `/runbooks:orchestrator` | `${CLAUDE_PLUGIN_ROOT}/commands/orchestrator.md` |
 | register a new role with its parents, account and permissions | `/runbooks:roles:create` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/create.md` |
 | change a role's description, parents or account, or rename it | `/runbooks:roles:update` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/update.md` |
 | remove a role from the registry, the config and the runbooks that cite it | `/runbooks:roles:delete` | `${CLAUDE_PLUGIN_ROOT}/commands/roles/delete.md` |

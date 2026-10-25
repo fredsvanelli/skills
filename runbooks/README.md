@@ -19,6 +19,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:upgrade` | updates the installed plugin to the latest version from its marketplace |
 | `/runbooks:help` | answers a question about the plugin from its own docs, optionally limited to one area (`--about roles`) |
 | `/runbooks:whats-next` | compares the runbooks with the code and the latest commits or uncommitted changes, and suggests the three commands that make the most sense to run now |
+| `/runbooks:orchestrator` | drives up to N agents that take runbooks through the whole flow (`map`, `create`, `run`, `to-test`) in parallel until a goal is met, answering their questions or relaying them to the user |
 | `/runbooks:roles:create` | registers a role with its parents, account and permissions |
 | `/runbooks:roles:update` | changes a role's description, parents or account, or renames it |
 | `/runbooks:roles:delete` | removes a role from the registry, the config and the runbooks that cite it |
