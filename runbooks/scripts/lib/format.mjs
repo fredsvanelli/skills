@@ -142,7 +142,7 @@ export function fixturesMarkdown({ id, dir, fixtures, sources, problems }) {
   ]
   if (fixtures.length > 0) {
     lines.push(table(['File', 'Step', 'Request', 'Status'],
-      fixtures.map((f) => [f.file, f.step ?? 'all', `${f.request.method} ${f.request.path}`, f.response.status])), '')
+      fixtures.map((f) => [f.file, f.step ?? 'all', `${f.request.method} ${f.request.path}${f.request.operationName ? ` ${f.request.operationName}` : ''}`, f.response.status])), '')
   }
   lines.push('### Problems', '', ...bullets(problems))
   return `${lines.join('\n')}\n`

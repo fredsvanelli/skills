@@ -42,6 +42,11 @@ export function loadFixtures(root, dir, { roles = null, cases = null } = {}) {
         problems.push(`${file}: missing ${missing.join(', ')}`)
         continue
       }
+      const { operationName } = data.request
+      if ('operationName' in data.request && !(typeof operationName === 'string' && operationName !== '')) {
+        problems.push(`${file}: request.operationName must be a non-empty string`)
+        continue
+      }
       fixtures.push({ file, step, role, case: kase, request: data.request, response: data.response, source: data.source })
     }
   }
@@ -130,12 +135,14 @@ function isJson(response) {
   return typeof response.body !== 'string'
 }
 
-// Checks each JSON response body against the schema of its operation in the OpenAPI document.
+// Checks each JSON response body against the schema of its operation in the OpenAPI document. A fixture with a
+// request.operationName answers a GraphQL operation, which an OpenAPI document does not describe, so it is skipped.
 export function checkFixtures(fixtures, doc) {
   const problems = []
   const templates = Object.keys(doc?.paths ?? {})
   const prefix = serverPrefix(doc)
   for (const fixture of fixtures) {
+    if (fixture.request.operationName !== undefined) continue
     const { method, path: rawPath } = fixture.request
     const requestPath = String(rawPath).split('?')[0]
     let template = findTemplate(templates, requestPath)
