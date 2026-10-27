@@ -4,10 +4,11 @@ You run the group of runbooks your brief names, in the mode and with the flags i
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md` (step states, dependency tree, status) and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/run-modes.md` (the mode you will use). For a `ui` runbook, also `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md` (the upstream modes, the server and its control routes). With role tracking on (`roles.enabled` in the config), also the Roles sections of `run-modes.md` and `format.md`, and for a runbook with cases the "Contexts and cases" section of `format.md`. The role steps below apply only then, and the case steps only to a runbook with cases (`cases` in the `list --json` output is not empty).
 
-
 ## 1. Your selection
 
-The brief lists the runbook ids of the group, the mode, the flags (`--steps`, `--role`, `--case`, `--record`, `--waive`, `--import`) and the run id of each runbook (`<YYYY-MM-DD-HHMM>-<runbook id>`). Select nothing else.
+The brief lists the runbook ids of the group, the mode, the flags (`--steps`, `--role`, `--case`, `--record`, `--waive`, `--import`) and the run id of each runbook (`<YYYY-MM-DD-HHMM>-<runbook id>`). Select nothing else. With `--waive`, the brief carries the reason the user gave; read it there.
+
+In mode `prompt` and for `--import`, the main session starts, keeps and stops the upstream server. Where the steps below say to keep the server running or to stop it after the last import, do nothing and say in `summary:` whether the last runbook's import is done.
 
 `ui` runbooks follow every step below, except that one run in mode `test` follows the "test" section of `run-modes.md` for its execution, as `api` runbooks do. `api` runbooks run in mode `test`, by that section, and use steps 2 to 4 as it says.
 
@@ -20,7 +21,7 @@ For `api` runbooks: item 1 of "test" in `run-modes.md`, then item 2 (sync), whic
 For `ui` runbooks:
 
 - The app answers at `app.baseUrl` (`curl -s -o /dev/null -w '%{http_code}' <baseUrl>`). This reachability check is the only direct request allowed besides the upstream checks below; it verifies nothing about a result. When the app is down, show the `app.start` commands and stop.
-- The upstream server runs when the project has any `mocked` runbook (`list --json`, field `upstream`, over all runbooks and not only the selection) or the run has `--record`. The app then points at the server for live runbooks too, because the server proxies them in `live` mode. Start it in the background with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" upstream` and wait for its first line, `runbooks-upstream listening on http://127.0.0.1:<port>`. A taken port exits 2 with a message naming the port and `upstream.port`: show it and stop. Stop the server when the run ends, except after a `prompt` run: the user runs the prompts later, so the server keeps running until the `--import` of the run's last runbook (step 6) has read it.
+- The upstream server runs when the project has any `mocked` runbook (`list --json`, field `upstream`, over all runbooks and not only the selection) or the run has `--record`. The app then points at the server for live runbooks too, because the server proxies them in `live` mode. Start it in the background with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" upstream` and wait for its first line, `runbooks-upstream listening on http://127.0.0.1:<port>`. A taken port exits 2 with a message naming the port and `upstream.port`: show it and stop. Stop the server when the run ends. In mode `prompt`, and for `--import`, the main session owns the server: the brief says it is already up at its port. Do not start or stop it, and send the select calls with `curl` as usual.
 - When the upstream server runs, in `guided`, `headless`, `headed` and `chrome`, the app reaches the server. Select the first runbook (`POST /__runbooks/select`, step 4 says how), navigate once to its first page in the browser, then read `GET /__runbooks/state`. Zero `requests` means the app points elsewhere: show `<urlEnv>=http://127.0.0.1:<port> <app.start>` and stop. `script` checks this where it reads its results (`run-modes.md`, "script"), and `prompt` at the import (step 6). Mode `test` does not check it (`run-modes.md`, "test", item 3).
 - When the config sets `upstream.baseUrl` and the selection has a `live` runbook, `upstream.baseUrl` answers (one `curl` as above). When it does not, show `upstream.start` and stop. With `--record`, the same check applies to every selected runbook.
 - With `upstream.schema` set, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" fixtures <id>` for each `mocked` runbook before its first step. The command exits 0 with problems in its findings. Problems make the runbook `blocked`, not `failed`, with the problems as the reason; offer `/runbooks:to-test <id>` and `/runbooks:update <id>`. Skip the check for a runbook being recorded: the run is about to record or change its fixtures, so checking the old ones first would block it for nothing.
@@ -92,6 +93,10 @@ Your report follows "The report" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/refer
 - for each failure: step, role (with role tracking on), case (with cases), viewport, Expected, Seen;
 - for runbooks with design references: the count of `major` and `minor` differences, each `major` one with its step, viewport, and what the design and the page show, and the references not compared;
 - for `api` runbooks: the scripts written or edited through `to-test`, the script mistakes fixed during the run, and the tests outside the runbook that failed.
+
+In mode `prompt`, the main session prints for the user what you print, so `summary:` lists every prompt file path you wrote (`.runbooks/prompts/...`) and which runbook, role and case still wait for an import.
+
+A sub-agent that stops with `status: escalate` keeps in `summary:` the rows of the runbooks it finished.
 
 With `Forced model: no`, a runbook that needs `to-test` work stops the run with `status: escalate`. Name the runbook and the reason (`sync` or `script`) in `escalate:`, and list in `handoff:` the runbooks of your group that have not run yet.
 
