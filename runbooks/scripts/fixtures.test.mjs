@@ -176,6 +176,24 @@ test('loadFixtures reports a request.operationName that is not a non-empty strin
   assert.deepEqual(problems, ['empty', 'null', 'number'].map((name) => `f/${name}.json: request.operationName must be a non-empty string`))
 })
 
+test('loadFixtures reports bad variables and a body next to an operation', () => {
+  const req = (request) => JSON.stringify({ request: { method: 'POST', path: '/graphql', ...request }, response: { status: 200, body: {} } })
+  const dir = tmp({
+    'f/good.json': req({ operationName: 'SearchClients', variables: { type: 'clients' } }),
+    'f/rest.json': req({ body: { type: 'clients' } }),
+    'f/array.json': req({ operationName: 'SearchClients', variables: ['x'] }),
+    'f/orphan.json': req({ variables: { type: 'x' } }),
+    'f/mixed.json': req({ operationName: 'SearchClients', body: { type: 'x' } }),
+  })
+  const { fixtures, problems } = loadFixtures(dir, 'f')
+  assert.deepEqual(fixtures.map((x) => x.file).sort(), ['f/good.json', 'f/rest.json'])
+  assert.deepEqual(problems.sort(), [
+    'f/array.json: request.variables must be an object',
+    'f/mixed.json: request.body cannot go with request.operationName; name the GraphQL payload in request.variables',
+    'f/orphan.json: request.variables needs request.operationName',
+  ])
+})
+
 test('checkFixtures skips a fixture that names a GraphQL operation', () => {
   const fx = { file: 'g', request: { method: 'POST', path: '/graphql', operationName: 'Client' }, response: { status: 200, body: {} } }
   assert.deepEqual(checkFixtures([fx], DOC), [])
