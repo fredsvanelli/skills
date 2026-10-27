@@ -181,12 +181,13 @@ function upstreamProject(upstream, extra = {}) {
 const configOf = (dir) => loadConfig(dir)
 
 test('upstreamOptions resolves the config and the flags', () => {
-  const dir = upstreamProject({ baseUrl: 'https://api.example.com/v1', port: 4321, redactHeaders: ['x-key'] })
+  const dir = upstreamProject({ baseUrl: 'https://api.example.com/v1', port: 4321, redactHeaders: ['x-key'], redactBodyKeys: ['otp'] })
   const config = configOf(dir)
   assert.deepEqual(upstreamOptions(dir, config, {}), {
     fixturesRoot: path.join(dir, 'docs/runbooks/_fixtures'),
     target: 'https://api.example.com/v1',
     redactHeaders: ['x-key'],
+    redactBodyKeys: ['otp'],
     port: 4321,
     mode: 'mocked',
     runbook: null,

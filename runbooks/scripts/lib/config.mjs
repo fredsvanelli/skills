@@ -86,6 +86,9 @@ function validateUpstream(upstream, stack) {
   if (!Array.isArray(upstream.redactHeaders) || upstream.redactHeaders.some((name) => typeof name !== 'string' || !name)) {
     throw new ConfigError('upstream.redactHeaders must be a list of header names')
   }
+  if (!Array.isArray(upstream.redactBodyKeys) || upstream.redactBodyKeys.some((name) => typeof name !== 'string' || !name)) {
+    throw new ConfigError('upstream.redactBodyKeys must be a list of key names')
+  }
 }
 
 const isSize = (value) => Number.isInteger(value) && value > 0
@@ -186,7 +189,7 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
     checkUpstreamShape(raw.upstream)
     config.upstream = {
       mode: 'live', baseUrl: '', start: [], urlEnv: '', port: 4010,
-      fixtures: `${config.paths.runbooks}/_fixtures`, schema: null, redactHeaders: [], tokenEnv: '', serverFile: null,
+      fixtures: `${config.paths.runbooks}/_fixtures`, schema: null, redactHeaders: [], redactBodyKeys: [], tokenEnv: '', serverFile: null,
       ...raw.upstream,
     }
   }

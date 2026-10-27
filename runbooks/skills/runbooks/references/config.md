@@ -259,6 +259,7 @@ The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design
 | `fixtures` | `<paths.runbooks>/_fixtures` | the folder of the fixtures |
 | `schema` | `null` | a local OpenAPI 3 JSON file (`.json`). `run` and `fixtures` check each fixture against it. YAML files and URLs are not read. For an API in another repository, the document it publishes, kept here at `docs/runbooks/_contract/openapi.json` by default (`upstream.md`, Another repository). `contract` checks calls and fixtures against it, and `list --affected` reads its changes (`upstream.md`, Contract) |
 | `redactHeaders` | `[]` | header names the recorder drops, besides `set-cookie`, `authorization` and `cookie`. Case does not matter |
+| `redactBodyKeys` | `[]` | key names the recorder drops from recorded request bodies and GraphQL variables, besides `password`, `token` and `secret`. A key whose name contains one of them is dropped, at any depth. Case does not matter |
 | `tokenEnv` | `""` | env var holding a service token, for an upstream API without password login |
 | `serverFile` | `null` | where `setup` copied the upstream server in the project (`<tests.ui.dir>/runbooks-upstream.mjs`) |
 
@@ -280,6 +281,7 @@ Errors the loader raises:
 - `upstream.port must be an integer from 1 to 65535`
 - `upstream.schema must be a JSON file (a local OpenAPI 3 .json path)`
 - `upstream.redactHeaders must be a list of header names`
+- `upstream.redactBodyKeys must be a list of key names`
 
 ## Sources
 

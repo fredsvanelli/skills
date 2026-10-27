@@ -29,6 +29,7 @@ export function upstreamOptions(root, config, options) {
     fixturesRoot: path.resolve(root, upstream.fixtures),
     target: upstream.baseUrl,
     redactHeaders: upstream.redactHeaders,
+    redactBodyKeys: upstream.redactBodyKeys,
     port,
     mode,
     runbook: typeof options.runbook === 'string' ? options.runbook : null,

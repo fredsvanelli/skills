@@ -297,7 +297,7 @@ test('loadConfig fills upstream defaults', () => {
   const { upstream } = loadConfig(dir)
   assert.deepEqual(upstream, {
     mode: 'mocked', baseUrl: '', start: [], urlEnv: 'NEXT_PUBLIC_API_URL', port: 4010,
-    fixtures: 'docs/runbooks/_fixtures', schema: null, redactHeaders: [], tokenEnv: '', serverFile: null,
+    fixtures: 'docs/runbooks/_fixtures', schema: null, redactHeaders: [], redactBodyKeys: [], tokenEnv: '', serverFile: null,
   })
 })
 
@@ -309,6 +309,7 @@ test('loadConfig rejects a bad upstream block', () => {
   assert.throws(() => loadConfig(bad({ mode: 'live', port: 70000 })), /upstream.port must be an integer from 1 to 65535/)
   assert.throws(() => loadConfig(bad({ mode: 'live', schema: 'openapi.yaml' })), /upstream.schema must be a JSON file/)
   assert.throws(() => loadConfig(bad({ mode: 'live', redactHeaders: 'x-key' })), /upstream.redactHeaders must be a list of header names/)
+  assert.throws(() => loadConfig(bad({ mode: 'live', redactBodyKeys: ['otp', ''] })), /upstream.redactBodyKeys must be a list of key names/)
 })
 
 test('loadConfig rejects an upstream block that is not an object', () => {

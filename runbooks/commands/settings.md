@@ -49,7 +49,7 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `tickets` | `tickets.fetch` |
 | `git` | `git.base`, `git.protected`, `git.messageFormat` |
 | `commits` | `commits.runbooks`, `commits.setup` |
-| `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `tokenEnv`, `serverFile`, and the obsolete `root`, which this group removes. Only with `ui` |
+| `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `redactBodyKeys`, `tokenEnv`, `serverFile`, and the obsolete `root`, which this group removes. Only with `ui` |
 | `roles` | `roles.enabled`. Turns role tracking on with the flow of `setup.md`; it does not turn it off. When tracking is already on, choosing the group shows the current value and changes nothing |
 | `stale` | `staleDays` |
 | `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in `.mcp.json`. Only with `ui` |
