@@ -103,3 +103,18 @@ test('the upstream reference has the sections the commands link to', () => {
   const headings = [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1])
   assert.deepEqual(headings, ['Modes', 'Fixtures', 'Server', 'Control routes', 'Recording', 'Scripts', 'Contract'])
 })
+
+test('the dispatch reference has the sections the commands link to', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/references/agents.md'), 'utf8')
+  const headings = [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1])
+  assert.deepEqual(headings, [
+    'Choosing the model',
+    'Dispatch steps',
+    'The brief',
+    'The report',
+    'Questions',
+    'Calls to other commands',
+    'Commits',
+    'When the model cannot launch'
+  ])
+})
