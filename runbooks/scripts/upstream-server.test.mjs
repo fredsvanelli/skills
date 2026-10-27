@@ -1099,3 +1099,57 @@ test('record saves an anonymous GraphQL operation without a body', async (t) => 
   assert.ok(requests.length >= 1)
   assert.ok(requests.every((request) => !('body' in request)))
 })
+
+test('record puts payload fixtures in the current step folder over an old payload-less fixture there', async (t) => {
+  const tab = (sent) => ({ data: { searchClients: [sent.variables?.type ?? 'none'] } })
+  const fake = await graphqlApi(t, (sent) => [200, tab(sent)])
+  const s = await start(t, {
+    ...RECORD_FILES,
+    'billing/list/post--graphql-SearchClients.json': searchFixture(undefined, ['old-runbook']),
+    'billing/list/S01/post--graphql-SearchClients.json': searchFixture(undefined, ['old-step']),
+  }, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', step: 'S01' })
+  await gql(s.base, { operationName: 'SearchClients', variables: { type: 'clients' } })
+  await gql(s.base, { operationName: 'SearchClients', variables: { type: 'contacts' } })
+  const names = listed(s.fixturesRoot)
+  assert.equal(names.filter((name) => /^S01\/post--graphql-SearchClients-[0-9a-f]{8}\.json$/.test(name)).length, 2)
+  assert.equal(names.length, 4)
+  await s.select({ mode: 'mocked' })
+  assert.deepEqual(await (await gql(s.base, { operationName: 'SearchClients', variables: { type: 'clients' } })).json(), { data: { searchClients: ['clients'] } })
+  assert.deepEqual(await (await gql(s.base, { operationName: 'SearchClients', variables: { type: 'contacts' } })).json(), { data: { searchClients: ['contacts'] } })
+})
+
+test('record drops a key that holds an array with a redacted item, and a redacted array body', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { saved: true }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  const post = (p, body) => fetch(`${s.base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  await post('/items', { items: [{ id: 1, token: 't' }], q: 'x' })
+  await post('/bulk', [{ password: 'x' }])
+  const requests = listed(s.fixturesRoot).map((name) => readJson(s.fixturesRoot, name).request)
+  assert.deepEqual(requests.find((r) => r.path === '/items').body, { q: 'x' })
+  assert.equal('body' in requests.find((r) => r.path === '/bulk'), false)
+  await s.select({ mode: 'mocked' })
+  const again = await post('/items', { items: [{ id: 1, token: 't' }], q: 'x' })
+  assert.equal(again.status, 200)
+  assert.deepEqual(await again.json(), { saved: true })
+})
+
+test('the server skips a fixture whose request.body is a scalar or null', async (t) => {
+  const bad = (body) => JSON.stringify({ request: { method: 'POST', path: '/search', body }, response: { status: 200, body: { bad: true } } })
+  const s = await start(t, { 'billing/list/a.json': bad('text'), 'billing/list/b.json': bad(null), 'billing/list/c.json': bad(3) })
+  await s.select({ runbook: 'billing.list' })
+  const r = await fetch(`${s.base}/search`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'null' })
+  assert.equal(r.status, 501)
+})
+
+test('the request log drops secret keys from request bodies', async (t) => {
+  const s = await start(t, { 'billing/list/a.json': fixture('POST', '/login', { status: 200, body: {} }) })
+  await s.select({ runbook: 'billing.list' })
+  await fetch(`${s.base}/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"email":"a","password":"x"}' })
+  assert.deepEqual((await s.state()).requests[0].body, { email: 'a' })
+})
+
+test('payloadMatches ignores inherited keys', () => {
+  assert.equal(payloadMatches(JSON.parse('{"__proto__":{}}'), {}), false)
+})

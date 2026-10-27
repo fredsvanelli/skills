@@ -61,6 +61,10 @@ export function loadFixtures(root, dir, { roles = null, cases = null } = {}) {
         problems.push(`${file}: request.body cannot go with request.operationName; name the GraphQL payload in request.variables`)
         continue
       }
+      if ('body' in data.request && !(typeof body === 'object' && body !== null)) {
+        problems.push(`${file}: request.body must be an object or array`)
+        continue
+      }
       fixtures.push({ file, step, role, case: kase, request: data.request, response: data.response, source: data.source })
     }
   }

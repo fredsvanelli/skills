@@ -184,13 +184,18 @@ test('loadFixtures reports bad variables and a body next to an operation', () =>
     'f/array.json': req({ operationName: 'SearchClients', variables: ['x'] }),
     'f/orphan.json': req({ variables: { type: 'x' } }),
     'f/mixed.json': req({ operationName: 'SearchClients', body: { type: 'x' } }),
+    'f/scalar.json': req({ body: 'text' }),
+    'f/null.json': req({ body: null }),
+    'f/list.json': req({ body: [{ a: 1 }] }),
   })
   const { fixtures, problems } = loadFixtures(dir, 'f')
-  assert.deepEqual(fixtures.map((x) => x.file).sort(), ['f/good.json', 'f/rest.json'])
+  assert.deepEqual(fixtures.map((x) => x.file).sort(), ['f/good.json', 'f/list.json', 'f/rest.json'])
   assert.deepEqual(problems.sort(), [
     'f/array.json: request.variables must be an object',
     'f/mixed.json: request.body cannot go with request.operationName; name the GraphQL payload in request.variables',
+    'f/null.json: request.body must be an object or array',
     'f/orphan.json: request.variables needs request.operationName',
+    'f/scalar.json: request.body must be an object or array',
   ])
 })
 

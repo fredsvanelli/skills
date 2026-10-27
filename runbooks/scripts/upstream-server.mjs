@@ -58,12 +58,28 @@ export function redactPayload(value, names) {
   return out
 }
 
+// Like redactPayload, for saving a fixture. Arrays match only when deeply equal, so a redacted array would never
+// match its own request: a key that holds an array with something redacted inside is dropped whole. A top-level
+// array with something redacted inside comes back undefined.
+export function redactForRecording(value, names) {
+  const redacted = redactPayload(value, names)
+  if (Array.isArray(value)) return isDeepStrictEqual(redacted, value) ? redacted : undefined
+  if (!isPlainObject(value)) return redacted
+  const out = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (names.some((name) => key.toLowerCase().includes(name))) continue
+    const kept = redactForRecording(item, names)
+    if (kept !== undefined) out[key] = kept
+  }
+  return out
+}
+
 // True when every field of expected is in actual. Objects match recursively by subset. Arrays and scalars,
 // null included, match only when deeply equal.
 export function payloadMatches(expected, actual) {
   if (!isPlainObject(expected)) return isDeepStrictEqual(expected, actual)
   if (!isPlainObject(actual)) return false
-  return Object.entries(expected).every(([key, value]) => key in actual && payloadMatches(value, actual[key]))
+  return Object.entries(expected).every(([key, value]) => Object.hasOwn(actual, key) && payloadMatches(value, actual[key]))
 }
 
 // How many fields a payload names: a plain object counts its values' fields, anything else counts 1.
@@ -78,7 +94,7 @@ const isBatch = (body) => Array.isArray(body) && body.some((item) => operationOf
 // Reads the .json files of a runbook folder (step null) and of its S<nn> subfolders, those of the @<role>
 // folders at both levels (role set), and those of the +<case> folders inside each of them (case set).
 // Invalid files are skipped, a request.operationName that is not a non-empty string included, a request.variables
-// that is not an object or has no operationName, and a request.body next to an operationName.
+// that is not an object or has no operationName, and a request.body next to an operationName or that is not an object or array.
 function readFixtures(dir) {
   const fixtures = []
   const readDir = (folder, step, role = null, kase = null) => {
@@ -96,6 +112,7 @@ function readFixtures(dir) {
         if ('operationName' in data.request && !validOperation(data.request.operationName)) continue
         if ('variables' in data.request && (!isPlainObject(data.request.variables) || !('operationName' in data.request))) continue
         if ('body' in data.request && 'operationName' in data.request) continue
+        if ('body' in data.request && (typeof data.request.body !== 'object' || data.request.body === null)) continue
         fixtures.push({ file: folder ? `${folder}/${name}` : name, step, role, case: kase, request: data.request, response: data.response })
       } catch {
         continue
@@ -415,12 +432,15 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   const payloadOf = (sent) => {
     const operationName = operationOf(sent)
     if (operationName !== null) {
-      const variables = redactPayload(variablesOf(sent), bodyRedacted)
+      const variables = redactForRecording(variablesOf(sent), bodyRedacted)
       return Object.keys(variables).length ? { variables } : {}
     }
-    if (Array.isArray(sent)) return { body: redactPayload(sent, bodyRedacted) }
+    if (Array.isArray(sent)) {
+      const body = redactForRecording(sent, bodyRedacted)
+      return body === undefined ? {} : { body }
+    }
     if (isPlainObject(sent) && !(typeof sent.query === 'string' && /^\s*(\{|query\b|mutation\b|subscription\b|fragment\b)/.test(sent.query))) {
-      const body = redactPayload(sent, bodyRedacted)
+      const body = redactForRecording(sent, bodyRedacted)
       return Object.keys(body).length ? { body } : {}
     }
     return {}
@@ -474,7 +494,12 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     let pool = request.operationName ? fixtures.filter((fixture) => fixture.request.operationName !== undefined) : fixtures
     if (hasPayload) pool = pool.filter((fixture) => fixture.request.variables !== undefined || fixture.request.body !== undefined)
     const existing = matchFixture(pool, { ...request, variables: request.variables ?? {} }, state.step, state.role, state.case)
+    // An old fixture without a payload that answers in the current step would keep winning on the step layer.
+    // The new file then goes in that step folder, to share the layer and win on fields.
+    const answering = hasPayload && state.step ? matchFixture(request.operationName ? fixtures.filter((fixture) => fixture.request.operationName !== undefined) : fixtures, { ...request, variables: request.variables ?? {} }, state.step, state.role, state.case) : null
+    const shadowed = answering && answering.step === state.step && answering.request.variables === undefined && answering.request.body === undefined
     let folder = dir
+    if (!existing && shadowed) folder = path.join(dir, state.step)
     if (existing) {
       const stored = existing.response
       if (stored.status === response.status && isDeepStrictEqual(stored.body ?? null, response.body ?? null)) return
@@ -508,7 +533,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const chunks = []
     const finish = (status) => {
       entry.status = status
-      entry.body = parseBody(Buffer.concat(chunks).toString('utf8'), req.headers['content-type'])
+      entry.body = redactPayload(parseBody(Buffer.concat(chunks).toString('utf8'), req.headers['content-type']), bodyRedacted)
       requests.push(entry)
       log(`${request.method} ${request.path} -> ${status}`)
     }
@@ -575,7 +600,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const request = { method: req.method.toUpperCase(), path: url.pathname, query }
     const body = parseBody(raw, req.headers['content-type'])
     const answer = mocked(req, res, request, body)
-    requests.push({ ...request, body, step: state.step, status: answer.status })
+    requests.push({ ...request, body: redactPayload(body, bodyRedacted), step: state.step, status: answer.status })
     log(`${request.method} ${request.path} -> ${answer.status}`)
     answer.send()
   }
