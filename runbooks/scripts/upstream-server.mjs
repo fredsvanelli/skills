@@ -28,13 +28,32 @@ function operationOf(body) {
   return body !== null && typeof body === 'object' && !Array.isArray(body) && validOperation(body.operationName) ? body.operationName : null
 }
 
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+// The variables of a GraphQL request body or batch item: its variables when a plain object, else {}.
+const variablesOf = (item) => (isPlainObject(item) && isPlainObject(item.variables) ? item.variables : {})
+
+// True when every field of expected is in actual. Objects match recursively by subset. Arrays and scalars,
+// null included, match only when deeply equal.
+export function payloadMatches(expected, actual) {
+  if (!isPlainObject(expected)) return isDeepStrictEqual(expected, actual)
+  if (!isPlainObject(actual)) return false
+  return Object.entries(expected).every(([key, value]) => key in actual && payloadMatches(value, actual[key]))
+}
+
+// How many fields a payload names: a plain object counts its values' fields, anything else counts 1.
+export function payloadFields(value) {
+  return isPlainObject(value) ? Object.values(value).reduce((sum, item) => sum + payloadFields(item), 0) : 1
+}
+
 // A GraphQL batch is a JSON array body with at least one named operation. Any other array, such as the body of
 // a REST bulk endpoint, is recorded as one request.
 const isBatch = (body) => Array.isArray(body) && body.some((item) => operationOf(item) !== null)
 
 // Reads the .json files of a runbook folder (step null) and of its S<nn> subfolders, those of the @<role>
 // folders at both levels (role set), and those of the +<case> folders inside each of them (case set).
-// Invalid files are skipped, a request.operationName that is not a non-empty string included.
+// Invalid files are skipped, a request.operationName that is not a non-empty string included, a request.variables
+// that is not an object or has no operationName, and a request.body next to an operationName.
 function readFixtures(dir) {
   const fixtures = []
   const readDir = (folder, step, role = null, kase = null) => {
@@ -50,6 +69,8 @@ function readFixtures(dir) {
         const data = JSON.parse(fs.readFileSync(path.join(dir, folder, name), 'utf8'))
         if (!data?.request?.method || !data?.request?.path || data?.response?.status === undefined) continue
         if ('operationName' in data.request && !validOperation(data.request.operationName)) continue
+        if ('variables' in data.request && (!isPlainObject(data.request.variables) || !('operationName' in data.request))) continue
+        if ('body' in data.request && 'operationName' in data.request) continue
         fixtures.push({ file: folder ? `${folder}/${name}` : name, step, role, case: kase, request: data.request, response: data.response })
       } catch {
         continue
@@ -115,8 +136,10 @@ function queryOf(fixture) {
 // with an operationName is a candidate only for a request with that operationName; one without answers any body.
 // A fixture with a role is a candidate only for that role, and one with a case only for that case. The score is
 // step * 4 + role * 2 + case, so the order is step, role and case; step and role; step and case; step; role
-// and case; role; case; runbook level. Then a fixture naming the operation, then more query keys, then the file name.
-export function matchFixture(fixtures, { method, path: requestPath, query = {}, operationName = null }, step, role = null, kase = null) {
+// and case; role; case; runbook level. A fixture with variables is a candidate only when the request variables
+// carry them, and one with a body only when the request has a JSON body that carries it (see payloadMatches).
+// Then a fixture naming the operation, then more fields (query keys plus payload leaves), then the file name.
+export function matchFixture(fixtures, { method, path: requestPath, query = {}, operationName = null, variables = {}, body = undefined }, step, role = null, kase = null) {
   const candidates = []
   for (const fixture of fixtures) {
     if (String(fixture.request.method).toUpperCase() !== String(method).toUpperCase()) continue
@@ -128,13 +151,16 @@ export function matchFixture(fixtures, { method, path: requestPath, query = {}, 
     if (operation && fixture.request.operationName !== operationName) continue
     const named = queryOf(fixture)
     if (!Object.entries(named).every(([key, value]) => query[key] === value)) continue
-    candidates.push({ fixture, operation, keys: Object.keys(named).length })
+    const { variables: wantVariables, body: wantBody } = fixture.request
+    if (wantVariables !== undefined && !payloadMatches(wantVariables, variables)) continue
+    if (wantBody !== undefined && (body === undefined || !payloadMatches(wantBody, body))) continue
+    candidates.push({ fixture, operation, fields: Object.keys(named).length + payloadFields(wantVariables ?? wantBody ?? {}) })
   }
   const score = ({ step: s, role: r, case: c }) => (s !== null) * 4 + (r != null) * 2 + (c != null)
   candidates.sort((a, b) =>
     score(b.fixture) - score(a.fixture) ||
     b.operation - a.operation ||
-    b.keys - a.keys ||
+    b.fields - a.fields ||
     (a.fixture.file < b.fixture.file ? -1 : a.fixture.file > b.fixture.file ? 1 : 0))
   return candidates[0]?.fixture ?? null
 }
@@ -271,7 +297,9 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const answer = Array.isArray(sent) ? batch(req, res, request, sent, fixtures) : null
     if (answer) return answer
     const operationName = operationOf(sent)
-    const fixture = matchFixture(fixtures, { ...request, operationName }, state.step, state.role, state.case)
+    const variables = operationName === null ? {} : variablesOf(sent)
+    const json = sent !== null && typeof sent === 'object' ? sent : undefined
+    const fixture = matchFixture(fixtures, { ...request, operationName, variables, body: json }, state.step, state.role, state.case)
     if (!fixture) {
       const operation = operationName === null ? {} : { operationName }
       unmatched.push({ method: request.method, path: request.path, ...operation, step: state.step })
@@ -291,8 +319,8 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   function batch(req, res, request, sent, fixtures) {
     const named = fixtures.filter((fixture) => fixture.request.operationName !== undefined)
     const names = sent.map(operationOf)
-    const found = names.map((operationName) =>
-      operationName === null ? null : matchFixture(named, { ...request, operationName }, state.step, state.role, state.case))
+    const found = names.map((operationName, i) =>
+      operationName === null ? null : matchFixture(named, { ...request, operationName, variables: variablesOf(sent[i]) }, state.step, state.role, state.case))
     if (!found.some(Boolean)) return null
     const missing = names.filter((_, i) => !found[i])
     if (missing.length > 0) {

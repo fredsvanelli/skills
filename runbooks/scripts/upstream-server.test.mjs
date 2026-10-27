@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import http from 'node:http'
 import net from 'node:net'
-import { createUpstreamServer, matchFixture, VERSION } from './upstream-server.mjs'
+import { createUpstreamServer, matchFixture, payloadMatches, payloadFields, VERSION } from './upstream-server.mjs'
 
 const fixture = (method, p, response, query) =>
   JSON.stringify({ request: { method, path: p, ...(query ? { query } : {}) }, response, source: 'hand-written' })
@@ -735,6 +735,111 @@ const GQL_FILES = {
 }
 
 const gql = (base, body) => fetch(`${base}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+
+const searchFixture = (variables, items) => JSON.stringify({
+  request: { method: 'POST', path: '/graphql', operationName: 'SearchClients', variables },
+  response: { status: 200, body: { data: { searchClients: items } } },
+  source: 'hand-written: test',
+})
+
+const TAB_FILES = {
+  'clients/tabs/clients.json': searchFixture({ type: 'clients' }, ['client']),
+  'clients/tabs/contacts.json': searchFixture({ type: 'contacts' }, ['contact']),
+  'clients/tabs/search.json': searchFixture({ search: 'Fred' }, ['fred']),
+}
+
+test('three tabs sending SearchClients with different variables each get their own fixture', async (t) => {
+  const s = await start(t, TAB_FILES)
+  await s.select({ runbook: 'clients.tabs', step: 'S01' })
+  const items = async (body) => (await (await gql(s.base, body)).json())
+  assert.deepEqual(await items({ operationName: 'SearchClients', variables: { type: 'clients' } }), { data: { searchClients: ['client'] } })
+  assert.deepEqual(await items({ operationName: 'SearchClients', variables: { type: 'contacts' } }), { data: { searchClients: ['contact'] } })
+  await s.select({ step: 'S02' })
+  assert.deepEqual(await items({ operationName: 'SearchClients', variables: { type: null, search: 'Fred' } }), { data: { searchClients: ['fred'] } })
+  assert.equal((await gql(s.base, { operationName: 'SearchClients' })).status, 501)
+  assert.equal((await gql(s.base, { operationName: 'SearchClients', variables: null })).status, 501)
+})
+
+test('a batch answers two SearchClients items from their variables', async (t) => {
+  const s = await start(t, TAB_FILES)
+  await s.select({ runbook: 'clients.tabs' })
+  const r = await gql(s.base, [
+    { operationName: 'SearchClients', variables: { type: 'contacts' } },
+    { operationName: 'SearchClients', variables: { type: 'clients' } },
+  ])
+  assert.deepEqual(await r.json(), [{ data: { searchClients: ['contact'] } }, { data: { searchClients: ['client'] } }])
+})
+
+test('a REST body fixture answers only a JSON body that carries its values', async (t) => {
+  const s = await start(t, {
+    'billing/list/any.json': fixture('POST', '/search', { status: 200, body: { any: true } }),
+    'billing/list/contacts.json': JSON.stringify({ request: { method: 'POST', path: '/search', body: { type: 'contacts' } }, response: { status: 200, body: { contacts: true } } }),
+  })
+  await s.select({ runbook: 'billing.list' })
+  const post = (body, type = 'application/json') => fetch(`${s.base}/search`, { method: 'POST', headers: { 'content-type': type }, body })
+  assert.deepEqual(await (await post('{"type":"contacts","q":"a"}')).json(), { contacts: true })
+  assert.deepEqual(await (await post('{"type":"clients"}')).json(), { any: true })
+  assert.deepEqual(await (await post('{"type":"contacts"}', 'text/plain')).json(), { any: true })
+})
+
+test('the server skips fixtures with invalid variables or body', async (t) => {
+  const bad = (request) => JSON.stringify({ request: { method: 'POST', path: '/graphql', ...request }, response: { status: 200, body: { bad: true } } })
+  const s = await start(t, {
+    'clients/tabs/array.json': bad({ operationName: 'SearchClients', variables: ['clients'] }),
+    'clients/tabs/orphan.json': bad({ variables: { type: 'clients' } }),
+    'clients/tabs/mixed.json': bad({ operationName: 'SearchClients', body: { type: 'clients' } }),
+  })
+  await s.select({ runbook: 'clients.tabs' })
+  assert.equal((await gql(s.base, { operationName: 'SearchClients', variables: { type: 'clients' } })).status, 501)
+})
+
+test('payloadMatches matches objects by subset and everything else exactly', () => {
+  assert.equal(payloadMatches({ type: 'clients' }, { type: 'clients', page: 1 }), true)
+  assert.equal(payloadMatches({ filter: { type: 'x' } }, { filter: { type: 'x', q: 'a' } }), true)
+  assert.equal(payloadMatches({ ids: [1, 2] }, { ids: [1, 2, 3] }), false)
+  assert.equal(payloadMatches({ ids: [1, 2] }, { ids: [1, 2] }), true)
+  assert.equal(payloadMatches({ type: null }, {}), false)
+  assert.equal(payloadMatches({ type: null }, { type: null }), true)
+  assert.equal(payloadMatches({}, { anything: 1 }), true)
+  assert.equal(payloadMatches({ filter: { type: 'x' } }, { filter: null }), false)
+  assert.equal(payloadMatches({ filter: { type: 'x' } }, { filter: ['x'] }), false)
+  assert.equal(payloadMatches({ filter: { type: 'x' } }, { filter: 'x' }), false)
+})
+
+test('payloadFields counts leaves, an array as one', () => {
+  assert.equal(payloadFields({}), 0)
+  assert.equal(payloadFields({ filter: { type: 'clients' }, ids: [1, 2] }), 2)
+  assert.equal(payloadFields([{ a: 1 }]), 1)
+})
+
+test('matchFixture picks the fixture whose variables match, more fields first, folder layer before fields', () => {
+  const f = (file, step, variables) =>
+    ({ file, step, request: { method: 'POST', path: '/graphql', operationName: 'SearchClients', ...(variables ? { variables } : {}) }, response: { status: 200 } })
+  const any = f('any.json', null)
+  const clients = f('clients.json', null, { type: 'clients' })
+  const contacts = f('contacts.json', null, { type: 'contacts' })
+  const search = f('search.json', null, { search: 'Fred' })
+  const both = f('both.json', null, { type: 'clients', page: 1 })
+  const req = (variables) => ({ method: 'POST', path: '/graphql', query: {}, operationName: 'SearchClients', variables })
+  const all = [any, clients, contacts, search]
+  assert.equal(matchFixture(all, req({ type: 'clients' }), null), clients)
+  assert.equal(matchFixture(all, req({ type: 'contacts' }), null), contacts)
+  assert.equal(matchFixture(all, req({ type: null, search: 'Fred' }), null), search)
+  assert.equal(matchFixture(all, req({ type: 'other' }), null), any)
+  assert.equal(matchFixture([clients, both], req({ type: 'clients', page: 1 }), null), both)
+  assert.equal(matchFixture([clients], req({}), null), null)
+  assert.equal(matchFixture([clients, f('S02/any.json', 'S02')], req({ type: 'clients' }), 'S02').file, 'S02/any.json')
+})
+
+test('matchFixture matches a REST body only against a JSON body', () => {
+  const f = (file, body) => ({ file, step: null, request: { method: 'POST', path: '/search', ...(body !== undefined ? { body } : {}) }, response: { status: 200 } })
+  const plain = f('plain.json')
+  const contacts = f('contacts.json', { type: 'contacts' })
+  const req = (body) => ({ method: 'POST', path: '/search', query: {}, body })
+  assert.equal(matchFixture([plain, contacts], req({ type: 'contacts', q: 'a' }), null), contacts)
+  assert.equal(matchFixture([plain, contacts], req({ type: 'clients' }), null), plain)
+  assert.equal(matchFixture([contacts], req(undefined), null), null)
+})
 
 test('a fixture with operationName answers only that operation and the 501 names an unknown one', async (t) => {
   const s = await start(t, GQL_FILES)
