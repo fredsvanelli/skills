@@ -35,7 +35,7 @@ test('the scenarios skill is invoked by the model only', () => {
   assert.equal(data.name, 'scenarios')
   assert.equal(typeof data.description, 'string')
   assert.equal(data['user-invocable'], false)
-  assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/create.md'), 'utf8'), /`runbooks:scenarios`/)
+  assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/instructions/create.md'), 'utf8'), /`runbooks:scenarios`/)
 })
 
 test('every command has a description and is user-invoked', () => {
@@ -119,12 +119,28 @@ test('the dispatch reference has the sections the commands link to', () => {
   ])
 })
 
-test('run is a dispatch file with an instructions file', () => {
-  const command = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/run.md'), 'utf8')
-  assert.match(command, /^## Dispatch$/m)
-  assert.match(command, /runbooks\.mjs" model run/)
-  assert.match(parseYaml(splitFrontmatter(command).yaml)['argument-hint'], /--model/)
+const DISPATCHING = ['run', 'coverage', 'help', 'whats-next', 'map', 'audit', 'roles:generate', 'create', 'update', 'to-test']
+
+for (const name of DISPATCHING) {
+  test(`${name} is a dispatch file with an instructions file`, () => {
+    const file = name.replace(':', '/')
+    const command = fs.readFileSync(path.join(PLUGIN_ROOT, `commands/${file}.md`), 'utf8')
+    assert.match(command, /^## Dispatch$/m)
+    assert.match(parseYaml(splitFrontmatter(command).yaml)['argument-hint'], /--model/)
+    const instructions = fs.readFileSync(path.join(PLUGIN_ROOT, `skills/runbooks/instructions/${file}.md`), 'utf8')
+    assert.equal(splitFrontmatter(instructions), null)
+  })
+}
+
+test('run escalates through its instructions file', () => {
   const instructions = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/instructions/run.md'), 'utf8')
-  assert.equal(splitFrontmatter(instructions), null)
   assert.match(instructions, /status: escalate/)
+})
+
+test('every default model row that is not inline names a dispatching command', async () => {
+  const { DEFAULT_MODELS } = await import('./lib/models.mjs')
+  for (const [row, model] of Object.entries(DEFAULT_MODELS)) {
+    if (model === 'inline') continue
+    assert.ok(DISPATCHING.includes(row.split(' ')[0]), `${row} is not a dispatching command`)
+  }
 })
