@@ -23,7 +23,7 @@ It prints the model of the matching row of the config table: `inline`, `haiku`, 
 2. Resolve the model with `runbooks.mjs model <command> <arguments>`, as above.
 3. Ask the up-front questions the command needs before any work. The dispatch file lists them. After an answer that changes the arguments (the mode of `run`, for example), resolve the model again.
 4. If the model is `inline`, read `<instructions file>` and follow it in this session. Otherwise launch a sub-agent with the `Agent` tool, with `model` set to the resolved value and a brief (below) that points at `<instructions file>`.
-5. Relay questions and calls until the sub-agent reports `done`, `blocked` or `failed`. A report with `status: escalate` ends that sub-agent. Read its reason and launch the same command again on a more capable model. When `forced` is true, show the reason and stop.
+5. Relay questions and calls until the sub-agent reports `done`, `blocked` or `failed`. A report with `status: escalate` ends that sub-agent. Resolve `runbooks.mjs model to-test <id>` for the runbook it names and launch a sub-agent on that model to write or fix the runbook's script. That sub-agent never loosens an assertion. When it reports, launch a new sub-agent on the original model to run that runbook. No escalation happens when the model is forced.
 6. Print the `summary:` of the report, then commit as the Commits section says.
 
 A sub-agent that reported a question or a call stays alive and waits for your `SendMessage`. Any other status ends it.
@@ -33,7 +33,7 @@ A sub-agent that reported a question or a call stays alive and waits for your `S
 Fill this template. Replace `${CLAUDE_PLUGIN_ROOT}` with its value. Leave out the "Fixed decisions" block unless your own instructions give you decisions to carry (the orchestrator does).
 
 ```
-You run one command of the runbooks plugin. No user is watching you: the main session is, and it reads only your last message.
+You run one command of the runbooks plugin. No user is watching you. The main session is, and it reads only your last message.
 
 Project root: <path>. Plugin root: <plugin root>.
 Read first: <plugin root>/skills/runbooks/SKILL.md, <plugin root>/CONTEXT.md, <plugin root>/skills/runbooks/references/agents.md, and the instructions file below. Follow the instructions file as if the user had typed the command. Follow the files it says to read first.
@@ -47,7 +47,7 @@ Fixed decisions. Where the instructions file says to ask with AskUserQuestion, d
 
 Commits: none. Do not run git add, git commit, git stash or git checkout. The main session commits.
 
-You cannot ask the user. Where the instructions file says to ask, stop and report status: question. Where it says to follow or run another command, stop and report status: call. When a decision is not settled here and not by a file you can read, report it as a question. Do not guess product behavior.
+You cannot ask the user. Where the instructions file says to ask, stop and report status: question. Where it says to follow or run another command, stop and report status: call. When a decision is not settled here and not by a file you can read, report it as a question. Do not guess product behavior. With `Forced model: yes`, do the `to-test` work yourself when a command's instructions would escalate, and never report `escalate`.
 
 Your last message is the report, in the shape of "The report" section of <plugin root>/skills/runbooks/references/agents.md.
 ```
@@ -71,14 +71,14 @@ handoff: <what the next stage must know and cannot read from the files; or none>
 ```
 
 - `summary:` carries what the command prints at the end. For `run`, that is its rows of the results table and the failures. The main session prints it as written.
-- `status: escalate` means the sub-agent stopped because the work needs a more capable model. It names the runbook and the reason.
+- `escalate:` names the runbook whose script must be written or fixed through `to-test`, and the reason. `sync` means the script is missing or out of sync with the steps. `script` means a failure looks like a mistake in the script itself. The sub-agent stops because that work needs a more capable model. With `Forced model: yes` it never reports `escalate`.
 - A command that writes a report of its own (a run report, a coverage report) writes it as its instructions file says and names the path in `summary:`.
 
 ## Questions
 
 A sub-agent cannot ask the user. Where the instructions file says to ask (an `AskUserQuestion`, "ask the user", a diff approval), the sub-agent stops with `status: question`, the question and its options.
 
-The main session asks the user with `AskUserQuestion` and sends the answer to the same sub-agent with `SendMessage`. Load `SendMessage` with `ToolSearch` (`select:SendMessage`) when it is not loaded. Diff approvals are questions: the sub-agent puts the diff in the question and writes nothing until the answer arrives.
+The main session asks the user with `AskUserQuestion` and sends the answer to the same sub-agent with `SendMessage`. Load `SendMessage` with `ToolSearch` (`select:SendMessage`) when it is not loaded. Diff approvals are questions. The sub-agent puts the diff in the question and writes nothing until the answer arrives.
 
 When the answer is in a file you can read, or is one of the fixed decisions of the brief, answer through `SendMessage` without asking the user.
 
