@@ -1003,7 +1003,10 @@ test('record keeps an array body without operations as one request, and logs an 
   const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
   await s.select({ runbook: 'billing.list', mode: 'record' })
   await fetch(`${s.base}/bulk`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '[{"a":1}]' })
-  assert.deepEqual(readJson(s.fixturesRoot, 'post--bulk.json').request, { method: 'POST', path: '/bulk' })
+  const bulk = listed(s.fixturesRoot).filter((name) => name.startsWith('post--bulk-'))
+  assert.equal(bulk.length, 1)
+  assert.match(bulk[0], /^post--bulk-[0-9a-f]{8}\.json$/)
+  assert.deepEqual(readJson(s.fixturesRoot, bulk[0]).request, { method: 'POST', path: '/bulk', body: [{ a: 1 }] })
   await gql(s.base, [{ operationName: 'Client' }, { operationName: 'Client' }])
   assert.deepEqual(readJson(s.fixturesRoot, 'post--graphql-Client.json').response.body, { n: 2 })
   assert.ok(s.logs.includes('overwrote post--graphql-Client.json with a different response'))
@@ -1029,4 +1032,48 @@ test('a 501 shows the payload of the unmatched request without secrets', async (
   const state = await s.state()
   assert.deepEqual(state.unmatched[0], { method: 'POST', path: '/graphql', operationName: 'SearchClients', variables: { type: 'other' }, step: null })
   assert.deepEqual(state.unmatched[2], { method: 'POST', path: '/graphql', operationName: 'Other', step: null })
+})
+
+test('record saves each SearchClients variables in its own file, and a second pass writes nothing', async (t) => {
+  const tab = (item) => ({ data: { searchClients: [item.variables?.type ?? 'none'] } })
+  const fake = await graphqlApi(t, (sent) => [200, Array.isArray(sent) ? sent.map(tab) : tab(sent)])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', step: 'S01' })
+  for (let pass = 0; pass < 2; pass++) {
+    await gql(s.base, [
+      { operationName: 'SearchClients', variables: { type: 'clients', page: 1 } },
+      { operationName: 'SearchClients', variables: { page: 1, type: 'contacts' } },
+    ])
+  }
+  await gql(s.base, { operationName: 'SearchClients', variables: { page: 1, type: 'clients' } })
+  const names = listed(s.fixturesRoot)
+  assert.equal(names.length, 2)
+  for (const name of names) assert.match(name, /^post--graphql-SearchClients-[0-9a-f]{8}\.json$/)
+  const saved = names.map((name) => readJson(s.fixturesRoot, name).request.variables.type).sort()
+  assert.deepEqual(saved, ['clients', 'contacts'])
+  assert.ok(!s.logs.some((line) => line.startsWith('overwrote')))
+})
+
+test('record puts a payload fixture in the runbook folder over an old fixture without variables', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { data: { searchClients: ['client'] } }])
+  const s = await start(t, { ...RECORD_FILES, 'billing/list/post--graphql-SearchClients.json': searchFixture(undefined, ['client']) },
+    { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', step: 'S02' })
+  await gql(s.base, { operationName: 'SearchClients', variables: { type: 'clients' } })
+  const names = listed(s.fixturesRoot)
+  assert.equal(names.length, 2)
+  assert.ok(names.every((name) => !name.startsWith('S02')))
+})
+
+test('record drops secrets from saved bodies and variables', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { ok: true }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}`, redactBodyKeys: ['otp'] })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await fetch(`${s.base}/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"email":"a@b.c","password":"x","otp":"1"}' })
+  await gql(s.base, { operationName: 'Login', variables: { input: { email: 'a@b.c', accessToken: 't' } } })
+  await gql(s.base, { operationName: 'Refresh', variables: { refreshToken: 't' } })
+  const requests = listed(s.fixturesRoot).map((name) => readJson(s.fixturesRoot, name).request)
+  assert.deepEqual(requests.find((r) => r.path === '/login').body, { email: 'a@b.c' })
+  assert.deepEqual(requests.find((r) => r.operationName === 'Login').variables, { input: { email: 'a@b.c' } })
+  assert.equal('variables' in requests.find((r) => r.operationName === 'Refresh'), false)
 })

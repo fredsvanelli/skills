@@ -36,6 +36,16 @@ const isPlainObject = (value) => value !== null && typeof value === 'object' && 
 // The variables of a GraphQL request body or batch item: its variables when a plain object, else {}.
 const variablesOf = (item) => (isPlainObject(item) && isPlainObject(item.variables) ? item.variables : {})
 
+// JSON.stringify with object keys sorted at every depth, so equal payloads give equal text.
+export function stableJson(value) {
+  const sort = (item) => {
+    if (Array.isArray(item)) return item.map(sort)
+    if (isPlainObject(item)) return Object.fromEntries(Object.keys(item).sort().map((key) => [key, sort(item[key])]))
+    return item
+  }
+  return JSON.stringify(sort(value))
+}
+
 // A copy of a payload without the object keys whose lowercased name contains one of names (already lowercased),
 // at any depth, inside arrays too. Anything that is not an object or array comes back as is.
 export function redactPayload(value, names) {
@@ -399,11 +409,30 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     }
   }
 
-  const fixtureFile = ({ method, path: requestPath, query, operationName }) => {
+  // The payload to save with a request, redacted: the variables of a named operation, else a JSON array body or
+  // a plain object body without a string query (an anonymous GraphQL operation is not saved). Empty ones are left out.
+  const payloadOf = (sent) => {
+    const operationName = operationOf(sent)
+    if (operationName !== null) {
+      const variables = redactPayload(variablesOf(sent), bodyRedacted)
+      return Object.keys(variables).length ? { variables } : {}
+    }
+    if (Array.isArray(sent)) return { body: redactPayload(sent, bodyRedacted) }
+    if (isPlainObject(sent) && typeof sent.query !== 'string') {
+      const body = redactPayload(sent, bodyRedacted)
+      return Object.keys(body).length ? { body } : {}
+    }
+    return {}
+  }
+
+  // The file name of a fixture: method, path, operation, then a hash of the query and a hash of the payload.
+  const fixtureFile = ({ method, path: requestPath, query, operationName, variables, body }) => {
     const base = `${method.toLowerCase()}-${requestPath.toLowerCase().replace(/[^a-z0-9]/g, '-')}`
     const operation = operationName ? `-${operationName.replace(/[^A-Za-z0-9_]/g, '-')}` : ''
     const hash = Object.keys(query).length ? `-${crypto.createHash('sha1').update(new URLSearchParams(query).toString()).digest('hex').slice(0, 8)}` : ''
-    return `${base}${operation}${hash}.json`
+    const payload = variables !== undefined || body !== undefined ? { ...(variables !== undefined ? { variables } : {}), ...(body !== undefined ? { body } : {}) } : null
+    const payloadHash = payload ? `-${crypto.createHash('sha1').update(stableJson(payload)).digest('hex').slice(0, 8)}` : ''
+    return `${base}${operation}${hash}${payloadHash}.json`
   }
 
   // Saves the response as fixtures of the selected runbook, given the request body the app sent. A GraphQL batch
@@ -421,7 +450,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const kept = Object.keys(headers).length ? { headers } : {}
     const body = parseBody(raw, upRes.headers['content-type'])
     if (!isBatch(sent)) {
-      return saveOne(dir, { ...request, operationName: operationOf(sent) }, { status, ...kept, ...(body === null ? {} : { body }) })
+      return saveOne(dir, { ...request, operationName: operationOf(sent), ...payloadOf(sent) }, { status, ...kept, ...(body === null ? {} : { body }) })
     }
     const label = `${request.method} ${request.path} (${sent.map((item) => operationOf(item) ?? 'unnamed').join(', ')})`
     if (status >= 300) return log(`not recording ${label}: the batch answered ${status}; write the failing operation's fixture by hand`)
@@ -429,18 +458,21 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     sent.forEach((item, i) => {
       const operationName = operationOf(item)
       if (operationName === null) return log(`not recording item ${i + 1} of ${label}: it has no operationName`)
-      saveOne(dir, { ...request, operationName }, { status, ...kept, body: body[i] })
+      saveOne(dir, { ...request, operationName, ...payloadOf(item) }, { status, ...kept, body: body[i] })
     })
   }
 
   // Writes one fixture, unless the fixture the server would serve for the request is equal. For a request with an
   // operationName, only a fixture naming that operation counts. A differing response goes in the current step's
   // folder. With a role selected, the file goes in that role's folder inside the folder it would otherwise use, and
-  // with a case selected, in the +<case> folder inside that.
+  // with a case selected, in the +<case> folder inside that. A request with variables or a body counts only
+  // against fixtures that have variables or a body.
   function saveOne(dir, request, response) {
     const fixtures = readFixtures(dir)
-    const pool = request.operationName ? fixtures.filter((fixture) => fixture.request.operationName !== undefined) : fixtures
-    const existing = matchFixture(pool, request, state.step, state.role, state.case)
+    const hasPayload = request.variables !== undefined || request.body !== undefined
+    let pool = request.operationName ? fixtures.filter((fixture) => fixture.request.operationName !== undefined) : fixtures
+    if (hasPayload) pool = pool.filter((fixture) => fixture.request.variables !== undefined || fixture.request.body !== undefined)
+    const existing = matchFixture(pool, { ...request, variables: request.variables ?? {} }, state.step, state.role, state.case)
     let folder = dir
     if (existing) {
       const stored = existing.response
@@ -454,6 +486,8 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
         method: request.method,
         path: request.path,
         ...(request.operationName ? { operationName: request.operationName } : {}),
+        ...(request.variables !== undefined ? { variables: request.variables } : {}),
+        ...(request.body !== undefined ? { body: request.body } : {}),
         ...(Object.keys(request.query).length ? { query: request.query } : {}),
       },
       response,
