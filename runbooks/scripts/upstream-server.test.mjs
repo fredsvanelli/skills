@@ -1077,3 +1077,25 @@ test('record drops secrets from saved bodies and variables', async (t) => {
   assert.deepEqual(requests.find((r) => r.operationName === 'Login').variables, { input: { email: 'a@b.c' } })
   assert.equal('variables' in requests.find((r) => r.operationName === 'Refresh'), false)
 })
+
+test('record saves REST bodies that carry a query field, one file each', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { ok: true }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  for (const query of ['foo', 'bar']) {
+    await fetch(`${s.base}/search`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) })
+  }
+  const bodies = listed(s.fixturesRoot).filter((name) => name.startsWith('post--search-')).map((name) => readJson(s.fixturesRoot, name).request.body)
+  assert.deepEqual(bodies.sort((a, b) => a.query.localeCompare(b.query)), [{ query: 'bar' }, { query: 'foo' }])
+})
+
+test('record saves an anonymous GraphQL operation without a body', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { data: {} }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await gql(s.base, { query: '{ x }' })
+  await gql(s.base, { query: '  query Foo { x }' })
+  const requests = listed(s.fixturesRoot).filter((name) => name.startsWith('post--graphql')).map((name) => readJson(s.fixturesRoot, name).request)
+  assert.ok(requests.length >= 1)
+  assert.ok(requests.every((request) => !('body' in request)))
+})

@@ -410,7 +410,8 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   }
 
   // The payload to save with a request, redacted: the variables of a named operation, else a JSON array body or
-  // a plain object body without a string query (an anonymous GraphQL operation is not saved). Empty ones are left out.
+  // a plain object body. A body whose query is a string starting with {, query, mutation, subscription or fragment
+  // is an anonymous GraphQL operation and is not saved. Empty ones are left out.
   const payloadOf = (sent) => {
     const operationName = operationOf(sent)
     if (operationName !== null) {
@@ -418,7 +419,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
       return Object.keys(variables).length ? { variables } : {}
     }
     if (Array.isArray(sent)) return { body: redactPayload(sent, bodyRedacted) }
-    if (isPlainObject(sent) && typeof sent.query !== 'string') {
+    if (isPlainObject(sent) && !(typeof sent.query === 'string' && /^\s*(\{|query\b|mutation\b|subscription\b|fragment\b)/.test(sent.query))) {
       const body = redactPayload(sent, bodyRedacted)
       return Object.keys(body).length ? { body } : {}
     }
