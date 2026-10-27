@@ -588,6 +588,7 @@ test('roles prints the Case keys column and one row per case for a context', () 
 test('model and models commands', () => {
   assert.equal(run(['model', '--root', FIXTURE, 'run', 'billing.issue-invoice', '--mode', 'test']).stdout, 'haiku\n')
   assert.deepEqual(JSON.parse(run(['model', '--root', FIXTURE, 'help', 'who?', '--json']).stdout), { model: 'sonnet', row: 'help <question>', forced: false })
+  assert.equal(run(['model', '--root', FIXTURE, 'run', '--help']).stdout, 'sonnet\n')
   const bad = run(['model', '--root', FIXTURE, 'run', '--model', 'gpt'])
   assert.equal(bad.code, 2)
   assert.match(bad.stderr, /--model must be one of/)

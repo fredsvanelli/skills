@@ -384,7 +384,7 @@ export function run(argv) {
   const finish = (code, stdout = '') => ({ code, stdout, stderr: stderr.length > 0 ? `${stderr.join('\n')}\n` : '' })
   const { command, options, positionals } = parseArgs(argv)
   try {
-    if (!command || command === 'help' || options.help) return finish(0, USAGE)
+    if (!command || command === 'help' || (options.help && command !== 'model')) return finish(0, USAGE)
     if (command === 'status') return finish(0, commandStatus(options))
     if (command === 'models' && options.defaults) {
       return finish(0, options.json ? json(DEFAULT_MODELS) : modelsMarkdown({ rows: DEFAULT_MODELS }))
