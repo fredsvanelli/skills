@@ -196,7 +196,7 @@ Matching in `mocked` mode:
 When `tests.ui` exists, `setup` copies the server to `<tests.ui.dir>/runbooks-upstream.mjs` and writes the path in `upstream.serverFile`, so CI runs mocked scripts without the plugin. When `tests.ui.root` points to a UI tests repository, the copy goes there, to `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`, and the fixtures stay in this one: that repository's CI checks out this one to pass `--fixtures` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`). `list` and `coverage` do not warn about the copy while that repository is not cloned. The copy carries the plugin version in its header comment and in `export const VERSION`. `list` and `coverage` warn when the copy is missing or from another version, `/runbooks:setup` refreshes the copy, and `/runbooks:upgrade` offers to run it. The copy takes its options from flags, which all take a value:
 
 ```
-node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--runbook id] [--role name] [--case name] [--step Sxx]
+node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--redact-body a,b] [--runbook id] [--role name] [--case name] [--step Sxx]
 ```
 
 `--fixtures` is required. `--port` defaults to `4010` and `--mode` to `mocked`.

@@ -21,6 +21,9 @@ const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '[::1]']
 // Headers starting with access-control- are never recorded either: the server answers CORS itself.
 const NEVER_RECORDED = ['set-cookie', 'authorization', 'cookie', 'content-length', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'vary']
 
+// Body keys whose values never reach a 501 body or the unmatched list. --redact-body adds more.
+const BODY_REDACTED = ['password', 'token', 'secret']
+
 const validOperation = (name) => typeof name === 'string' && name !== ''
 
 // The GraphQL operation a request body names: a JSON object with a non-empty string operationName. Else null.
@@ -32,6 +35,18 @@ const isPlainObject = (value) => value !== null && typeof value === 'object' && 
 
 // The variables of a GraphQL request body or batch item: its variables when a plain object, else {}.
 const variablesOf = (item) => (isPlainObject(item) && isPlainObject(item.variables) ? item.variables : {})
+
+// A copy of a payload without the object keys whose lowercased name contains one of names (already lowercased),
+// at any depth, inside arrays too. Anything that is not an object or array comes back as is.
+export function redactPayload(value, names) {
+  if (Array.isArray(value)) return value.map((item) => redactPayload(item, names))
+  if (!isPlainObject(value)) return value
+  const out = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (!names.some((name) => key.toLowerCase().includes(name))) out[key] = redactPayload(item, names)
+  }
+  return out
+}
 
 // True when every field of expected is in actual. Objects match recursively by subset. Arrays and scalars,
 // null included, match only when deeply equal.
@@ -196,10 +211,11 @@ function parseBody(raw, contentType) {
   return raw
 }
 
-export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders = [], log = () => {}, mode = 'mocked', runbook = null, role = null, case: kase = null, step = null }) {
+export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders = [], redactBodyKeys = [], log = () => {}, mode = 'mocked', runbook = null, role = null, case: kase = null, step = null }) {
   const state = { runbook, mode, role, case: kase, step }
   let requests = []
   let unmatched = []
+  const bodyRedacted = [...BODY_REDACTED, ...redactBodyKeys.map((name) => String(name).toLowerCase())]
 
   // Control routes get no CORS headers, so a page on another origin cannot read them or send them JSON.
   const cors = (req) => {
@@ -302,6 +318,10 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const fixture = matchFixture(fixtures, { ...request, operationName, variables, body: json }, state.step, state.role, state.case)
     if (!fixture) {
       const operation = operationName === null ? {} : { operationName }
+      // The payload of the request: the variables of a named operation, else a JSON object or array body.
+      if (operationName !== null) {
+        if (isPlainObject(sent.variables)) operation.variables = redactPayload(sent.variables, bodyRedacted)
+      } else if (json !== undefined) operation.body = redactPayload(json, bodyRedacted)
       unmatched.push({ method: request.method, path: request.path, ...operation, step: state.step })
       return {
         status: 501,
@@ -324,10 +344,17 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     if (!found.some(Boolean)) return null
     const missing = names.filter((_, i) => !found[i])
     if (missing.length > 0) {
-      for (const operationName of missing) unmatched.push({ method: request.method, path: request.path, operationName, step: state.step })
+      const payloads = []
+      names.forEach((operationName, i) => {
+        if (found[i]) return
+        payloads.push(operationName !== null && isPlainObject(sent[i].variables) ? redactPayload(sent[i].variables, bodyRedacted) : null)
+        const variables = payloads.at(-1)
+        unmatched.push({ method: request.method, path: request.path, operationName, ...(variables ? { variables } : {}), step: state.step })
+      })
+      const shown = payloads.some(Boolean) ? { variables: payloads } : {}
       return {
         status: 501,
-        send: () => sendJson(req, res, 501, { error: 'no fixture', method: request.method, path: request.path, operationNames: missing, runbook: state.runbook, step: state.step }),
+        send: () => sendJson(req, res, 501, { error: 'no fixture', method: request.method, path: request.path, operationNames: missing, ...shown, runbook: state.runbook, step: state.step }),
       }
     }
     const failed = found.find((fixture) => fixture.response.status >= 300)
@@ -613,6 +640,7 @@ function cliOptions(argv) {
     fixturesRoot: path.resolve(flags.fixtures),
     target: flags.target ?? '',
     redactHeaders: flags.redact ? flags.redact.split(',').map((name) => name.trim()).filter(Boolean) : [],
+    redactBodyKeys: flags['redact-body'] ? flags['redact-body'].split(',').map((name) => name.trim()).filter(Boolean) : [],
     port,
     mode,
     runbook: flags.runbook ?? null,

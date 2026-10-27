@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import http from 'node:http'
 import net from 'node:net'
-import { createUpstreamServer, matchFixture, payloadMatches, payloadFields, VERSION } from './upstream-server.mjs'
+import { createUpstreamServer, redactPayload, matchFixture, payloadMatches, payloadFields, VERSION } from './upstream-server.mjs'
 
 const fixture = (method, p, response, query) =>
   JSON.stringify({ request: { method, path: p, ...(query ? { query } : {}) }, response, source: 'hand-written' })
@@ -97,9 +97,9 @@ test('an unknown request gets a 501 and appears in unmatched', async (t) => {
   await s.select({ runbook: 'billing.list', step: 'S01' })
   const r = await fetch(`${s.base}/nope`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"a":1}' })
   assert.equal(r.status, 501)
-  assert.deepEqual(await r.json(), { error: 'no fixture', method: 'POST', path: '/nope', runbook: 'billing.list', step: 'S01' })
+  assert.deepEqual(await r.json(), { error: 'no fixture', method: 'POST', path: '/nope', body: { a: 1 }, runbook: 'billing.list', step: 'S01' })
   const state = await s.state()
-  assert.deepEqual(state.unmatched, [{ method: 'POST', path: '/nope', step: 'S01' }])
+  assert.deepEqual(state.unmatched, [{ method: 'POST', path: '/nope', body: { a: 1 }, step: 'S01' }])
   assert.deepEqual(state.requests[0].body, { a: 1 })
   assert.equal(state.requests[0].status, 501)
   await s.select({ step: 'S02' })
@@ -1007,4 +1007,26 @@ test('record keeps an array body without operations as one request, and logs an 
   await gql(s.base, [{ operationName: 'Client' }, { operationName: 'Client' }])
   assert.deepEqual(readJson(s.fixturesRoot, 'post--graphql-Client.json').response.body, { n: 2 })
   assert.ok(s.logs.includes('overwrote post--graphql-Client.json with a different response'))
+})
+
+test('redactPayload drops secret keys at any depth, case ignored', () => {
+  const names = [...['password', 'token', 'secret'], 'otp']
+  assert.deepEqual(
+    redactPayload({ email: 'a', Password: 'x', input: { accessToken: 't', otp: '1', keep: 1 }, users: [{ password: 'y', name: 'b' }] }, names),
+    { email: 'a', input: { keep: 1 }, users: [{ name: 'b' }] })
+  assert.equal(redactPayload('plain', names), 'plain')
+})
+
+test('a 501 shows the payload of the unmatched request without secrets', async (t) => {
+  const s = await start(t, TAB_FILES, { redactBodyKeys: ['OTP'] })
+  await s.select({ runbook: 'clients.tabs' })
+  const r = await gql(s.base, { operationName: 'SearchClients', variables: { type: 'other', token: 't', otp: '1' } })
+  assert.deepEqual(await r.json(), { error: 'no fixture', method: 'POST', path: '/graphql', operationName: 'SearchClients', variables: { type: 'other' }, runbook: 'clients.tabs', step: null })
+  const batch = await gql(s.base, [{ operationName: 'SearchClients', variables: { type: 'clients' } }, { operationName: 'SearchClients', variables: { type: 'x' } }, { operationName: 'Other' }])
+  const body = await batch.json()
+  assert.deepEqual(body.operationNames, ['SearchClients', 'Other'])
+  assert.deepEqual(body.variables, [{ type: 'x' }, null])
+  const state = await s.state()
+  assert.deepEqual(state.unmatched[0], { method: 'POST', path: '/graphql', operationName: 'SearchClients', variables: { type: 'other' }, step: null })
+  assert.deepEqual(state.unmatched[2], { method: 'POST', path: '/graphql', operationName: 'Other', step: null })
 })
