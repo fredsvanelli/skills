@@ -109,7 +109,7 @@ Done when the user chose to write.
 
 Run the same command with `--write --json` and keep its result for the next steps. A key the proposal adds or changes gets the proposal's origin, `guess` or none; an unchanged key keeps its own. The script writes `roles.json` with two-space indentation and keeps the key order, with `version` first and `contexts` after `actions`. The first context moves the file to `"version": 2`.
 
-Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, write back the content of `roles.json` you read in step 3, and report `status: blocked` with the registry error.
+Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, write back the content of `roles.json` you read in step 3 (delete the file if it did not exist then), and report `status: blocked` with the registry error.
 
 Done when `roles.json` is written and the script loads it.
 
@@ -126,7 +126,7 @@ A new project action reaches no runbook until a key uses it. A new role reaches 
 
 Show the runbooks grouped by reason, then by role, context or case, with the key in one line. Merge a runbook that appears in several groups into one row with all of them. When no runbook is reached, say so and go to step 9.
 
-Done when the user has seen every group.
+Done when every group is in `summary:`.
 
 ## 8. Mark for review
 

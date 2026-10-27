@@ -8,7 +8,7 @@ Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md` ("Scrip
 
 The runbook is the source of truth. A script changes to match the runbook; the runbook changes only when the user says it is the one that is wrong, and then through `/runbooks:update`.
 
-`run` also launches a sub-agent on this file for an `api` runbook whose script is missing or out of sync, or whose failure looks like a script mistake. Then the brief says so: skip item 6 (the run that follows is the execution), and in item 9 only list the script in `files:` and name its path and the `scripts:` change in `summary:`. The run commits the script.
+`run` also reaches this file for an `api` runbook whose script is missing or out of sync, or whose failure looks like a script mistake. Two cases. When `run` launched you for it (escalation), your brief says what to skip. When a `run` sub-agent follows this file itself (`Forced model: yes`), skip item 6 (the run is that run) and item 9. Do not end with a report: list the script in the run's `files:` and go on with the run. In both cases the run commits the script, so item 9 only lists the script in `files:` and names its path and the `scripts:` change in `summary:`.
 
 With role tracking on (`roles.enabled` in the config), also read the Roles part of "Scripts of api runbooks" in `format.md`, and for a runbook with cases the "Contexts and cases" section. The role rules below apply only then, and the case rules only to a runbook with cases. A script written before tracking was on has no role in its test names, so it no longer matches its runbook. Rewrite it as item 5 says and show the renamed tests in the mapping of item 3.
 

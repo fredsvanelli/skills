@@ -86,7 +86,7 @@ When the answer is in a file you can read, or is one of the fixed decisions of t
 
 Where an instructions file says to follow or run another command, the sub-agent stops with `status: call` and `call: /runbooks:<command> <arguments>`.
 
-The main session dispatches that command by its own row. It runs `runbooks.mjs model` for the called command and launches or follows it by the dispatch steps. It carries `--model` to the called command when the user gave it. When the called command ends, the main session sends its report to the first sub-agent with `SendMessage`, and the first sub-agent continues.
+The main session dispatches that command by its own row. It runs `runbooks.mjs model` for the called command and launches or follows it by the dispatch steps. It carries `--model` to the called command when the user gave it. When the called command ends, the main session sends its report to the first sub-agent with `SendMessage`, and the first sub-agent continues. A command reached through a call never runs its own commit step. The main session commits once, in the dispatch file of the command the user typed, with every file the chain reported.
 
 ## Commits
 
