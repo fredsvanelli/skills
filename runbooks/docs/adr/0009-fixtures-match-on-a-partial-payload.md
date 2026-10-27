@@ -10,11 +10,11 @@ ADR 0008 left GraphQL variables as its follow-up, and a page with three tabs sho
 
 ## Consequences
 
-- `request.variables` needs `request.operationName`, and `request.body` cannot go with it. `runbooks.mjs fixtures` reports a `variables` or `body` of the wrong shape, and the server skips such a file.
+- `request.variables` needs `request.operationName`, and `request.body` cannot go with it and must be an object or array. `runbooks.mjs fixtures` reports a `variables` or `body` of the wrong shape, and the server skips such a file.
 - A payload is partial at every object depth. `{ "filter": { "type": "clients" } }` matches a request that also sends other keys in `filter`.
 - A fixture that names `null` needs a request that sends `null`. A request that leaves the key out does not match it.
-- Recording drops every key whose name contains `password`, `token` or `secret`, or a name in `upstream.redactBodyKeys`, at any depth. Case does not matter, so `accessToken` is dropped. The 501 body and the `unmatched` entries drop the same keys. Dropping a key makes the saved fixture match more requests.
-- Only a fixture with a payload counts as the one the server would serve for a request with a payload. A project recorded before this change gets new files in the runbook folder, and the old fixtures stay until someone removes them.
+- Recording drops every key whose name contains `password`, `token` or `secret`, or a name in `upstream.redactBodyKeys`, at any depth. Case does not matter, so `accessToken` is dropped. The 501 body and the `unmatched` entries drop the same keys. Dropping a key makes the saved fixture match more requests. A key that holds an array with a redacted item is dropped whole, and a top-level array body with one is saved without `body`, because arrays match only when equal. The `requests` log of `/__runbooks/state` drops the same keys from request bodies.
+- Only a fixture with a payload counts as the one the server would serve for a request with a payload. A project recorded before this change gets new files in the runbook folder, and the old fixtures stay until someone removes them. When an old fixture without a payload answers in the current step, the new files go in that step folder, so they share its layer and win on fields.
 - An unnamed JSON object body is an anonymous GraphQL operation, and is recorded without `body`, only when its `query` is a string that starts with `{`, `query`, `mutation`, `subscription` or `fragment`. Matching on query text stays out of scope. Any other unnamed JSON object or array is recorded with `body`.
 - A payload that is empty after redaction, or an empty object body, is not saved, so the fixture keeps answering any payload.
 - The copied server changed, so `list` and `coverage` warn about a copy from an older version until `/runbooks:setup` refreshes it.
