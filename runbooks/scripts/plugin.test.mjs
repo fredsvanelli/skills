@@ -118,3 +118,13 @@ test('the dispatch reference has the sections the commands link to', () => {
     'When the model cannot launch'
   ])
 })
+
+test('run is a dispatch file with an instructions file', () => {
+  const command = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/run.md'), 'utf8')
+  assert.match(command, /^## Dispatch$/m)
+  assert.match(command, /runbooks\.mjs" model run/)
+  assert.match(parseYaml(splitFrontmatter(command).yaml)['argument-hint'], /--model/)
+  const instructions = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/instructions/run.md'), 'utf8')
+  assert.equal(splitFrontmatter(instructions), null)
+  assert.match(instructions, /status: escalate/)
+})
