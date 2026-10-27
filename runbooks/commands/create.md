@@ -148,7 +148,7 @@ This step applies once the config has `upstream.urlEnv` (step 2, item 7). A `moc
 2. Otherwise, when the config sets `upstream.schema`, write them from it, a local OpenAPI 3 JSON file, one response per operation and status the steps need, with `source: "schema"`.
 3. Otherwise write them by hand, each with `source: "hand-written: <reason>"`.
 
-The fixture shape is `{ request: { method, path, query?, operationName? }, response: { status, headers?, body? }, source }`. Over a GraphQL API, write one fixture per operation the page sends, with its name in `request.operationName` (`references/upstream.md`, "GraphQL operations"). Recording fills it in. Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" fixtures <id> --json` and fix every problem it lists. It exits 0 with problems, so read its output. It exits 2 only when the id or the config is unusable.
+The fixture shape is `{ request: { method, path, query?, operationName?, variables?, body? }, response: { status, headers?, body? }, source }`. Over a GraphQL API, write one fixture per operation the page sends, with its name in `request.operationName` (`references/upstream.md`, "GraphQL operations"). Name `variables` or `body` when the page sends the same request with different payloads. Recording fills it in. Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" fixtures <id> --json` and fix every problem it lists. It exits 0 with problems, so read its output. It exits 2 only when the id or the config is unusable.
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and confirm the new runbook has an empty `problems` list. For a `mocked` runbook, its `warnings` may still name a missing script, which `/runbooks:run` or `/runbooks:to-test` resolves.
 

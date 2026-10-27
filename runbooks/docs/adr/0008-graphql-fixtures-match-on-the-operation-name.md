@@ -5,7 +5,7 @@ A fixture matched a request by method, path and query, so every GraphQL operatio
 ## Considered Options
 
 - Matching on any body field, with a path expression in the fixture. Rejected: the fixture format would need a small query language, while the operation name alone serves the pages that need it.
-- Matching on GraphQL variables. Not built. Step and case folders already give one record per pass. A page that sends the same operation twice in one step with different variables needs it, and until then a recording keeps only the last result and logs the overwrite. This is the follow-up.
+- Matching on GraphQL variables. Not built. Step and case folders already give one record per pass. A page that sends the same operation twice in one step with different variables needs it, and until then a recording keeps only the last result and logs the overwrite. This is the follow-up. Built in ADR 0009.
 - Finding the operation by parsing the query document when the body has no `operationName`. Rejected: the server is one dependency-free file, and an anonymous operation is rare enough to stay on fixtures without `operationName`.
 - Letting a fixture without `operationName` answer each item of a batch. Rejected: a batch recorded before this change is one fixture whose body is the whole array, and it would answer each item with that array.
 
