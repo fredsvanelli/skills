@@ -13,6 +13,7 @@ import { VERSION, createUpstreamServer } from './upstream-server.mjs'
 import { parseArgs } from './lib/args.mjs'
 import { loadConfig } from './lib/config.mjs'
 import { pct } from './lib/format.mjs'
+import { DEFAULT_MODELS } from './lib/models.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
 const SCRIPT = fileURLToPath(new URL('./runbooks.mjs', import.meta.url))
@@ -582,4 +583,18 @@ test('roles prints the Case keys column and one row per case for a context', () 
   assert.match(detail, /\| Key \| Case \| Actions \| Source \| From \|/)
   assert.match(detail, /\| clients\/\* \| vip-outside \|/)
   assert.doesNotMatch(run(['roles', '--root', fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))]).stdout, /Case keys/)
+})
+
+test('model and models commands', () => {
+  assert.equal(run(['model', '--root', FIXTURE, 'run', 'billing.issue-invoice', '--mode', 'test']).stdout, 'haiku\n')
+  assert.deepEqual(JSON.parse(run(['model', '--root', FIXTURE, 'help', 'who?', '--json']).stdout), { model: 'sonnet', row: 'help <question>', forced: false })
+  const bad = run(['model', '--root', FIXTURE, 'run', '--model', 'gpt'])
+  assert.equal(bad.code, 2)
+  assert.match(bad.stderr, /--model must be one of/)
+  assert.deepEqual(JSON.parse(run(['models', '--defaults', '--json', '--root', '/nonexistent']).stdout), DEFAULT_MODELS)
+  const diff = JSON.parse(run(['models', '--diff', '--json', '--root', FIXTURE]).stdout)
+  assert.deepEqual(diff.differing, [])
+  assert.equal(diff.missing.length, Object.keys(DEFAULT_MODELS).length)
+  assert.match(run(['models', '--root', FIXTURE]).stdout, /^\| run --mode test \| haiku \| haiku \|$/m)
+  assert.match(run(['models', '--diff', '--root', FIXTURE]).stdout, /^Missing rows: \d+\n\nNo row differs from the default\.\n$/)
 })

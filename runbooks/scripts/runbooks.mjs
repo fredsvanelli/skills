@@ -17,7 +17,7 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown, modelsMarkdown } from './lib/format.mjs'
 import { roleRows, roleDetail, affectedByChange, affectedByContext, contextRows, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
@@ -27,6 +27,7 @@ import { planReview, planEnableRoles } from './lib/review-edit.mjs'
 import { planRenameCase, planDeleteCase, planDeleteContext } from './lib/case-edit.mjs'
 import { planMerge } from './lib/roles-merge.mjs'
 import { todayLocal } from './lib/stale.mjs'
+import { DEFAULT_MODELS, resolveModel, modelRowsDiff } from './lib/models.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
 
@@ -78,6 +79,11 @@ Commands:
   merge-roles   --file <json> [--write] merges a proposal of roles, contexts and permissions into roles.json:
                 a key the proposal gives replaces the role's own entry, and what it leaves out stays. Removes
                 only the keys its remove list names. A dry run unless --write
+  model         <command> [arguments...] prints the model the command runs on, from the models block of the
+                config. --model <value> in the arguments forces it. --json prints { model, row, forced }
+  models        [--json] prints the model table of the project: key, model and default
+  models        --defaults [--json] prints the default table and needs no config
+  models        --diff [--json] counts the default rows the config lacks and lists the rows whose model differs
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
                 and prints its address; stop it with Ctrl+C
 
@@ -351,7 +357,27 @@ function commandMergeRoles(root, config, options) {
   return options.json ? json(plan) : mergeRolesMarkdown(plan)
 }
 
-const PROJECT_COMMANDS = ['list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles']
+function commandModel(config, argv) {
+  const invocation = []
+  let seen = false
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--root' || argv[i] === '--config') i++
+    else if (argv[i] === '--json') continue
+    else if (!seen && argv[i] === 'model') seen = true
+    else invocation.push(argv[i])
+  }
+  return resolveModel(config.models, invocation)
+}
+
+function commandModels(config, options) {
+  if (options.diff) {
+    const diff = modelRowsDiff(config.ownModels)
+    return options.json ? json(diff) : modelsMarkdown({ diff })
+  }
+  return options.json ? json(config.models) : modelsMarkdown({ rows: config.models, defaults: DEFAULT_MODELS })
+}
+
+const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles']
 
 export function run(argv) {
   const stderr = []
@@ -360,6 +386,9 @@ export function run(argv) {
   try {
     if (!command || command === 'help' || options.help) return finish(0, USAGE)
     if (command === 'status') return finish(0, commandStatus(options))
+    if (command === 'models' && options.defaults) {
+      return finish(0, options.json ? json(DEFAULT_MODELS) : modelsMarkdown({ rows: DEFAULT_MODELS }))
+    }
     if (!PROJECT_COMMANDS.includes(command)) {
       stderr.push(`runbooks: unknown command "${command}"`)
       return finish(2, USAGE)
@@ -369,7 +398,11 @@ export function run(argv) {
     const warnings = ['list', 'coverage', 'entries', 'requirements'].includes(command) ? [...config.warnings] : []
     let stdout
     let code = 0
-    if (command === 'contract') ({ code, stdout } = commandContract(root, config, options))
+    if (command === 'model') {
+      const result = commandModel(config, argv)
+      stdout = options.json ? json(result) : `${result.model}\n`
+    } else if (command === 'models') stdout = commandModels(config, options)
+    else if (command === 'contract') ({ code, stdout } = commandContract(root, config, options))
     else if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
