@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { MODEL_VALUES, COMMAND_NAMES, DEFAULT_MODELS, parseKey } from './models.mjs'
 
 export const DEFAULT_CONFIG_PATH = 'docs/runbooks/runbooks.config.json'
 // Where the config lived before the plugin was renamed from runbook to runbooks.
@@ -53,6 +54,30 @@ function validateDesign(design, stack) {
   if (needs.length > 0 && !needs.some((key) => design[key])) {
     throw new ConfigError(`design: ${design.system} needs ${needs.map((key) => `"${key}"`).join(' or ')}`)
   }
+}
+
+// Returns the usable rows of the project's models block and the warnings for the rows it ignores.
+function validateModels(models) {
+  if (models === null || models === undefined) return { own: {}, warnings: [] }
+  if (typeof models !== 'object' || Array.isArray(models)) {
+    throw new ConfigError('models must be an object of "<command> [parameters]": model')
+  }
+  const own = {}
+  const warnings = []
+  for (const [key, value] of Object.entries(models)) {
+    if (!MODEL_VALUES.includes(value)) throw new ConfigError(`models["${key}"] must be one of ${MODEL_VALUES.join(', ')}`)
+    let reason = null
+    try {
+      const { command } = parseKey(key)
+      if (command === undefined) reason = 'the key is empty'
+      else if (!COMMAND_NAMES.includes(command)) reason = `unknown command "${command}"`
+    } catch (err) {
+      reason = 'the key is not a command with options and <placeholder> positionals'
+    }
+    if (reason) warnings.push(`models["${key}"]: ${reason}; the row is ignored`)
+    else own[key] = value
+  }
+  return { own, warnings }
 }
 
 const UPSTREAM_MODES = ['live', 'mocked']
@@ -200,6 +225,9 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
       throw new ConfigError(`commits.${type} must be one of ${COMMIT_POLICIES.join(', ')}`)
     }
   }
-  config.warnings = pathWarnings(projectRoot, config)
+  const { own, warnings: modelWarnings } = validateModels(raw.models)
+  config.ownModels = own
+  config.models = { ...DEFAULT_MODELS, ...own }
+  config.warnings = [...pathWarnings(projectRoot, config), ...modelWarnings]
   return config
 }

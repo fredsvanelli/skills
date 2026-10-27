@@ -283,6 +283,53 @@ Errors the loader raises:
 - `upstream.redactHeaders must be a list of header names`
 - `upstream.redactBodyKeys must be a list of key names`
 
+## Models
+
+The optional `models` block sets which model runs each command. It maps a row key to one of `inline`, `haiku`, `sonnet`, `opus` or `fable`. `inline` runs the command in the main session, with no sub-agent. Any other value launches the command's sub-agents on that model. The five values run from least to most capable in that order. A config without `models` uses the default table below, and a project's rows replace the default rows with the same key.
+
+A key is a command name followed by options and `<placeholder>` positionals, as in `run --mode test` or `help <question>`. A row matches an invocation when the command is the same, every option in the key is given (an option with a value must have that value), and a placeholder has a positional argument to match. When several rows match, the row with the most options and placeholders wins. On a tie, the more capable model wins. An invocation that no row matches runs `inline`. `--model <value>` on the command line overrides every row.
+
+| Row | Model |
+|---|---|
+| `check` | `inline` |
+| `list` | `inline` |
+| `ui` | `inline` |
+| `upgrade` | `inline` |
+| `roles:list` | `inline` |
+| `contexts:list` | `inline` |
+| `help` | `inline` |
+| `setup` | `inline` |
+| `settings` | `inline` |
+| `roles:create` | `inline` |
+| `roles:update` | `inline` |
+| `roles:delete` | `inline` |
+| `contexts:create` | `inline` |
+| `contexts:update` | `inline` |
+| `contexts:delete` | `inline` |
+| `permissions:manage` | `inline` |
+| `orchestrator` | `inline` |
+| `run --mode guided` | `inline` |
+| `coverage` | `haiku` |
+| `run --mode test` | `haiku` |
+| `run --mode prompt` | `haiku` |
+| `run --import` | `haiku` |
+| `run` | `sonnet` |
+| `help <question>` | `sonnet` |
+| `whats-next` | `sonnet` |
+| `map` | `sonnet` |
+| `audit` | `sonnet` |
+| `roles:generate` | `sonnet` |
+| `audit --fix` | `opus` |
+| `create` | `opus` |
+| `update` | `opus` |
+| `to-test` | `opus` |
+
+A value outside the five is a config error: `models["<key>"] must be one of inline, haiku, sonnet, opus, fable`. `models` itself must be an object or `null`, or the loader raises `models must be an object of "<command> [parameters]": model`.
+
+A key that is not a command with options and placeholders, an empty key, or a key whose command does not exist is not an error. The loader warns `models["<key>"]: <reason>; the row is ignored` and leaves the row out.
+
+`setup` writes the table into a project that has no `models` key. `/runbooks:settings models` changes it.
+
 ## Sources
 
 Each `entries` or `requirements` item is one source. Every source accepts `root`, a folder of the project relative to its root (for a monorepo: `"apps/api"`). Ids from a rooted source keep the root in their `file` (`apps/api/src/app/...`), and `slices` globs match that same path. An API in another repository is never a source: CI checks out this repository alone, so the source would never run there (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`).
