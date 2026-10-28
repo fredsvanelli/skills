@@ -18,7 +18,7 @@ import { splitFrontmatter } from './lib/yaml.mjs'
 import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
 import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript, serverFileOf, PACKAGE_SCRIPT } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
-import { serveUi } from './ui-server.mjs'
+import { startUi } from './ui-server.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown, modelsMarkdown, lastRunPlanMarkdown, markOutdatedMarkdown } from './lib/format.mjs'
 import { roleRows, roleDetail, affectedByChange, affectedByContext, contextRows, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
@@ -585,20 +585,7 @@ if (invokedPath && invokedPath === fs.realpathSync(fileURLToPath(import.meta.url
       process.exit(2)
     }
   } else if (argv[0] === 'ui' && !argv.includes('--help')) {
-    try {
-      const { options } = parseArgs(argv)
-      const port = options.port === undefined ? 4020 : Number(options.port)
-      if (options.port !== undefined && (typeof options.port !== 'string' || !/^\d+$/.test(options.port) || port > 65535)) {
-        throw new Error('--port must be an integer from 0 to 65535')
-      }
-      const root = path.resolve(typeof options.root === 'string' ? options.root : process.cwd())
-      const configPath = typeof options.config === 'string' ? options.config : undefined
-      loadConfig(root, configPath)
-      serveUi({ root, configPath, port })
-    } catch (err) {
-      process.stderr.write(`runbooks: ${err.message}\n`)
-      process.exit(2)
-    }
+    startUi(argv)
   } else {
     const result = run(argv)
     process.stdout.write(result.stdout)

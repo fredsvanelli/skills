@@ -5,7 +5,7 @@ import path from 'node:path'
 import http from 'node:http'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
-import { createUiServer } from './ui-server.mjs'
+import { createUiServer, uiCliOptions } from './ui-server.mjs'
 
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
 const ROLES = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
@@ -218,4 +218,18 @@ test('/api/roles and /api/runbook serve the cases of a context', async (t) => {
   assert.equal(roles.contexts[0].name, 'client-access')
   const runbook = await (await get(`${base}/api/runbook/clients.edit-client`)).json()
   assert.equal(runbook.context, 'client-access')
+})
+
+test('uiCliOptions reads --port, --root and --config and defaults to port 4020', () => {
+  assert.deepEqual(uiCliOptions([], '/work/app'), { root: path.resolve('/work/app'), configPath: undefined, port: 4020 })
+  assert.deepEqual(
+    uiCliOptions(['ui', '--port', '4800', '--root', '../app', '--config', 'x.json', '--model', 'haiku'], '/work/e2e'),
+    { root: path.resolve('/work/app'), configPath: 'x.json', port: 4800 },
+  )
+})
+
+test('uiCliOptions rejects a port that is not an integer from 0 to 65535', () => {
+  for (const bad of ['70000', 'abc', '-1']) {
+    assert.throws(() => uiCliOptions(['--port', bad]), /^Error: --port must be an integer from 0 to 65535$/)
+  }
 })

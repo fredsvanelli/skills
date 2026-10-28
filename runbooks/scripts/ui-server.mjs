@@ -1,7 +1,9 @@
 // runbooks UI server. Read-only: it serves the views of the runbooks on disk to templates/ui.html.
 import http from 'node:http'
 import fs from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseArgs } from './lib/args.mjs'
 import { loadConfig } from './lib/config.mjs'
 import { todayLocal } from './lib/stale.mjs'
 import { runbooksView, runbookView, historyView, reportView, coverageView, rolesView, roleView } from './lib/explore.mjs'
@@ -76,8 +78,8 @@ export function createUiServer({ root, configPath, today = todayLocal, html = ()
 }
 
 // Listens on 127.0.0.1, prints the listening line and closes on SIGINT or SIGTERM. Exits 2 when the port is taken.
-export function serveUi({ root, configPath, port }) {
-  const server = createUiServer({ root, configPath })
+export function serveUi({ root, configPath, port, html }) {
+  const server = createUiServer({ root, configPath, ...(html ? { html } : {}) })
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       process.stderr.write(`runbooks: port ${port} is in use; stop what holds it or pass --port\n`)
@@ -96,4 +98,28 @@ export function serveUi({ root, configPath, port }) {
   }
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop)
   return server
+}
+
+// The flags of `runbooks.mjs ui` and of the project's copy. Unknown flags, such as --model, are ignored.
+export function uiCliOptions(argv, cwd = process.cwd()) {
+  const { options } = parseArgs(argv)
+  const port = options.port === undefined ? 4020 : Number(options.port)
+  if (options.port !== undefined && (typeof options.port !== 'string' || !/^\d+$/.test(options.port) || port > 65535)) {
+    throw new Error('--port must be an integer from 0 to 65535')
+  }
+  const root = path.resolve(cwd, typeof options.root === 'string' ? options.root : '.')
+  const configPath = typeof options.config === 'string' ? options.config : undefined
+  return { root, configPath, port }
+}
+
+// Starts the server from the command line. A bad flag or config prints one runbooks: line and exits 2.
+export function startUi(argv, { cwd = process.cwd(), html } = {}) {
+  try {
+    const { root, configPath, port } = uiCliOptions(argv, cwd)
+    loadConfig(root, configPath)
+    return serveUi({ root, configPath, port, html })
+  } catch (err) {
+    process.stderr.write(`runbooks: ${err.message}\n`)
+    process.exit(2)
+  }
 }
