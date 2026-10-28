@@ -33,7 +33,7 @@ This file only dispatches. The procedure is in `${CLAUDE_PLUGIN_ROOT}/skills/run
 ## Dispatch
 
 1. Run `git status --porcelain` now and keep the list for the commit step.
-2. With `--import`, resolve the model with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model run --import <file or text> [--model <x>]`, dispatch the Import step (step 6) of the instructions file by `agents.md`, and go to step 7.
+2. With `--import`, resolve the model with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model run --import reply [--model <x>]`, dispatch the Import step (step 6) of the instructions file by `agents.md`, and go to step 7.
 3. Select, by the first match:
    - Ids: those runbooks.
    - `--capability x`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --capability x --json`.
@@ -42,16 +42,16 @@ This file only dispatches. The procedure is in `${CLAUDE_PLUGIN_ROOT}/skills/run
    Leave out `deprecated`, `placeholder` and invalid runbooks and name them in the final summary. A placeholder has no steps; offer `/runbooks:create --from placeholder <id>` for it.
 
    Split the selection by `surface` (in the `list --json` output). Mode for the `ui` runbooks: `--mode` when given; otherwise ask the user to choose among the available modes, as "Choosing the mode" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/run-modes.md` describes. Read only that section. Mode `test` is available for a `ui` runbook whose script has one test per step; the question says why it is not offered for the others. `--record` needs a browser mode (`guided`, `headless`, `headed` or `chrome`). With `--record` and mode `test`, `script` or `prompt`, say so and ask for a browser mode. When the selection has no `ui` runbook, ask nothing. With `--waive`, ask the reason for it now.
-4. Group. An `api` runbook gets `--mode test`. A `ui` runbook gets the chosen mode. `--record`, `--steps`, `--role`, `--case`, `--waive` and `--model` carry as typed. Runbooks with the same arguments form one group. Resolve one model per group:
+4. Group. An `api` runbook gets `--mode test`. A `ui` runbook gets the chosen mode. `--record`, `--steps`, `--role`, `--case`, `--waive` and `--model` carry as typed. Runbooks with the same arguments form one group. Resolve one model per group, passing every flag the user gave as typed (a value that is a list stands for itself, never free text), so a user row such as `run --steps` matches:
 
    ```
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model run --mode <m> [--record] [--model <x>] --json
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model run --mode <m> [--record] [--steps S01] [--role a] [--case a] [--waive S03] [--model <x>] --json
    ```
 
    The output is `{ model, row, forced }`. Five `api` runbooks are one group. A `--mode headless` selection with `api` and `ui` runbooks is two groups.
 5. Run the groups one after another, because the upstream server, the browser and the test database are shared. Give each runbook the run id `<YYYY-MM-DD-HHMM>-<runbook id>`. A group whose model is `inline` follows the instructions file in the main session. Any other group gets a sub-agent by `agents.md`, with the group's runbook ids, mode, flags and run ids in the brief, and `Forced model: yes` when `forced` is true. Put the `--waive` reason from step 3 in the brief. Relay each `status: question` and `status: call` report by `agents.md` until the group's sub-agent reports `done`, `blocked` or `failed`.
 
-   The main session owns the upstream server for a `prompt` group and for `--import`, because a server started by a sub-agent may not outlive it. Before it dispatches a `prompt` group, it starts the server by the start rule in step 2 of the instructions file (background start, wait for the first line, stop on a taken port). It keeps the server running across imports and stops it after the last runbook's import. The brief says the server is already up at its port and that the sub-agent must not start or stop it. In other modes the sub-agent starts and stops the server within its own run.
+   The main session owns the upstream server for a `prompt` group and for `--import`, because a server started by a sub-agent may not outlive it. Before it dispatches or follows a `prompt` group, it starts the server by the start rule in step 2 of the instructions file (background start, wait for the first line, stop on a taken port). It keeps the server running across imports and stops it after the last runbook's import. The brief says the server is already up at its port and that the sub-agent must not start or stop it. In other modes the sub-agent starts and stops the server within its own run.
 6. Escalate, only when `forced` is false. A report with `status: escalate` names a runbook and the reason (`sync` or `script`), and its `handoff:` names the runbooks of the group that did not run.
    - Resolve `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model to-test <id>` and launch a sub-agent on that model with the `to-test` instructions file (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`). Tell it to write the missing tests, or to fix the named script mistake, without loosening an assertion.
    - Then launch a new sub-agent on the group's model to run that runbook and the ones in `handoff:`.

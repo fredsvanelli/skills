@@ -47,7 +47,7 @@ Every path is under `${CLAUDE_PLUGIN_ROOT}`.
 
 ## Dispatch
 
-1. Resolve the model with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model help $ARGUMENTS`. Without a question the row is `inline`: read `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/help.md` and follow it in this session. With a question, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with the command `help` and that instructions file; the sub-agent finds the areas table in this file, under "Areas".
+1. Resolve the model with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model help [--about <area>] [--model <x>] [text]`, where `text` stands for the question, if any. When it prints `inline`, read `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/help.md` and follow it in this session. Otherwise follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with the command `help` and that instructions file; the sub-agent finds the areas table in this file, under "Areas".
 2. Print the `summary:` of the report as written. It is the answer.
 
 Done when the user has the answer.
