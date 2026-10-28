@@ -5,7 +5,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { loadRunbooks } from './runbooks.mjs'
 import { fixturesDir } from './fixtures.mjs'
-import { setRoleKeys } from './frontmatter-edit.mjs'
+import { setRoleKeys, setLastRun } from './frontmatter-edit.mjs'
+import { readLastRun, renameCells } from './last-run.mjs'
 import { splitFrontmatter, parseYaml } from './yaml.mjs'
 import { OUTCOMES } from './roles.mjs'
 
@@ -218,6 +219,14 @@ function plan(root, config, runbooks, edit, { folders, write }) {
 
 const ownerOf = (registry, kase) => Object.values(registry.contexts ?? {}).find((context) => context.cases.includes(kase))?.name ?? null
 
+// Renames the case in the last_run cells of a runbook text. A runbook with no cells comes back unchanged.
+function renameCaseCells(text, from, to) {
+  const parts = splitFrontmatter(text)
+  const { lastRun } = readLastRun(parts ? parseYaml(parts.yaml).last_run ?? null : null)
+  if (!lastRun || lastRun.legacy || lastRun.cells.length === 0) return text
+  return setLastRun(text, { lastRun: renameCells(lastRun, { field: 'case', from, to }) })
+}
+
 export function planRenameCase(root, config, registry, from, to, { write = false } = {}) {
   const owner = ownerOf(registry, from)
   if (owner === null) throw new Error(`no case "${from}"`)
@@ -225,7 +234,11 @@ export function planRenameCase(root, config, registry, from, to, { write = false
   if (!/^[a-z0-9][a-z0-9-]*$/.test(to)) throw new Error(`case "${to}" must be kebab-case`)
   const runbooks = loadRunbooks(root, config).filter((rb) => rb.context === owner)
   const rename = (list) => list.map((name) => (name === from ? to : name))
-  return plan(root, config, runbooks, (text) => rewriteCases(text, rename, { emptyStepLine: 'skip' }), {
+  const edit = (text) => {
+    const rewritten = rewriteCases(text, rename, { emptyStepLine: 'skip' })
+    return rewritten.skipped.length > 0 ? rewritten : { ...rewritten, text: renameCaseCells(rewritten.text, from, to) }
+  }
+  return plan(root, config, runbooks, edit, {
     write,
     folders: (rb) => caseFolders(root, config, rb, from).map((dir) => ({ from: dir, to: `${dir.slice(0, dir.length - from.length - 1)}+${to}` })),
   })

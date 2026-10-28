@@ -11,7 +11,7 @@ import { parseSteps } from './lib/steps.mjs'
 import { reportByName } from './lib/reports.mjs'
 import {
   readLastRun, lastRunLines, passKey, parsePassKey,
-  expectedCells, reportCells, pendingCells, mergeLastRun, markOutdated
+  expectedCells, reportCells, pendingCells, mergeLastRun, markOutdated, renameCells
 } from './lib/last-run.mjs'
 
 const SHAPE = `last_run:
@@ -316,6 +316,24 @@ test('a plain runbook expects one cell per step, so a merge leaves the other ste
   assert.equal(merged.lastRun.result, 'incomplete')
   assert.equal(merged.status, 'draft')
   assert.deepEqual(pendingCells(merged.lastRun.cells, expected), [cell('S01'), cell('S03')])
+})
+
+test('renameCells moves a case and leaves * and other cases', () => {
+  const { lastRun } = readLastRun(parseYaml(`last_run:
+  runs:
+    r1: { date: 2026-10-16, commit: "abc1234", report: _runs/x.md }
+  cells:
+    S01: { admin/vip-team: passed r1, admin/*: passed r1, admin/regular@mobile: failed r1, viewer: passed r1 }
+`).last_run)
+  const renamed = renameCells(lastRun, { field: 'case', from: 'vip-team', to: 'key-team' })
+  assert.deepEqual(renamed.cells.map(passKey), ['admin/key-team', 'admin/*', 'admin/regular@mobile', 'viewer'])
+  assert.equal(renamed.cells[0].state, 'passed')
+  assert.equal(renamed.cells[0].run, 'r1')
+  const role = renameCells(lastRun, { field: 'role', from: 'admin', to: 'owner' })
+  assert.deepEqual(role.cells.map(passKey), ['owner/vip-team', 'owner/*', 'owner/regular@mobile', 'viewer'])
+  assert.deepEqual(renameCells(lastRun, { field: 'case', from: '*', to: 'x' }).cells.map(passKey), lastRun.cells.map(passKey))
+  const { lastRun: legacy } = readLastRun({ date: '2026-10-01', commit: 'abc1234', result: 'passed', report: '_runs/x.md' })
+  assert.equal(renameCells(legacy, { field: 'case', from: 'a', to: 'b' }), legacy)
 })
 
 test('reportCells reads empty columns as null and leaves the run unset', () => {

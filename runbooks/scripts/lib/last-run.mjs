@@ -289,3 +289,10 @@ export function mergeLastRun(previous, report, expected, { merge, status }) {
 export function markOutdated(lastRun) {
   return { ...lastRun, outdated: true, cells: lastRun.cells.map((cell) => ({ ...cell, outdated: true })) }
 }
+
+// Renames a role or a case in every cell that has it. A legacy value has no cells and comes back unchanged.
+// The case `*` (a role that runs once) is never renamed, since it is not a case name.
+export function renameCells(lastRun, { field, from, to }) {
+  if (lastRun.legacy || from === '*') return lastRun
+  return { ...lastRun, cells: lastRun.cells.map((cell) => (cell[field] === from ? { ...cell, [field]: to } : cell)) }
+}

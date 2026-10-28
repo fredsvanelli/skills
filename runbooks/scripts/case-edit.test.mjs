@@ -70,6 +70,21 @@ test('rename-case moves fixture folders and delete-case skips a runbook it canno
   assert.match(run(['rename-case', 'nope', 'other', '--root', dir]).stderr, /no case "nope"/)
 })
 
+test('rename-case renames the case in last_run cells', () => {
+  const dir = copyContexts()
+  const report = '_runs/2026-10-21-1000-clients.edit-client.md'
+  const cells = `last_run:\n  date: 2026-10-21\n  commit: "abc1234"\n  result: passed\n  report: ${report}\n  runs:\n    r1: { date: 2026-10-21, commit: "abc1234", report: ${report} }\n  cells:\n    S01: { admin/vip-team: passed r1, admin/*: passed r1 }`
+  fs.writeFileSync(path.join(dir, EDIT), fixtureText().replace(/^last_run:.*$/m, cells))
+  const dry = JSON.parse(run(['rename-case', 'vip-team', 'key-team', '--json', '--root', dir]).stdout)
+  assert.equal(dry.written.length, 0)
+  assert.match(read(dir), /admin\/vip-team: passed r1/)
+  const out = JSON.parse(run(['rename-case', 'vip-team', 'key-team', '--write', '--json', '--root', dir]).stdout)
+  assert.ok(out.written.includes(EDIT), JSON.stringify(out))
+  const text = read(dir)
+  assert.match(text, /S01: \{ admin\/key-team: passed r1, admin\/\*: passed r1 \}/)
+  assert.doesNotMatch(text, /admin\/vip-team/)
+})
+
 test('delete-case removes the case everywhere and skips a runbook whose cases list only it', () => {
   const dir = copyContexts()
   const list = path.join(dir, 'docs/runbooks/clients/list-clients.md')

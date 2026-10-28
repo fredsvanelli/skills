@@ -11,7 +11,7 @@ import { nextStatus } from './lib/status.mjs'
 import { changedFiles, affectedRunbooks, schemaChanges } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
 import { latestReport, reportByName } from './lib/reports.mjs'
-import { expectedCells, mergeLastRun, markOutdated, pendingCells } from './lib/last-run.mjs'
+import { expectedCells, mergeLastRun, markOutdated, renameCells, pendingCells } from './lib/last-run.mjs'
 import { setLastRun } from './lib/frontmatter-edit.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
@@ -91,6 +91,8 @@ Commands:
                 _runs/<name>. A partial report needs --merge. A dry run unless --write
   mark-outdated <id...> [--write] marks the last_run of each runbook and all its cells outdated. A runbook
                 with no last_run is skipped. A dry run unless --write
+  rename-role-cells <from> <to> [--write] renames the role in the last_run cells of every runbook and
+                changes nothing else. Needs role tracking on. A dry run unless --write
   model         <command> [arguments...] prints the model the command runs on, from the models block of the
                 config. --model <value> in the arguments forces it. --json prints { model, row, forced }
   models        [--json] prints the model table of the project: key, model and default
@@ -105,7 +107,7 @@ Global options:
   --json           print JSON instead of Markdown
 
 Read-only, except move-to-calls, mark-review, enable-roles, merge-roles, rename-case, delete-case,
-delete-context, last-run and mark-outdated with --write: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
+delete-context, last-run, mark-outdated and rename-role-cells with --write: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
 contract --strict has findings, 2 on error.
 `
 
@@ -424,6 +426,33 @@ function commandMarkOutdated(root, config, options, positionals) {
   return options.json ? json(result) : markOutdatedMarkdown({ ...result, write })
 }
 
+// rename-role-cells: renames a role in the last_run cells of every runbook. Every edit is computed before any file is written.
+function commandRenameRoleCells(root, config, options, positionals) {
+  requireTracking(config)
+  // parseArgs reads "--write <arg>" as a value, so a string --write is the first name.
+  const names = [options.write, ...positionals].filter((value) => typeof value === 'string')
+  const write = options.write !== undefined
+  if (names.length !== 2) throw new Error('rename-role-cells needs <from> and <to>')
+  const [from, to] = names
+  const result = { runbooks: [], written: [] }
+  const edits = []
+  for (const rb of loadRunbooks(root, config)) {
+    if (!rb.lastRun || !rb.lastRun.cells.some((cell) => cell.role === from)) continue
+    const file = path.resolve(root, rb.path)
+    try {
+      edits.push([file, setLastRun(fs.readFileSync(file, 'utf8'), { lastRun: renameCells(rb.lastRun, { field: 'role', from, to }) })])
+    } catch (err) {
+      throw new Error(`${rb.path}: ${err.message}. Nothing was written`)
+    }
+    result.runbooks.push({ id: rb.id, path: rb.path })
+  }
+  if (write) {
+    for (const [file, text] of edits) fs.writeFileSync(file, text)
+    result.written = result.runbooks.map((rb) => rb.path)
+  }
+  return options.json ? json(result) : caseEditMarkdown({ title: `Renames the role ${from} to ${to} in last_run cells.`, ...result, write })
+}
+
 function commandMergeRoles(root, config, options) {
   requireTracking(config)
   if (typeof options.file !== 'string') throw new Error('merge-roles needs --file <json>')
@@ -461,7 +490,7 @@ function commandPackageScript(root, config, options) {
   return `${status}: "${PACKAGE_SCRIPT}": "${value}"\n`
 }
 
-const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles', 'last-run', 'mark-outdated']
+const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles', 'last-run', 'mark-outdated', 'rename-role-cells']
 
 export function run(argv) {
   const stderr = []
@@ -507,6 +536,7 @@ export function run(argv) {
     else if (command === 'merge-roles') stdout = commandMergeRoles(root, config, options)
     else if (command === 'last-run') stdout = commandLastRun(root, config, options, positionals)
     else if (command === 'mark-outdated') stdout = commandMarkOutdated(root, config, options, positionals)
+    else if (command === 'rename-role-cells') stdout = commandRenameRoleCells(root, config, options, positionals)
     else stdout = commandItems(root, config, options, command, warnings)
     if (command === 'list' || command === 'coverage') {
       const copied = copiedServerWarning(root, config, VERSION)
