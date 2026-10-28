@@ -22,6 +22,13 @@ test('every ${CLAUDE_PLUGIN_ROOT} path in the plugin docs exists', () => {
   assert.deepEqual(missing, [])
 })
 
+test('no command or instruction starts the plugin copy of the upstream server', () => {
+  const starts = markdownFiles()
+    .filter((rel) => rel.startsWith('commands/') || rel.startsWith('skills/runbooks/instructions/'))
+    .filter((rel) => /runbooks\.mjs" upstream(?![-\w])/.test(fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')))
+  assert.deepEqual(starts, [])
+})
+
 test('the runbook skill has a name and a description', () => {
   const parts = splitFrontmatter(fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/SKILL.md'), 'utf8'))
   const data = parseYaml(parts.yaml)
