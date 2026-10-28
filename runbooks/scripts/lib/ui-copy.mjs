@@ -28,6 +28,31 @@ export function uiModules() {
   return [...found].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 }
 
+// Where setup writes the copy, relative to the project, with forward slashes so it survives a shell.
+export const uiCopyFile = (config) => `${config.paths.runbooks.replaceAll('\\', '/')}/${UI_COPY_NAME}`
+
+// Why /runbooks:ui cannot start the copy, or null when it can. Reads the copy as text and never imports it.
+export function uiCopyProblem(root, config, version) {
+  const file = uiCopyFile(config)
+  const full = path.resolve(root, file)
+  if (!fs.existsSync(full)) return `runbooks UI copy ${file} is missing: run /runbooks:setup to write it`
+  const found = /export const VERSION = '([^']*)'/.exec(fs.readFileSync(full, 'utf8'))?.[1] ?? 'unknown'
+  if (found === version) return null
+  return `runbooks UI copy ${file} is from runbooks ${found}, the plugin is ${version}: run /runbooks:setup to refresh it`
+}
+
+// Writes or refreshes the copy. unchanged means the file already holds these bytes.
+export function writeUiCopy(root, config, version) {
+  const file = uiCopyFile(config)
+  const full = path.resolve(root, file)
+  const text = buildUiCopy(version)
+  const current = fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : null
+  if (current === text) return { status: 'unchanged', file }
+  fs.mkdirSync(path.dirname(full), { recursive: true })
+  fs.writeFileSync(full, text)
+  return { status: current === null ? 'added' : 'replaced', file }
+}
+
 // The project's copy of the UI server: the modules and the page as strings, written to a temp folder at startup.
 export function buildUiCopy(version) {
   const modules = uiModules().map(([rel, source]) => `  ${JSON.stringify(rel)}: ${JSON.stringify(source)},`)

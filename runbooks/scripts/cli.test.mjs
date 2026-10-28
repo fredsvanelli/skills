@@ -265,8 +265,9 @@ test('copiedServerProblem is strict about an unset file and a UI tests repositor
   )
 })
 
+const pick = ({ code, stdout }) => [code, stdout]
+
 test('upstream-copy prints the file when it is current and the problem otherwise', () => {
-  const pick = ({ code, stdout }) => [code, stdout]
   const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
   assert.deepEqual(pick(run(['upstream-copy', '--root', dir])), [1, 'upstream.serverFile tests/runbooks-upstream.mjs is missing: run /runbooks:setup to copy it\n'])
   fs.mkdirSync(path.join(dir, 'tests'))
@@ -274,6 +275,31 @@ test('upstream-copy prints the file when it is current and the problem otherwise
   assert.equal(run(['upstream-copy', '--root', dir]).code, 1)
   fs.writeFileSync(path.join(dir, 'tests/runbooks-upstream.mjs'), `export const VERSION = '${VERSION}'\n`)
   assert.deepEqual(pick(run(['upstream-copy', '--root', dir])), [0, 'tests/runbooks-upstream.mjs\n'])
+})
+
+test('ui-copy reports a missing copy, writes it with --write, then prints its path', () => {
+  const dir = upstreamProject(null)
+  assert.deepEqual(pick(run(['ui-copy', '--root', dir])), [1, 'runbooks UI copy docs/runbooks/runbooks-ui.mjs is missing: run /runbooks:setup to write it\n'])
+  assert.deepEqual(pick(run(['ui-copy', '--root', dir, '--write'])), [0, 'added: docs/runbooks/runbooks-ui.mjs\n'])
+  assert.deepEqual(pick(run(['ui-copy', '--root', dir])), [0, 'docs/runbooks/runbooks-ui.mjs\n'])
+  assert.deepEqual(pick(run(['ui-copy', '--root', dir, '--write'])), [0, 'unchanged: docs/runbooks/runbooks-ui.mjs\n'])
+})
+
+test('ui-copy names the version of a stale copy, and --write replaces it', () => {
+  const dir = upstreamProject(null)
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/runbooks-ui.mjs'), "export const VERSION = '0.9.0'\n")
+  assert.deepEqual(pick(run(['ui-copy', '--root', dir])), [
+    1,
+    `runbooks UI copy docs/runbooks/runbooks-ui.mjs is from runbooks 0.9.0, the plugin is ${VERSION}: run /runbooks:setup to refresh it\n`,
+  ])
+  assert.deepEqual(pick(run(['ui-copy', '--root', dir, '--write'])), [0, 'replaced: docs/runbooks/runbooks-ui.mjs\n'])
+  assert.equal(run(['ui-copy', '--root', dir]).code, 0)
+})
+
+test('ui-copy follows paths.runbooks', () => {
+  const dir = upstreamProject(null, { paths: { runbooks: 'qa\\runbooks' } })
+  assert.equal(run(['ui-copy', '--root', dir, '--write']).stdout, 'added: qa/runbooks/runbooks-ui.mjs\n')
+  assert.ok(fs.existsSync(path.join(dir, 'qa/runbooks/runbooks-ui.mjs')))
 })
 
 test('packageScript adds, keeps and replaces the runbooks:upstream script', () => {

@@ -19,6 +19,7 @@ import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fi
 import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript, serverFileOf, PACKAGE_SCRIPT } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { startUi } from './ui-server.mjs'
+import { uiCopyFile, uiCopyProblem, writeUiCopy } from './lib/ui-copy.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown, modelsMarkdown, lastRunPlanMarkdown, markOutdatedMarkdown } from './lib/format.mjs'
 import { roleRows, roleDetail, affectedByChange, affectedByContext, contextRows, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
@@ -99,7 +100,10 @@ Commands:
   models        --defaults [--json] prints the default table and needs no config
   models        --diff [--json] counts the default rows the config lacks and lists the rows whose model differs
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
-                and prints its address; stop it with Ctrl+C
+                and prints its address; stop it with Ctrl+C. It serves plugin development: a project starts its own
+                copy with npm run runbooks:ui
+  ui-copy       [--write] prints <paths.runbooks>/runbooks-ui.mjs when the copied UI server is there and from this
+                plugin version; else prints why and exits 1. --write writes or refreshes it
 
 Global options:
   --root <dir>     project root (default: current directory)
@@ -511,7 +515,7 @@ function commandPackageScript(root, config, options) {
   return `${status}: "${PACKAGE_SCRIPT}": "${value}"\n`
 }
 
-const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles', 'last-run', 'mark-outdated', 'rename-role-cells']
+const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'ui-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles', 'last-run', 'mark-outdated', 'rename-role-cells']
 
 export function run(argv) {
   const stderr = []
@@ -541,6 +545,13 @@ export function run(argv) {
       const problem = copiedServerProblem(root, config, VERSION)
       code = problem ? 1 : 0
       stdout = `${problem ?? serverFileOf(config)}\n`
+    } else if (command === 'ui-copy' && options.write) {
+      const { status, file } = writeUiCopy(root, config, VERSION)
+      stdout = `${status}: ${file}\n`
+    } else if (command === 'ui-copy') {
+      const problem = uiCopyProblem(root, config, VERSION)
+      code = problem ? 1 : 0
+      stdout = `${problem ?? uiCopyFile(config)}\n`
     } else if (command === 'package-script') stdout = commandPackageScript(root, config, options)
     else if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
