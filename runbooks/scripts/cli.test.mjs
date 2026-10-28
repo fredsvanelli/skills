@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { spawn, spawnSync } from 'node:child_process'
 import net from 'node:net'
 import { run } from './runbooks.mjs'
-import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
+import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript } from './lib/upstream.mjs'
 import { VERSION, createUpstreamServer } from './upstream-server.mjs'
 import { parseArgs } from './lib/args.mjs'
 import { loadConfig } from './lib/config.mjs'
@@ -190,7 +190,7 @@ test('upstreamOptions resolves the config and the flags', () => {
     redactHeaders: ['x-key'],
     redactBodyKeys: ['otp'],
     port: 4321,
-    mode: 'mocked',
+    mode: 'live',
     runbook: null,
     role: null,
     case: null,
@@ -250,6 +250,87 @@ test('copiedServerWarning skips a copy in a UI tests repository that is not clon
   } finally {
     fs.rmSync(path.resolve(dir, '../app-e2e'), { recursive: true })
   }
+})
+
+test('copiedServerProblem is strict about an unset file and a UI tests repository not cloned', () => {
+  const unset = upstreamProject({})
+  assert.equal(copiedServerProblem(unset, configOf(unset), VERSION), 'upstream.serverFile is not set: run /runbooks:setup to copy the server')
+  const none = upstreamProject(null)
+  assert.equal(copiedServerProblem(none, configOf(none), VERSION), 'the config has no upstream block. Run /runbooks:setup')
+  const tests = { ui: { framework: 'playwright', root: '../app-e2e', dir: 'tests' } }
+  const far = upstreamProject({ serverFile: '../app-e2e/tests/runbooks-upstream.mjs' }, { tests })
+  assert.equal(
+    copiedServerProblem(far, configOf(far), VERSION),
+    'upstream.serverFile ../app-e2e/tests/runbooks-upstream.mjs is in ../app-e2e, which is not cloned: clone it there or run /runbooks:setup',
+  )
+})
+
+test('upstream-copy prints the file when it is current and the problem otherwise', () => {
+  const pick = ({ code, stdout }) => [code, stdout]
+  const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
+  assert.deepEqual(pick(run(['upstream-copy', '--root', dir])), [1, 'upstream.serverFile tests/runbooks-upstream.mjs is missing: run /runbooks:setup to copy it\n'])
+  fs.mkdirSync(path.join(dir, 'tests'))
+  fs.writeFileSync(path.join(dir, 'tests/runbooks-upstream.mjs'), "export const VERSION = '0.9.0'\n")
+  assert.equal(run(['upstream-copy', '--root', dir]).code, 1)
+  fs.writeFileSync(path.join(dir, 'tests/runbooks-upstream.mjs'), `export const VERSION = '${VERSION}'\n`)
+  assert.deepEqual(pick(run(['upstream-copy', '--root', dir])), [0, 'tests/runbooks-upstream.mjs\n'])
+})
+
+test('packageScript adds, keeps and replaces the runbooks:upstream script', () => {
+  const dir = upstreamProject({ serverFile: 'tests\\e2e\\runbooks-upstream.mjs' })
+  const config = configOf(dir)
+  assert.equal(packageScript(dir, config).status, 'no-package')
+  const file = path.join(dir, 'package.json')
+  fs.writeFileSync(file, '{\n    "name": "app",\n    "scripts": {\n        "dev": "next dev"\n    }\n}')
+  assert.deepEqual(packageScript(dir, config), { status: 'missing', value: 'node tests/e2e/runbooks-upstream.mjs', current: null })
+  assert.equal(packageScript(dir, config, { write: true }).status, 'added')
+  assert.equal(
+    fs.readFileSync(file, 'utf8'),
+    '{\n    "name": "app",\n    "scripts": {\n        "dev": "next dev",\n        "runbooks:upstream": "node tests/e2e/runbooks-upstream.mjs"\n    }\n}',
+  )
+  assert.equal(packageScript(dir, config).status, 'unchanged')
+})
+
+test('packageScript reports and replaces a different script, and adds scripts when absent', () => {
+  const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
+  const file = path.join(dir, 'package.json')
+  fs.writeFileSync(file, '{\n\t"scripts": { "runbooks:upstream": "node old.mjs" }\n}\n')
+  assert.deepEqual(packageScript(dir, configOf(dir)), { status: 'differs', value: 'node tests/runbooks-upstream.mjs', current: 'node old.mjs' })
+  assert.equal(packageScript(dir, configOf(dir), { write: true }).status, 'replaced')
+  assert.match(fs.readFileSync(file, 'utf8'), /^\{\n\t"scripts": \{\n\t\t"runbooks:upstream": "node tests\/runbooks-upstream\.mjs"\n\t\}\n\}\n$/)
+  fs.writeFileSync(file, '{ "name": "app" }\n')
+  packageScript(dir, configOf(dir), { write: true })
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).scripts, { 'runbooks:upstream': 'node tests/runbooks-upstream.mjs' })
+})
+
+test('packageScript keeps CRLF line endings', () => {
+  const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
+  const file = path.join(dir, 'package.json')
+  fs.writeFileSync(file, '{\r\n  "name": "app"\r\n}\r\n')
+  packageScript(dir, configOf(dir), { write: true })
+  assert.equal(fs.readFileSync(file, 'utf8'), '{\r\n  "name": "app",\r\n  "scripts": {\r\n    "runbooks:upstream": "node tests/runbooks-upstream.mjs"\r\n  }\r\n}\r\n')
+})
+
+test('upstream-copy reads and prints a serverFile written with backslashes as a forward-slash path', () => {
+  const dir = upstreamProject({ serverFile: 'tests\\runbooks-upstream.mjs' })
+  fs.mkdirSync(path.join(dir, 'tests'))
+  fs.writeFileSync(path.join(dir, 'tests/runbooks-upstream.mjs'), `export const VERSION = '${VERSION}'\n`)
+  const { code, stdout } = run(['upstream-copy', '--root', dir])
+  assert.deepEqual([code, stdout], [0, 'tests/runbooks-upstream.mjs\n'])
+})
+
+test('packageScript needs upstream.serverFile', () => {
+  const dir = upstreamProject({})
+  assert.throws(() => packageScript(dir, configOf(dir)), /^Error: upstream\.serverFile is not set: run \/runbooks:setup to copy the server first$/)
+})
+
+test('package-script prints one line', () => {
+  const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
+  assert.equal(run(['package-script', '--root', dir]).stdout, 'no package.json: start the server with node tests/runbooks-upstream.mjs\n')
+  fs.writeFileSync(path.join(dir, 'package.json'), '{}\n')
+  assert.equal(run(['package-script', '--root', dir, '--write']).stdout, 'added: "runbooks:upstream": "node tests/runbooks-upstream.mjs"\n')
+  fs.writeFileSync(path.join(dir, 'package.json'), '{ "scripts": { "runbooks:upstream": "node old.mjs" } }\n')
+  assert.equal(run(['package-script', '--root', dir]).stdout, 'differs: "runbooks:upstream" is "node old.mjs", expected "node tests/runbooks-upstream.mjs"\n')
 })
 
 test('list and coverage warn about the copied server', () => {

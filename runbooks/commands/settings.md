@@ -92,7 +92,7 @@ Some changes reach past their own key. Work out each one from the table below, a
 | `mcp.secretsFile` or `paths.evidence` | rewrite the arguments of the two Playwright servers in `.mcp.json`; confirm the secrets file is ignored with `git check-ignore -q <file>`, and stop when it is not. A new `paths.evidence` must be ignored too |
 | `mcp.headless` or `mcp.headed` | rename the server in `.mcp.json` |
 | `upstream.mode` | list the `ui` runbooks whose effective mode changes: those with no `upstream:` in their frontmatter, whose `upstream` in the list differs from the new default. Offer `/runbooks:update <id>` for each, because `update` records or deletes the fixtures and rewrites the steps (`references/upstream.md`, Changing a runbook's mode). When the new default is `mocked`, say that endpoints then count only through `live` runbooks. When it is `live`, say that the fixtures stay on disk until `update` deletes them |
-| `upstream.serverFile`, `tests.ui.root` or `tests.ui.dir` changes while `tests.ui` exists and `serverFile` is set, or `upstream.mode` becomes `mocked` (or the first mocked runbook appears) while `serverFile` is null | copy `${CLAUDE_PLUGIN_ROOT}/scripts/upstream-server.mjs` to `<tests.ui.dir>/runbooks-upstream.mjs` (`<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs` with a root) and write that path, relative to this project, to `upstream.serverFile`. Show the diff before overwriting an existing file. An old copy at a previous path stays in place, because the plugin deletes no project file; name it in the summary so the user can delete it. Show the framework start command again, as `setup.md` step 3 does |
+| `upstream.serverFile`, `tests.ui.root` or `tests.ui.dir` changes while `serverFile` is set, or the `upstream` block is added, or `upstream.mode` becomes `mocked` (or the first mocked runbook appears), while `serverFile` is null | copy `${CLAUDE_PLUGIN_ROOT}/scripts/upstream-server.mjs` to `<tests.ui.dir>/runbooks-upstream.mjs` (`<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs` with a root, `<paths.runbooks>/runbooks-upstream.mjs` without `tests.ui`) and write that path, relative to this project, to `upstream.serverFile`. Show the diff before overwriting an existing file. An old copy at a previous path stays in place, because the plugin deletes no project file; name it in the summary so the user can delete it. Put the copy and `package.json` on the write list, so `runbooks:upstream` points at the new path; step 4 writes the script once the config is on disk. With `tests.ui`, show the framework start command again, as `setup.md` step 3 does |
 | an `entries` source with a `root` outside the project is removed, or the loader warned about one (`sources` group) | the endpoints it read belong to another repository (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" move-to-calls --source <index>` while its folder exists, else `move-to-calls` once the source is gone. Show its dry run: the ids each runbook moves to `calls`, the entry coverage before and after, and the orphans it leaves for `/runbooks:update`. On a yes, run it again with `--write` before the config loses the source, remove the `slices` globs that start with `../` in the same write, and add the runbooks to the write list. A config without `upstream` cannot hold `calls`: ask the `upstream` group first |
 | `app.start`, `upstream.start` or `data.seedHint` holds a `cd` into a folder next to this project | show it and offer an `upstream.start` hint that names the API's repository and its command instead (`setup.md` step 2) |
 | `upstream.root` is set | remove it: no command reads it |
@@ -104,7 +104,9 @@ Done when every chosen key has a new value or was kept, and every file the chang
 
 ## 4. Write
 
-Show the diff of every file on the write list and ask whether to write it. Write only after a yes; on a no, write nothing and stop.
+Show the diff of every file on the write list and ask whether to write it. For `package.json`, the diff is the `"runbooks:upstream": "node <new upstream.serverFile>"` line. Write only after a yes; on a no, write nothing and stop.
+
+When `package.json` is on the list, write the config first, because `package-script` reads `upstream.serverFile` from it. Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" package-script --write`; the yes above covers it. When it prints `no package.json`, keep its line for the summary.
 
 Then validate:
 
@@ -125,7 +127,7 @@ Print, before any commit question:
 
 ## 6. Commit
 
-Commit the config, the agents block and `.mcp.json` by the `setup` policy, and `roles.json` and the runbooks renamed, moved to `calls` or changed by `enable-roles` in step 3 by the `runbooks` policy. Files written in the UI tests repository get a commit of their own there, by the `setup` policy (`commits.md`, UI tests repository). Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
+Commit the config, the agents block, `.mcp.json`, `package.json` and the server copy in this repository by the `setup` policy, and `roles.json` and the runbooks renamed, moved to `calls` or changed by `enable-roles` in step 3 by the `runbooks` policy. Files written in the UI tests repository get a commit of their own there, by the `setup` policy (`commits.md`, UI tests repository). Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
 
 Write in the config `language`.
 

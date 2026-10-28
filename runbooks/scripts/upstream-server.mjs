@@ -1,4 +1,4 @@
-// runbooks upstream server, runbooks 1.13.0. Copied by /runbooks:setup; do not edit.
+// runbooks upstream server, runbooks 1.14.0. Copied by /runbooks:setup; do not edit.
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
@@ -9,7 +9,7 @@ import crypto from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
-export const VERSION = '1.13.0'
+export const VERSION = '1.14.0'
 
 const MODES = ['mocked', 'live', 'record']
 const STEP_DIR = /^S\d+$/
@@ -23,6 +23,48 @@ const NEVER_RECORDED = ['set-cookie', 'authorization', 'cookie', 'content-length
 
 // Body keys whose values never reach a 501 body or the unmatched list. --redact-body adds more.
 const BODY_REDACTED = ['password', 'token', 'secret']
+
+// The upstream block of the config with every key at its default. The loader and the copy in a project both start from it.
+export function upstreamDefaults(runbooksPath = 'docs/runbooks') {
+  return {
+    mode: 'live', baseUrl: '', start: [], urlEnv: '', port: 4010,
+    fixtures: `${runbooksPath}/_fixtures`, schema: null, redactHeaders: [], redactBodyKeys: [], tokenEnv: '', serverFile: null,
+  }
+}
+
+const commaList = (value) => value.split(',').map((name) => name.trim()).filter(Boolean)
+
+// Turns an upstream block, already merged over upstreamDefaults, and the CLI flags into the options of serveUpstream.
+// The server starts live when the block names a baseUrl and mocked otherwise; upstream.mode is a runbook default, not this.
+export function upstreamServerOptions(root, upstream, flags) {
+  let port = upstream.port
+  if (flags.port !== undefined) {
+    port = Number(flags.port)
+    if (typeof flags.port !== 'string' || !/^\d+$/.test(flags.port) || port > 65535) {
+      throw new Error('--port must be an integer from 0 to 65535')
+    }
+  }
+  const mode = flags.mode ?? (upstream.baseUrl ? 'live' : 'mocked')
+  if (!MODES.includes(mode)) throw new Error(`--mode must be one of ${MODES.join(', ')}`)
+  if (flags.role !== undefined && !(typeof flags.role === 'string' && ROLE.test(flags.role))) {
+    throw new Error('--role must be a role name like editor')
+  }
+  if (flags.case !== undefined && !(typeof flags.case === 'string' && ROLE.test(flags.case))) {
+    throw new Error('--case must be a case name like vip-team')
+  }
+  return {
+    fixturesRoot: path.resolve(root, upstream.fixtures),
+    target: typeof flags.target === 'string' ? flags.target : upstream.baseUrl,
+    redactHeaders: typeof flags.redact === 'string' ? commaList(flags.redact) : upstream.redactHeaders,
+    redactBodyKeys: typeof flags['redact-body'] === 'string' ? commaList(flags['redact-body']) : upstream.redactBodyKeys,
+    port,
+    mode,
+    runbook: typeof flags.runbook === 'string' ? flags.runbook : null,
+    role: flags.role ?? null,
+    case: flags.case ?? null,
+    step: typeof flags.step === 'string' ? flags.step : null,
+  }
+}
 
 const validOperation = (name) => typeof name === 'string' && name !== ''
 
@@ -684,10 +726,29 @@ export function serveUpstream({ port, ...options }) {
   return server
 }
 
-function cliOptions(argv) {
+// The upstream block of <root>/docs/runbooks/runbooks.config.json over its defaults. Validates nothing else in the config.
+export function readProjectUpstream(root) {
+  const file = path.join(root, 'docs/runbooks/runbooks.config.json')
+  if (!fs.existsSync(file)) throw new Error(`no config at ${file}: pass --root <project> or --fixtures <dir>, or run /runbooks:setup`)
+  let raw
+  try {
+    raw = JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch (err) {
+    throw new Error(`${file} is not valid JSON: ${err.message}`)
+  }
+  if (raw?.upstream == null) throw new Error('the config has no upstream block. Run /runbooks:setup')
+  return { ...upstreamDefaults(raw.paths?.runbooks ?? 'docs/runbooks'), ...raw.upstream }
+}
+
+// With --fixtures, the flags alone set every option, as CI jobs pass them. Without it, the project's config does.
+export function cliOptions(argv, cwd = process.cwd()) {
   const flags = {}
   for (let i = 0; i < argv.length; i += 2) {
     if (argv[i].startsWith('--') && argv[i + 1] !== undefined) flags[argv[i].slice(2)] = argv[i + 1]
+  }
+  if (!flags.fixtures) {
+    const root = path.resolve(cwd, flags.root ?? '.')
+    return upstreamServerOptions(root, readProjectUpstream(root), flags)
   }
   const port = flags.port === undefined ? 4010 : Number(flags.port)
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('--port must be an integer from 0 to 65535')
@@ -695,7 +756,6 @@ function cliOptions(argv) {
   if (!MODES.includes(mode)) throw new Error(`--mode must be one of ${MODES.join(', ')}`)
   if (flags.role !== undefined && !ROLE.test(flags.role)) throw new Error('--role must be a role name like editor')
   if (flags.case !== undefined && !ROLE.test(flags.case)) throw new Error('--case must be a case name like vip-team')
-  if (!flags.fixtures) throw new Error('--fixtures <dir> is required')
   return {
     fixturesRoot: path.resolve(flags.fixtures),
     target: flags.target ?? '',
@@ -714,7 +774,7 @@ const invokedPath = process.argv[1] ? fs.realpathSync(process.argv[1]) : null
 if (invokedPath && invokedPath === fs.realpathSync(fileURLToPath(import.meta.url))) {
   let options
   try {
-    options = cliOptions(process.argv.slice(2))
+    options = cliOptions(process.argv.slice(2), process.cwd())
   } catch (err) {
     process.stderr.write(`runbooks: ${err.message}\n`)
     process.exit(2)

@@ -22,6 +22,34 @@ test('every ${CLAUDE_PLUGIN_ROOT} path in the plugin docs exists', () => {
   assert.deepEqual(missing, [])
 })
 
+test('no command or instruction starts the plugin copy of the upstream server', () => {
+  const starts = markdownFiles()
+    .filter((rel) => rel.startsWith('commands/') || rel.startsWith('skills/runbooks/instructions/'))
+    .filter((rel) => /runbooks\.mjs" upstream(?![-\w])/.test(fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')))
+  assert.deepEqual(starts, [])
+})
+
+const readPlugin = (rel) => fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')
+
+test('settings and setup run package-script only once the config is written, and commit package.json', () => {
+  const settings = readPlugin('commands/settings.md')
+  assert.match(settings.slice(settings.indexOf('## 4. Write'), settings.indexOf('## 5.')), /package-script/)
+  assert.match(settings.slice(settings.indexOf('## 6. Commit'), settings.indexOf('Write in the config')), /`package\.json`/)
+  assert.match(readPlugin('commands/setup.md'), /- npm script: once the config with `upstream\.serverFile` is written/)
+})
+
+test('a CI job in a UI tests repository starts the copy by its path in that repository', () => {
+  const toTest = readPlugin('skills/runbooks/instructions/to-test.md')
+  assert.doesNotMatch(toTest, /`node <upstream\.serverFile> --root/)
+  assert.match(toTest, /`node <tests\.ui\.dir>\/runbooks-upstream\.mjs --root <path from tests\.ui\.root to this project>`/)
+})
+
+test('the main session checks the copy before it starts the server for a prompt group', () => {
+  const run = readPlugin('commands/run.md')
+  const line = run.split('\n').find((text) => text.includes('The main session owns the upstream server'))
+  assert.match(line, /upstream-copy/)
+})
+
 test('the runbook skill has a name and a description', () => {
   const parts = splitFrontmatter(fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/SKILL.md'), 'utf8'))
   const data = parseYaml(parts.yaml)

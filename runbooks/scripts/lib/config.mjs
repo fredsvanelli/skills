@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { MODEL_VALUES, COMMAND_NAMES, DEFAULT_MODELS, parseKey } from './models.mjs'
+import { upstreamDefaults } from '../upstream-server.mjs'
 
 export const DEFAULT_CONFIG_PATH = 'docs/runbooks/runbooks.config.json'
 // Where the config lived before the plugin was renamed from runbook to runbooks.
@@ -212,11 +213,7 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
   validateDesign(config.design, config.stack)
   if (raw.upstream != null) {
     checkUpstreamShape(raw.upstream)
-    config.upstream = {
-      mode: 'live', baseUrl: '', start: [], urlEnv: '', port: 4010,
-      fixtures: `${config.paths.runbooks}/_fixtures`, schema: null, redactHeaders: [], redactBodyKeys: [], tokenEnv: '', serverFile: null,
-      ...raw.upstream,
-    }
+    config.upstream = { ...upstreamDefaults(config.paths.runbooks), ...raw.upstream }
   }
   validateUpstream(config.upstream, config.stack)
   if (!Number.isInteger(config.staleDays) || config.staleDays < 1) throw new ConfigError('staleDays must be a positive integer')

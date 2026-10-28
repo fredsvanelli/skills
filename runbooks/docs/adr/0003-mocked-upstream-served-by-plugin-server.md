@@ -12,5 +12,5 @@ A `mocked` `ui` runbook runs in every browser mode and through its script, so th
 ## Consequences
 
 - In a project with any `mocked` runbook, `live` runbooks also go through the proxy, which must pass SSE as a stream and WebSocket through Node's `upgrade` event. A proxy bug shows up in `live` runs too.
-- `setup` copies the server into the project (`<tests.ui.dir>/runbooks-upstream.mjs`) so the project's CI runs mocked scripts without the plugin. The file carries the plugin version in a comment; `list` and `coverage` warn when it differs from the installed plugin and `setup` refreshes it, and `upgrade` offers to run `setup`.
+- `setup` copies the server into the project (`<tests.ui.dir>/runbooks-upstream.mjs`) so the project's CI runs mocked scripts without the plugin. Since ADR 0011, that copy is also what the agent and `npm run runbooks:upstream` start. The file carries the plugin version in a comment; `list` and `coverage` warn when it differs from the installed plugin and `setup` refreshes it, and `upgrade` offers to run `setup`.
 - Recording needs one `live` execution of the flow (`run <id> --record`). When the live API does not answer, fixtures come from `upstream.schema` or are written by hand, and each one says where it came from in `source`.

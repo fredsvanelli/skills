@@ -180,13 +180,16 @@ When `upstream.schema` is set, `run` runs this check before the first step. A ru
 
 ## Server
 
-One dependency-free Node file, `scripts/upstream-server.mjs`, serves the upstream API. It listens on `127.0.0.1:<upstream.port>` (default `4010`). The app starts with the env var named in `upstream.urlEnv` (for example `NEXT_PUBLIC_API_URL`) set to the server's URL, so the server sees the requests of the browser and of the app's own server (SSR, route handlers, server actions).
+One dependency-free Node file serves the upstream API. `setup` copies it into the project, and that copy is the server everyone starts: the agent in `run` and `to-test`, the team, and CI ("The copy in the project"). It listens on `127.0.0.1:<upstream.port>` (default `4010`). The app starts with the env var named in `upstream.urlEnv` (for example `NEXT_PUBLIC_API_URL`) set to the server's URL, so the server sees the requests of the browser and of the app's own server (SSR, route handlers, server actions).
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" upstream [--port n] [--mode mocked|live|record] [--runbook id] [--role name] [--case name] [--step Sxx]
+npm run runbooks:upstream
+node <upstream.serverFile> [--root dir] [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--redact-body a,b] [--runbook id] [--role name] [--case name] [--step Sxx]
 ```
 
-The command reads the `upstream` block of the config. The flags override `upstream.port` and `upstream.mode`, and select the runbook, role, case and step at startup. It prints `runbooks-upstream listening on http://127.0.0.1:<port>` and stops on SIGINT or SIGTERM. When the port is taken, it exits 2 with a message that names the port and `upstream.port`.
+Without `--fixtures`, the copy reads `<root>/docs/runbooks/runbooks.config.json`, where the root is `--root` (resolved from the current folder) or the current folder, and resolves the config's paths from that root. It takes the port, the fixtures folder (`upstream.fixtures`, by default `<paths.runbooks>/_fixtures`), the target (`upstream.baseUrl`) and the redact lists from the `upstream` block. It starts in `live` mode when `upstream.baseUrl` is set and in `mocked` mode otherwise. `upstream.mode` is the default of a runbook, and the agent and scripts select each runbook's mode anyway. The flags override the config, and the others select the runbook, role, case and step at startup. It prints `runbooks-upstream listening on http://127.0.0.1:<port>` and stops on SIGINT or SIGTERM. When the port is taken, it exits 2 with a message that names the port and `upstream.port`. A missing config, a config that is not valid JSON, or one without an `upstream` block also exits 2, with a message that names the fix.
+
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" upstream` starts the plugin's own file from the config the same way. It serves plugin development; no command uses it.
 
 The server answers in one of three modes, which a select call changes without a restart:
 
@@ -208,13 +211,21 @@ Matching in `mocked` mode:
 
 ### The copy in the project
 
-When `tests.ui` exists, `setup` copies the server to `<tests.ui.dir>/runbooks-upstream.mjs` and writes the path in `upstream.serverFile`, so CI runs mocked scripts without the plugin. When `tests.ui.root` points to a UI tests repository, the copy goes there, to `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`, and the fixtures stay in this one: that repository's CI checks out this one to pass `--fixtures` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`). `list` and `coverage` do not warn about the copy while that repository is not cloned. The copy carries the plugin version in its header comment and in `export const VERSION`. `list` and `coverage` warn when the copy is missing or from another version, `/runbooks:setup` refreshes the copy, and `/runbooks:upgrade` offers to run it. The copy takes its options from flags, which all take a value:
+When the config has an `upstream` block, `setup` copies the server into the project and writes the path in `upstream.serverFile` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0011-the-agent-runs-the-projects-copy-of-the-upstream-server.md`):
+
+- with `tests.ui`: `<tests.ui.dir>/runbooks-upstream.mjs`;
+- with `tests.ui.root` pointing to a UI tests repository: `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`. The fixtures stay in this repository: that repository's CI checks out this one and passes `--root` or `--fixtures` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`);
+- without `tests.ui`: `<paths.runbooks>/runbooks-upstream.mjs`.
+
+`setup` also adds `"runbooks:upstream": "node <upstream.serverFile>"` to the scripts of `package.json` (`runbooks.mjs package-script`), so `npm run runbooks:upstream` starts the copy from the config. A project without `package.json` starts it with `node <upstream.serverFile>`.
+
+The copy carries the plugin version in its header comment and in `export const VERSION`. `list` and `coverage` warn when the copy is missing or from another version, and do not warn while a UI tests repository that holds it is not cloned. `run`, `to-test` and the orchestrator check it with `runbooks.mjs upstream-copy`, which prints the copy's path, or why it cannot run and exits 1: no copy, a copy from another version, or a UI tests repository that is not cloned. They then stop before the first step and offer `/runbooks:setup`, and never copy or refresh the server themselves. `/runbooks:setup` refreshes the copy, and `/runbooks:upgrade` offers to run it.
+
+CI jobs and framework configs written before the copy read the config pass `--fixtures`. With it, the copy reads no config: `--port` defaults to `4010`, `--mode` to `mocked`, and `--target` and the redact lists to empty.
 
 ```
-node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--redact-body a,b] [--runbook id] [--role name] [--case name] [--step Sxx]
+node <upstream.serverFile> --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--redact-body a,b] [--runbook id] [--role name] [--case name] [--step Sxx]
 ```
-
-`--fixtures` is required. `--port` defaults to `4010` and `--mode` to `mocked`.
 
 ## Control routes
 

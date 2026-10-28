@@ -5,7 +5,8 @@ import os from 'node:os'
 import path from 'node:path'
 import http from 'node:http'
 import net from 'node:net'
-import { createUpstreamServer, redactPayload, matchFixture, payloadMatches, payloadFields, VERSION } from './upstream-server.mjs'
+import { spawn } from 'node:child_process'
+import { createUpstreamServer, redactPayload, matchFixture, payloadMatches, payloadFields, upstreamDefaults, upstreamServerOptions, cliOptions, VERSION } from './upstream-server.mjs'
 
 const fixture = (method, p, response, query) =>
   JSON.stringify({ request: { method, path: p, ...(query ? { query } : {}) }, response, source: 'hand-written' })
@@ -43,6 +44,25 @@ const FILES = {
 test('VERSION matches the plugin manifest', () => {
   const manifest = JSON.parse(fs.readFileSync(new URL('../.claude-plugin/plugin.json', import.meta.url), 'utf8'))
   assert.equal(VERSION, manifest.version)
+})
+
+test('upstreamServerOptions starts live with a baseUrl and mocked without, whatever upstream.mode says', () => {
+  const root = '/project'
+  const live = upstreamServerOptions(root, { ...upstreamDefaults(), mode: 'mocked', baseUrl: 'https://api.example.com' }, {})
+  assert.deepEqual([live.mode, live.target], ['live', 'https://api.example.com'])
+  const mocked = upstreamServerOptions(root, { ...upstreamDefaults(), mode: 'live' }, {})
+  assert.deepEqual([mocked.mode, mocked.target], ['mocked', ''])
+  assert.equal(upstreamServerOptions(root, { ...upstreamDefaults(), baseUrl: 'https://x' }, { mode: 'record' }).mode, 'record')
+})
+
+test('upstreamServerOptions lets flags override the config', () => {
+  const upstream = { ...upstreamDefaults(), port: 4321, redactHeaders: ['x-key'], redactBodyKeys: ['otp'] }
+  const options = upstreamServerOptions('/project', upstream, { port: '5010', target: 'https://other', redact: 'a, b', 'redact-body': 'pin' })
+  assert.deepEqual(
+    [options.port, options.target, options.redactHeaders, options.redactBodyKeys, options.fixturesRoot],
+    [5010, 'https://other', ['a', 'b'], ['pin'], path.resolve('/project', 'docs/runbooks/_fixtures')],
+  )
+  assert.throws(() => upstreamServerOptions('/project', upstream, { port: true }), /--port/)
 })
 
 test('matchFixture ranks the step folder first, then more query keys, then file name', () => {
@@ -1152,4 +1172,64 @@ test('the request log drops secret keys from request bodies', async (t) => {
 
 test('payloadMatches ignores inherited keys', () => {
   assert.equal(payloadMatches(JSON.parse('{"__proto__":{}}'), {}), false)
+})
+
+const CONFIG = 'docs/runbooks/runbooks.config.json'
+
+test('cliOptions without --fixtures reads the config of the current folder', () => {
+  const dir = tmp({ [CONFIG]: JSON.stringify({ version: 1, upstream: { port: 4321, baseUrl: 'https://api.example.com', redactHeaders: ['x-key'], redactBodyKeys: ['otp'] } }) })
+  assert.deepEqual(cliOptions([], dir), {
+    fixturesRoot: path.join(dir, 'docs/runbooks/_fixtures'), target: 'https://api.example.com',
+    redactHeaders: ['x-key'], redactBodyKeys: ['otp'], port: 4321, mode: 'live',
+    runbook: null, role: null, case: null, step: null,
+  })
+  assert.deepEqual([cliOptions(['--mode', 'mocked', '--port', '5010'], dir).mode, cliOptions(['--port', '5010'], dir).port], ['mocked', 5010])
+})
+
+test('cliOptions takes fixtures from paths.runbooks when upstream.fixtures is absent', () => {
+  const dir = tmp({ [CONFIG]: JSON.stringify({ version: 1, paths: { runbooks: 'qa/runbooks' }, upstream: {} }) })
+  assert.equal(cliOptions([], dir).fixturesRoot, path.join(dir, 'qa/runbooks/_fixtures'))
+})
+
+test('cliOptions --root resolves from the current folder and fixtures resolve from the root', () => {
+  const parent = tmp({ [`app/${CONFIG}`]: JSON.stringify({ version: 1, upstream: {} }), 'app-e2e/.keep': '' })
+  assert.equal(cliOptions(['--root', '../app'], path.join(parent, 'app-e2e')).fixturesRoot, path.join(parent, 'app/docs/runbooks/_fixtures'))
+})
+
+test('cliOptions with --fixtures ignores a config in the folder', () => {
+  const dir = tmp({ [CONFIG]: JSON.stringify({ version: 1, upstream: { port: 4321, baseUrl: 'https://api.example.com' } }) })
+  const options = cliOptions(['--fixtures', 'fx'], dir)
+  assert.deepEqual([options.port, options.mode, options.target], [4010, 'mocked', ''])
+})
+
+test('cliOptions fails on a missing config, bad JSON and no upstream block', () => {
+  assert.throws(() => cliOptions([], tmp({})), /^Error: no config at .*runbooks\.config\.json: pass --root <project> or --fixtures <dir>, or run \/runbooks:setup$/)
+  assert.throws(() => cliOptions([], tmp({ [CONFIG]: '{ nope' })), /is not valid JSON/)
+  assert.throws(() => cliOptions([], tmp({ [CONFIG]: '{ "version": 1 }' })), /the config has no upstream block\. Run \/runbooks:setup/)
+})
+
+test('a copy in a project folder starts from the config with no flags but --port', async (t) => {
+  const dir = tmp({
+    [CONFIG]: JSON.stringify({ version: 1, upstream: {} }),
+    'docs/runbooks/_fixtures/billing/list/invoices.json': fixture('GET', '/invoices', { status: 200, body: { items: [] } }),
+  })
+  fs.mkdirSync(path.join(dir, 'tests'))
+  fs.copyFileSync(new URL('./upstream-server.mjs', import.meta.url), path.join(dir, 'tests/runbooks-upstream.mjs'))
+  const child = spawn(process.execPath, ['tests/runbooks-upstream.mjs', '--port', '0'], { cwd: dir })
+  t.after(() => child.kill())
+  const base = await new Promise((resolve, reject) => {
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (chunk) => {
+      out += chunk
+      const found = /listening on (http:\/\/127\.0\.0\.1:\d+)/.exec(out)
+      if (found) resolve(found[1])
+    })
+    child.stderr.on('data', (chunk) => { err += chunk })
+    child.on('exit', (code) => reject(new Error(`exited ${code}: ${err}`)))
+  })
+  await fetch(`${base}/__runbooks/select`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runbook: 'billing.list', mode: 'mocked' }) })
+  const res = await fetch(`${base}/invoices`)
+  assert.equal(res.status, 200)
+  assert.deepEqual(await res.json(), { items: [] })
 })
