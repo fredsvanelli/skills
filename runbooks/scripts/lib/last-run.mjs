@@ -1,4 +1,5 @@
-import { STEP_STATES } from './status.mjs'
+import { STEP_STATES, nextStatus } from './status.mjs'
+import { passPlan } from './passes.mjs'
 
 export const LAST_RUN_RESULTS = ['passed', 'failed', 'blocked', 'incomplete']
 
@@ -161,4 +162,132 @@ export function lastRunLines(lastRun) {
     }
   }
   return lines
+}
+
+const PARTIAL_WITHOUT_MERGE = 'a partial run changes last_run only with --merge; without it last_run stays as it is'
+
+// One string per cell: the step and the pass key.
+function cellKey(cell) {
+  return `${cell.step} ${passKey(cell)}`
+}
+
+// True when a step's Roles:, Cases: or Viewports: line lets the value through. An empty line or a null value always does.
+function allows(only, value) {
+  return (only ?? []).length === 0 || value === null || only.includes(value)
+}
+
+// The cells a full run of the runbook fills, step by step. With tracking on (registry not null), every step for every
+// pass of passPlan; with it off, every step for every viewport, or null when the runbook has no viewports.
+// A pass that a step's Roles:, Cases: or Viewports: line leaves out has no cell, as in `junit`.
+export function expectedCells(runbook, steps, { registry, config }) {
+  if (registry !== null) {
+    const passes = passPlan(registry, config, runbook, steps)
+    return steps.flatMap((step) => passes
+      .filter((pass) => allows(step.roles, pass.role) && allows(step.cases, pass.dataCase) && allows(step.viewports, pass.viewport))
+      .map((pass) => ({ step: step.step, role: pass.role, case: pass.case, viewport: pass.viewport })))
+  }
+  const viewports = runbook.viewports ?? []
+  if (viewports.length === 0) return null
+  return steps.flatMap((step) => viewports
+    .filter((viewport) => allows(step.viewports, viewport))
+    .map((viewport) => ({ step: step.step, role: null, case: null, viewport })))
+}
+
+// The report rows as cells. An empty column reads as null; the run is left for mergeLastRun to set.
+export function reportCells(report) {
+  return report.steps.map((row) => ({
+    step: row.step,
+    role: row.role || null,
+    case: row.case || null,
+    viewport: row.viewport || null,
+    state: row.state,
+    run: null,
+    outdated: false
+  }))
+}
+
+// The expected cells with no cell of the same step and pass key. None when expected is null.
+export function pendingCells(cells, expected) {
+  if (expected === null) return []
+  const held = new Set(cells.map(cellKey))
+  return expected
+    .filter((cell) => !held.has(cellKey(cell)))
+    .map(({ step, role, case: caseName, viewport }) => ({ step, role, case: caseName, viewport }))
+}
+
+// failed, then blocked, then incomplete (a pending cell), then passed. not-applicable, no-account and waived pass.
+function resultOf(states, pending) {
+  if (states.includes('failed')) return 'failed'
+  if (states.some((state) => state === 'blocked' || state === 'blocked-by-parent')) return 'blocked'
+  if (pending.length > 0) return 'incomplete'
+  return 'passed'
+}
+
+const reportName = (run) => (run.report ?? '').split('/').pop()
+
+// Merges a run report into last_run. A full report replaces every cell; a partial one, with merge, replaces the cells
+// it ran and keeps the others. Cells outside expected are dropped. Returns the new LastRun, the runbook status and the
+// cells whose state or run changed (from null for a cell that was pending).
+export function mergeLastRun(previous, report, expected, { merge, status }) {
+  if (report.partial && !merge) throw new Error(PARTIAL_WITHOUT_MERGE)
+  // Inside this function a cell's run is an id, the report path, so runs keep their identity while keys renumber.
+  const runs = new Map()
+  const before = new Map()
+  if (previous !== null && !previous.legacy) {
+    for (const cell of previous.cells) {
+      const run = previous.runs[cell.run]
+      const id = run.report ?? `#${cell.run}`
+      runs.set(id, run)
+      before.set(cellKey(cell), { ...cell, run: id })
+    }
+  }
+  const run = { date: (report.date ?? report.name).slice(0, 10), commit: report.commit, report: `_runs/${report.name}` }
+  runs.set(run.report, run)
+
+  const wanted = expected === null ? null : new Set(expected.map(cellKey))
+  const cells = new Map(report.partial ? before : [])
+  for (const cell of reportCells(report)) {
+    const key = cellKey(cell)
+    if (wanted !== null && !wanted.has(key)) continue
+    if (cell.state === 'no-account' && cells.has(key)) continue
+    cells.set(key, { ...cell, run: run.report, outdated: false })
+  }
+  const kept = expected === null ? [...cells.values()] : expected.map((cell) => cells.get(cellKey(cell))).filter(Boolean)
+
+  const ids = [...new Set(kept.map((cell) => cell.run))]
+    .sort((a, b) => reportName(runs.get(a)).localeCompare(reportName(runs.get(b))) || a.localeCompare(b))
+  const keyOf = new Map(ids.map((id, index) => [id, `r${index + 1}`]))
+  const newest = runs.get(ids.at(-1)) ?? run
+  const oldest = runs.get(ids[0]) ?? run
+
+  const changed = []
+  for (const cell of kept) {
+    const was = before.get(cellKey(cell))
+    if (was !== undefined && was.state === cell.state && was.run === cell.run) continue
+    changed.push({ step: cell.step, role: cell.role, case: cell.case, viewport: cell.viewport, from: was?.state ?? null, to: cell.state })
+  }
+
+  const finalCells = kept.map((cell) => ({ ...cell, run: keyOf.get(cell.run) }))
+  const states = finalCells.map((cell) => cell.state)
+  const pending = pendingCells(finalCells, expected)
+  const outdated = finalCells.some((cell) => cell.outdated)
+  const lastRun = {
+    date: newest.date,
+    oldest: oldest.date,
+    commit: newest.commit,
+    result: resultOf(states, pending),
+    report: newest.report,
+    mixed: ids.length > 1,
+    outdated,
+    runs: Object.fromEntries(ids.map((id) => [keyOf.get(id), { ...runs.get(id) }])),
+    cells: finalCells,
+    legacy: false
+  }
+  const nextState = pending.length > 0 || outdated ? status : nextStatus(status, states)
+  return { lastRun, status: nextState, changed }
+}
+
+// Marks every cell and the whole last_run outdated. A legacy value has no cells, so only the whole changes.
+export function markOutdated(lastRun) {
+  return { ...lastRun, outdated: true, cells: lastRun.cells.map((cell) => ({ ...cell, outdated: true })) }
 }
