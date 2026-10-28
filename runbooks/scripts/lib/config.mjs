@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { MODEL_VALUES, COMMAND_NAMES, DEFAULT_MODELS, parseKey } from './models.mjs'
+import { COMMAND_NAMES, DEFAULT_MODELS, defaultsFor, isModel, modelValueHint, parseKey } from './models.mjs'
 import { upstreamDefaults } from '../upstream-server.mjs'
 
 export const DEFAULT_CONFIG_PATH = 'docs/runbooks/runbooks.config.json'
@@ -58,15 +58,16 @@ function validateDesign(design, stack) {
 }
 
 // Returns the usable rows of the project's models block and the warnings for the rows it ignores.
-function validateModels(models) {
+function validateModels(models, runtime = 'claude') {
+  const label = runtime === 'codex' ? 'codex.models' : 'models'
   if (models === null || models === undefined) return { own: {}, warnings: [] }
   if (typeof models !== 'object' || Array.isArray(models)) {
-    throw new ConfigError('models must be an object of "<command> [parameters]": model')
+    throw new ConfigError(`${label} must be an object of "<command> [parameters]": model`)
   }
   const own = {}
   const warnings = []
   for (const [key, value] of Object.entries(models)) {
-    if (!MODEL_VALUES.includes(value)) throw new ConfigError(`models["${key}"] must be one of ${MODEL_VALUES.join(', ')}`)
+    if (!isModel(value, runtime)) throw new ConfigError(`${label}["${key}"] must be ${modelValueHint(runtime)}`)
     let reason = null
     try {
       const { command } = parseKey(key)
@@ -75,7 +76,7 @@ function validateModels(models) {
     } catch (err) {
       reason = 'the key is not a command with options and <placeholder> positionals'
     }
-    if (reason) warnings.push(`models["${key}"]: ${reason}; the row is ignored`)
+    if (reason) warnings.push(`${label}["${key}"]: ${reason}; the row is ignored`)
     else own[key] = value
   }
   return { own, warnings }
@@ -225,6 +226,10 @@ export function loadConfig(projectRoot, configPath = DEFAULT_CONFIG_PATH) {
   const { own, warnings: modelWarnings } = validateModels(raw.models)
   config.ownModels = own
   config.models = { ...DEFAULT_MODELS, ...own }
-  config.warnings = [...pathWarnings(projectRoot, config), ...modelWarnings]
+  if (raw.codex != null && (typeof raw.codex !== 'object' || Array.isArray(raw.codex))) throw new ConfigError('codex must be an object')
+  const { own: ownCodex, warnings: codexWarnings } = validateModels(raw.codex?.models, 'codex')
+  config.ownCodexModels = ownCodex
+  config.codex = { ...raw.codex, models: { ...defaultsFor('codex'), ...ownCodex } }
+  config.warnings = [...pathWarnings(projectRoot, config), ...modelWarnings, ...codexWarnings]
   return config
 }

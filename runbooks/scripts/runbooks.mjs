@@ -31,7 +31,7 @@ import { planReview, planEnableRoles } from './lib/review-edit.mjs'
 import { planRenameCase, planDeleteCase, planDeleteContext } from './lib/case-edit.mjs'
 import { planMerge } from './lib/roles-merge.mjs'
 import { todayLocal } from './lib/stale.mjs'
-import { DEFAULT_MODELS, resolveModel, modelRowsDiff } from './lib/models.mjs'
+import { defaultsFor, resolveModel, modelRowsDiff } from './lib/models.mjs'
 
 export const USAGE = `Usage: runbooks.mjs <command> [options]
 
@@ -97,8 +97,8 @@ Commands:
   rename-role-cells <from> <to> [--write] renames the role in the last_run cells of every runbook and
                 changes nothing else. Needs role tracking on. A dry run unless --write
   model         <command> [arguments...] prints the model the command runs on, from the models block of the
-                config. --model <value> in the arguments forces it. --json prints { model, row, forced }
-  models        [--json] prints the model table of the project: key, model and default
+                config. --runtime claude|codex selects the model table (default claude). --model <value> forces it. --json prints { model, row, forced }
+  models        [--runtime claude|codex] [--json] prints the model table of the project: key, model and default
   models        --defaults [--json] prints the default table and needs no config
   models        --diff [--json] counts the default rows the config lacks and lists the rows whose model differs
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
@@ -490,24 +490,28 @@ function commandMergeRoles(root, config, options) {
   return options.json ? json(plan) : mergeRolesMarkdown(plan)
 }
 
-function commandModel(config, argv) {
+function commandModel(config, argv, runtime) {
   const invocation = []
   let seen = false
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--root' || argv[i] === '--config') i++
+    if (argv[i] === '--root' || argv[i] === '--config' || argv[i] === '--runtime') i++
     else if (argv[i] === '--json') continue
     else if (!seen && argv[i] === 'model') seen = true
     else invocation.push(argv[i])
   }
-  return resolveModel(config.models, invocation)
+  return resolveModel(runtime === 'codex' ? config.codex.models : config.models, invocation, runtime)
 }
 
 function commandModels(config, options) {
+  const runtime = options.runtime ?? 'claude'
+  const defaults = defaultsFor(runtime)
+  const rows = runtime === 'codex' ? config.codex.models : config.models
+  const own = runtime === 'codex' ? config.ownCodexModels : config.ownModels
   if (options.diff) {
-    const diff = modelRowsDiff(config.ownModels)
+    const diff = modelRowsDiff(own, defaults)
     return options.json ? json(diff) : modelsMarkdown({ diff })
   }
-  return options.json ? json(config.models) : modelsMarkdown({ rows: config.models, defaults: DEFAULT_MODELS })
+  return options.json ? json(rows) : modelsMarkdown({ rows, defaults })
 }
 
 function commandPackageScript(root, config, options) {
@@ -529,8 +533,10 @@ export function run(argv) {
   try {
     if (!command || command === 'help' || (options.help && command !== 'model')) return finish(0, USAGE)
     if (command === 'status') return finish(0, commandStatus(options))
+    if (command === 'model' || command === 'models') defaultsFor(options.runtime ?? 'claude')
     if (command === 'models' && options.defaults) {
-      return finish(0, options.json ? json(DEFAULT_MODELS) : modelsMarkdown({ rows: DEFAULT_MODELS }))
+      const defaults = defaultsFor(options.runtime ?? 'claude')
+      return finish(0, options.json ? json(defaults) : modelsMarkdown({ rows: defaults }))
     }
     if (!PROJECT_COMMANDS.includes(command)) {
       stderr.push(`runbooks: unknown command "${command}"`)
@@ -542,7 +548,7 @@ export function run(argv) {
     let stdout
     let code = 0
     if (command === 'model') {
-      const result = commandModel(config, argv)
+      const result = commandModel(config, argv, options.runtime ?? 'claude')
       stdout = options.json ? json(result) : `${result.model}\n`
     } else if (command === 'models') stdout = commandModels(config, options)
     else if (command === 'contract') ({ code, stdout } = commandContract(root, config, options))

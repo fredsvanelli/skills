@@ -24,6 +24,24 @@ export const DEFAULT_MODELS = {
   'audit --fix': 'opus', create: 'opus', update: 'opus', 'to-test': 'opus',
 }
 
+export function defaultsFor(runtime = 'claude') {
+  if (runtime === 'claude') return DEFAULT_MODELS
+  if (runtime === 'codex') return Object.fromEntries(Object.entries(DEFAULT_MODELS).map(([key, value]) => [key, value === 'inline' ? 'inline' : 'inherit']))
+  throw new Error('--runtime must be claude or codex')
+}
+
+export function isModel(value, runtime = 'claude') {
+  defaultsFor(runtime)
+  if (runtime === 'claude') return MODEL_VALUES.includes(value)
+  return typeof value === 'string' && value.length <= 200 &&
+    !['haiku', 'sonnet', 'opus', 'fable'].includes(value) &&
+    /^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(value) && !value.includes('..')
+}
+
+export function modelValueHint(runtime = 'claude') {
+  return runtime === 'codex' ? 'inline, inherit, or a model ID available in Codex (not a Claude alias)' : `one of ${MODEL_VALUES.join(', ')}`
+}
+
 export function parseKey(key) {
   const { command, options, positionals } = parseArgs(key.split(/\s+/).filter(Boolean))
   const placeholders = positionals.filter((token) => /^<[^<>]+>$/.test(token))
@@ -40,11 +58,12 @@ function matches(parsed, invocation) {
   })
 }
 
-export function resolveModel(rows, argv) {
+export function resolveModel(rows, argv, runtime = 'claude') {
+  defaultsFor(runtime)
   const invocation = parseArgs(argv)
   if ('model' in invocation.options) {
     const model = invocation.options.model
-    if (!MODEL_VALUES.includes(model)) throw new Error(`--model must be one of ${MODEL_VALUES.join(', ')}`)
+    if (!isModel(model, runtime)) throw new Error(`--model must be ${modelValueHint(runtime)}`)
     return { model, row: null, forced: true }
   }
   let best = null
@@ -52,7 +71,7 @@ export function resolveModel(rows, argv) {
     const parsed = parseKey(row)
     if (!matches(parsed, invocation)) continue
     const score = Object.keys(parsed.options).length + (parsed.positional ? 1 : 0)
-    const rank = MODEL_VALUES.indexOf(model)
+    const rank = runtime === 'claude' ? MODEL_VALUES.indexOf(model) : 0
     if (!best || score > best.score || (score === best.score && rank > best.rank)) best = { row, model, score, rank }
   }
   if (!best) return { model: 'inline', row: null, forced: false }

@@ -92,3 +92,70 @@ test('a row for an unknown command is ignored with a warning', () => {
 test('models must be an object', () => {
   assert.throws(() => loadModels([]), /models must be an object/)
 })
+
+// A Codex project must not inherit Claude aliases or overwrite Claude choices.
+import { run } from './runbooks.mjs'
+function codexProject(codex, models = { create: 'haiku' }) {
+  const root = modelsProject(models)
+  const file = path.join(root, 'docs/runbooks/runbooks.config.json')
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'))
+  raw.codex = codex
+  fs.writeFileSync(file, JSON.stringify(raw))
+  return root
+}
+test('Codex CLI defaults select inheritance independently of Claude defaults', () => {
+  const result = run(['models', '--runtime', 'codex', '--defaults', '--json', '--root', '/nonexistent'])
+  assert.equal(result.code, 0)
+  const rows = JSON.parse(result.stdout)
+  assert.equal(rows.create, 'inherit')
+  assert.equal(rows.list, 'inline')
+  assert.equal(rows['run --mode guided'], 'inline')
+})
+test('Codex config and CLI resolve overrides without changing Claude rows', (t) => {
+  const root = codexProject({ models: { create: 'test-model-v2', 'run --mode test': 'inline' } })
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const invoke = (args) => run([...args, '--root', root, '--json'])
+  assert.equal(JSON.parse(invoke(['model', 'create']).stdout).model, 'haiku')
+  assert.deepEqual(JSON.parse(invoke(['model', 'create', '--runtime', 'codex']).stdout), { model: 'test-model-v2', row: 'create', forced: false })
+  assert.equal(JSON.parse(invoke(['model', 'run', '--mode', 'test', '--runtime', 'codex']).stdout).model, 'inline')
+  assert.deepEqual(JSON.parse(invoke(['model', 'create', '--runtime', 'codex', '--model', 'inherit']).stdout), { model: 'inherit', row: null, forced: true })
+  const diff = JSON.parse(invoke(['models', '--runtime', 'codex', '--diff']).stdout)
+  assert.deepEqual(diff.differing, [{ key: 'create', value: 'test-model-v2', default: 'inherit' }, { key: 'run --mode test', value: 'inline', default: 'inherit' }])
+  assert.ok(!diff.missing.includes('create'))
+})
+test('Codex accepts structural model IDs but rejects Claude aliases and malformed overrides', () => {
+  for (const model of ['inline', 'inherit', 'test-model-v2', 'vendor/model:latest']) {
+    assert.equal(resolveModel({}, ['run', '--model', model], 'codex').model, model)
+  }
+  for (const model of ['haiku', 'sonnet', 'opus', 'fable', '', 'bad model', '-bad', '../escape', 'x;echo']) {
+    assert.throws(() => resolveModel({}, ['run', '--model', model], 'codex'), /--model/)
+  }
+  assert.throws(() => resolveModel({}, ['run', '--model'], 'codex'), /--model/)
+})
+test('Codex ties use first matching row, not a model-name capability ranking', () => {
+  const rows = { 'run --record': 'z-model', 'run --mode headless': 'a-model' }
+  assert.equal(resolveModel(rows, ['run', '--record', '--mode', 'headless'], 'codex').model, 'z-model')
+})
+test('Codex config rejects invalid shapes and Claude model aliases', (t) => {
+  for (const codex of [[], 'bad', { models: [] }, { models: { create: 'opus' } }, { models: { create: 'bad model' } }]) {
+    const root = codexProject(codex)
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    assert.throws(() => loadConfig(root), /codex/)
+  }
+})
+test('legacy project gains Codex defaults without rewriting its config', (t) => {
+  const root = modelsProject({ create: 'opus' })
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const before = fs.readFileSync(path.join(root, 'docs/runbooks/runbooks.config.json'), 'utf8')
+  const result = run(['model', 'create', '--runtime', 'codex', '--root', root])
+  assert.equal(result.code, 0)
+  assert.equal(result.stdout.trim(), 'inherit')
+  assert.equal(fs.readFileSync(path.join(root, 'docs/runbooks/runbooks.config.json'), 'utf8'), before)
+})
+test('unknown or valueless runtimes fail even when requesting defaults', () => {
+  for (const args of [['--runtime', 'other'], ['--runtime']]) {
+    const result = run(['models', '--defaults', '--json', ...args])
+    assert.equal(result.code, 2)
+    assert.match(result.stderr, /runtime/)
+  }
+})
