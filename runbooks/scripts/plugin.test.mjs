@@ -162,3 +162,11 @@ test('orchestrator stages take the model of their command row', () => {
   assert.match(command, /references\/agents\.md/)
   assert.doesNotMatch(command, /commands\/(map|create|update|to-test|run)\.md/)
 })
+
+test('setup writes the model table and settings has a models group', () => {
+  const setup = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/setup.md'), 'utf8')
+  const settings = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/settings.md'), 'utf8')
+  assert.match(setup, /models --defaults --json/)
+  assert.match(setup, /models --diff --json/)
+  assert.match(settings, /^\| `models` \|/m)
+})
