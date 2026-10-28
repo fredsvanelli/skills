@@ -1,4 +1,4 @@
-// runbooks upstream server, runbooks 1.16.0. Copied by /runbooks:setup; do not edit.
+// runbooks upstream server, runbooks 1.16.1. Copied by /runbooks:setup; do not edit.
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
@@ -9,7 +9,7 @@ import crypto from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
-export const VERSION = '1.16.0'
+export const VERSION = '1.16.1'
 
 const MODES = ['mocked', 'live', 'record']
 const STEP_DIR = /^S\d+$/
@@ -723,6 +723,14 @@ export function serveUpstream({ port, ...options }) {
     process.exit(0)
   }
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop)
+  // npm runs the script through sh, which dies on SIGTERM without passing it on: a new parent means it is gone. Only
+  // under npm run runbooks:upstream, because CI may start the copy with `node ... &` from a shell that exits.
+  if (process.env.npm_lifecycle_event === 'runbooks:upstream') {
+    const parent = process.ppid
+    setInterval(() => {
+      if (process.ppid !== parent) stop()
+    }, 500).unref()
+  }
   return server
 }
 

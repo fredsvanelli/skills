@@ -425,18 +425,20 @@ async function portFrees(port) {
   return false
 }
 
-test('npm run runbooks:ui starts the copy, and SIGTERM to npm frees the port', { skip: !npmOnPath() }, async (t) => {
-  const dir = upstreamProject(null)
-  fs.writeFileSync(path.join(dir, 'package.json'), '{ "name": "app", "private": true }\n')
-  writeUiCopy(dir, configOf(dir), VERSION)
-  packageScripts(dir, configOf(dir), { write: true })
-  const npm = spawn('npm', ['run', 'runbooks:ui', '--', '--port', '0'], { cwd: dir })
-  t.after(() => npm.kill('SIGKILL'))
+// Runs `npm run <script> -- --port 0` in dir, waits for the server's listening line, sends SIGTERM to npm and resolves
+// with the port once npm has exited. The pipes are closed at the end, so a server left running cannot hold the test open.
+async function npmRunThenTerm(t, dir, script, banner) {
+  const npm = spawn('npm', ['run', script, '--', '--port', '0'], { cwd: dir })
+  t.after(() => {
+    npm.kill('SIGKILL')
+    npm.stdout.destroy()
+    npm.stderr.destroy()
+  })
   const port = await new Promise((resolve, reject) => {
     let out = ''
     npm.stdout.on('data', (chunk) => {
       out += chunk
-      const match = /runbooks-ui listening on http:\/\/127\.0\.0\.1:(\d+)/.exec(out)
+      const match = new RegExp(`${banner} listening on http://127\\.0\\.0\\.1:(\\d+)`).exec(out)
       if (match) resolve(Number(match[1]))
     })
     npm.on('exit', (code) => reject(new Error(`npm exited ${code}: ${out}`)))
@@ -444,7 +446,23 @@ test('npm run runbooks:ui starts the copy, and SIGTERM to npm frees the port', {
   const exited = new Promise((resolve) => npm.once('exit', resolve))
   npm.kill('SIGTERM')
   await exited
-  assert.equal(await portFrees(port), true)
+  return port
+}
+
+test('npm run runbooks:ui starts the copy, and SIGTERM to npm frees the port', { skip: !npmOnPath() }, async (t) => {
+  const dir = upstreamProject(null)
+  fs.writeFileSync(path.join(dir, 'package.json'), '{ "name": "app", "private": true }\n')
+  writeUiCopy(dir, configOf(dir), VERSION)
+  packageScripts(dir, configOf(dir), { write: true })
+  assert.equal(await portFrees(await npmRunThenTerm(t, dir, 'runbooks:ui', 'runbooks-ui')), true)
+})
+
+test('npm run runbooks:upstream starts the copy, and SIGTERM to npm frees the port', { skip: !npmOnPath() }, async (t) => {
+  const dir = upstreamProject({ serverFile: 'docs/runbooks/runbooks-upstream.mjs' })
+  fs.writeFileSync(path.join(dir, 'package.json'), '{ "name": "app", "private": true }\n')
+  fs.copyFileSync(fileURLToPath(new URL('./upstream-server.mjs', import.meta.url)), path.join(dir, 'docs/runbooks/runbooks-upstream.mjs'))
+  packageScripts(dir, configOf(dir), { write: true })
+  assert.equal(await portFrees(await npmRunThenTerm(t, dir, 'runbooks:upstream', 'runbooks-upstream')), true)
 })
 
 test('list and coverage warn about the copied server', () => {
