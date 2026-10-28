@@ -304,6 +304,12 @@ test('ui-copy follows paths.runbooks', () => {
   assert.ok(fs.existsSync(path.join(dir, 'qa/runbooks/runbooks-ui.mjs')))
 })
 
+test('package-script follows paths.runbooks for runbooks:ui', () => {
+  const dir = upstreamProject(null, { paths: { runbooks: 'qa\\runbooks' } })
+  fs.writeFileSync(path.join(dir, 'package.json'), '{}\n')
+  assert.equal(run(['package-script', '--root', dir, '--write']).stdout, 'added: "runbooks:ui": "node qa/runbooks/runbooks-ui.mjs"\n')
+})
+
 const UI_SCRIPT = 'node docs/runbooks/runbooks-ui.mjs'
 const statuses = (items) => items.map(({ name, status }) => `${name} ${status}`)
 

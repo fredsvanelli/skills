@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { uiModules, buildUiCopy } from './lib/ui-copy.mjs'
+import { uiModules, buildUiCopy, relativeImports } from './lib/ui-copy.mjs'
 
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const FIXTURE = fileURLToPath(new URL('./__fixtures__/project', import.meta.url))
@@ -50,6 +50,29 @@ test('uiModules holds every module ui-server.mjs reaches and nothing else', () =
   }
 })
 
+test('relativeImports finds multi-line, side-effect, re-export and double-quoted imports', () => {
+  const source = [
+    "import fs from 'node:fs'",
+    'import {',
+    '  a,',
+    '  b as c,',
+    "} from './lib/one.mjs'",
+    "import './lib/two.mjs'",
+    'import * as three from "./lib/three.mjs"',
+    "export { d } from '../four.mjs'",
+  ].join('\n')
+  assert.deepEqual(relativeImports('lib/x.mjs', source), ['lib/lib/one.mjs', 'lib/lib/two.mjs', 'lib/lib/three.mjs', 'four.mjs'])
+})
+
+test('relativeImports ignores a path in a comment or a string', () => {
+  const source = "// moved from '../templates/x'\nconst text = \"see from './old.mjs'\"\nexport function f() {\n  return 'from ./y'\n}\n"
+  assert.deepEqual(relativeImports('ui-server.mjs', source), [])
+})
+
+test('relativeImports refuses a dynamic import, which the copy cannot follow', () => {
+  assert.throws(() => relativeImports('lib/x.mjs', "const m = await import('./y.mjs')\n"), /^Error: lib\/x\.mjs has a dynamic import\(\), which the UI copy cannot embed$/)
+})
+
 test('buildUiCopy writes the header and VERSION, is stable, and names no plugin path', () => {
   const text = buildUiCopy('9.9.9')
   assert.match(text, /^\/\/ runbooks UI server, runbooks 9\.9\.9\. Written by \/runbooks:setup from the plugin's sources; do not edit\.\n/)
@@ -61,7 +84,10 @@ test('buildUiCopy writes the header and VERSION, is stable, and names no plugin 
 test('the copy serves the page and the API from the project folder and leaves no temp folder', async (t) => {
   const { tmp, root } = project()
   const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ui-tmpdir-'))
-  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
+  t.after(() => {
+    fs.rmSync(tmp, { recursive: true, force: true })
+    fs.rmSync(tmpdir, { recursive: true, force: true })
+  })
   const { line } = await spawnCopy(t, root, { flags: ['--port', '0'] }, { TMPDIR: tmpdir })
   assert.match(line, /^runbooks-ui listening on http:\/\/127\.0\.0\.1:\d+$/)
   const base = line.slice('runbooks-ui listening on '.length)
@@ -100,8 +126,20 @@ test('the copy keeps running after the shell that started it with node exits', a
   assert.equal((await fetch(`${base}/`)).status, 200)
 })
 
-test('the copy exits 2 with a runbooks: line when the root has no config', () => {
+test('the copy exits 2 with a runbooks: line when it cannot write its temp folder', (t) => {
+  const { tmp, root } = project()
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
+  const env = { ...process.env, TMPDIR: path.join(tmp, 'missing') }
+  const result = spawnSync(process.execPath, [COPY, '--port', '0'], { cwd: root, env, encoding: 'utf8', timeout: 10000 })
+  assert.equal(result.status, 2)
+  assert.match(result.stderr, /^runbooks: .*missing/)
+  assert.doesNotMatch(result.stderr, /\n\s+at /)
+  assert.equal(result.stdout, '')
+})
+
+test('the copy exits 2 with a runbooks: line when the root has no config', (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ui-copy-noconfig-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
   fs.mkdirSync(path.join(dir, 'docs/runbooks'), { recursive: true })
   fs.writeFileSync(path.join(dir, COPY), buildUiCopy('9.9.9'))
   const result = spawnSync(process.execPath, [COPY, '--port', '0'], { cwd: dir, encoding: 'utf8', timeout: 10000 })

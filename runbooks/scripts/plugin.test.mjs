@@ -44,6 +44,14 @@ test('/runbooks:ui checks the copy and starts it through npm run runbooks:ui', (
   assert.match(ui, /npm run runbooks:ui/)
 })
 
+test('/runbooks:ui handles ui-copy exit 2 and a runbooks:ui script the project changed', () => {
+  const ui = readPlugin('commands/ui.md')
+  const step = (n) => ui.slice(ui.indexOf(`\n${n}. `), ui.indexOf(`\n${n + 1}. `))
+  assert.match(step(1), /exit 2/)
+  assert.match(step(2), /`differs`/)
+  assert.doesNotMatch(step(2), /\(`missing`, `differs` or `no package\.json`\)/)
+})
+
 test('setup and settings replace only the script the user approved', () => {
   const settings = readPlugin('commands/settings.md')
   const write = settings.slice(settings.indexOf('## 4. Write'), settings.indexOf('## 5.'))

@@ -11,6 +11,17 @@ export const UI_COPY_NAME = 'runbooks-ui.mjs'
 // LF only, so a Windows checkout of the plugin writes the same copy.
 const read = (file) => fs.readFileSync(file, 'utf8').replaceAll('\r\n', '\n')
 
+// A statement at the start of a line: `import './x.mjs'`, or `import`/`export` with bindings, which may span lines,
+// then `from './x.mjs'`. The bindings hold no parenthesis, so a match never runs into a function body or a comment.
+const STATIC_IMPORT = /^(?:import\s*|(?:import|export)\s+[\w$*\s{},]*?\bfrom\s*)(['"])(\.{1,2}\/[^'"]+)\1/gm
+
+// The relative static imports of one module, as paths from scripts/, in source order. A dynamic import() throws:
+// the copy deletes its temp folder once the server is imported, so a module loaded later would not be there.
+export function relativeImports(rel, source) {
+  if (/\bimport\s*\(/.test(source)) throw new Error(`${rel} has a dynamic import(), which the UI copy cannot embed`)
+  return [...source.matchAll(STATIC_IMPORT)].map((match) => path.posix.join(path.posix.dirname(rel), match[2]))
+}
+
 // ui-server.mjs and every module it reaches through relative static imports, as [path from scripts/, source], sorted.
 export function uiModules() {
   const found = new Map()
@@ -18,9 +29,8 @@ export function uiModules() {
     if (found.has(rel)) return
     const source = read(path.join(SCRIPTS, rel))
     found.set(rel, source)
-    for (const match of source.matchAll(/from '(\.{1,2}\/[^']+)'/g)) {
-      const next = path.posix.join(path.posix.dirname(rel), match[1])
-      if (next.startsWith('../')) throw new Error(`${rel} imports ${match[1]}, outside scripts/`)
+    for (const next of relativeImports(rel, source)) {
+      if (next.startsWith('../')) throw new Error(`${rel} imports ${next}, outside scripts/`)
       visit(next)
     }
   }
@@ -71,16 +81,25 @@ ${modules.join('\n')}
 const PAGE = ${JSON.stringify(read(PAGE))}
 
 // Node imports modules from files, so they go to a fresh temp folder, which is gone before the server listens.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ui-'))
+// A failure here prints one runbooks: line and exits 2, as a bad flag or config does.
+let dir = null
 let startUi
+let failure = null
 try {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ui-'))
   for (const [rel, source] of Object.entries(MODULES)) {
     fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true })
     fs.writeFileSync(path.join(dir, rel), source)
   }
   ;({ startUi } = await import(pathToFileURL(path.join(dir, 'ui-server.mjs')).href))
+} catch (err) {
+  failure = err
 } finally {
-  fs.rmSync(dir, { recursive: true, force: true })
+  if (dir) fs.rmSync(dir, { recursive: true, force: true })
+}
+if (failure) {
+  process.stderr.write('runbooks: ' + failure.message + '\\n')
+  process.exit(2)
 }
 startUi(process.argv.slice(2), { html: () => PAGE })
 `
