@@ -10,14 +10,16 @@ import { filterRunbooks } from './lib/filter.mjs'
 import { nextStatus } from './lib/status.mjs'
 import { changedFiles, affectedRunbooks, schemaChanges } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
-import { latestReport } from './lib/reports.mjs'
+import { latestReport, reportByName } from './lib/reports.mjs'
+import { expectedCells, mergeLastRun, markOutdated, pendingCells } from './lib/last-run.mjs'
+import { setLastRun } from './lib/frontmatter-edit.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
 import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
 import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript, serverFileOf, PACKAGE_SCRIPT } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
-import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown, modelsMarkdown } from './lib/format.mjs'
+import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown, modelsMarkdown, lastRunPlanMarkdown, markOutdatedMarkdown } from './lib/format.mjs'
 import { roleRows, roleDetail, affectedByChange, affectedByContext, contextRows, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
 import { checkContract } from './lib/contract.mjs'
@@ -84,6 +86,11 @@ Commands:
   merge-roles   --file <json> [--write] merges a proposal of roles, contexts and permissions into roles.json:
                 a key the proposal gives replaces the role's own entry, and what it leaves out stays. Removes
                 only the keys its remove list names. A dry run unless --write
+  last-run      <id> --report <name> [--merge] [--write] merges a run report into the last_run of a runbook,
+                cell by cell, and moves status when no cell is pending or outdated. <name> is the file name or
+                _runs/<name>. A partial report needs --merge. A dry run unless --write
+  mark-outdated <id...> [--write] marks the last_run of each runbook and all its cells outdated. A runbook
+                with no last_run is skipped. A dry run unless --write
   model         <command> [arguments...] prints the model the command runs on, from the models block of the
                 config. --model <value> in the arguments forces it. --json prints { model, row, forced }
   models        [--json] prints the model table of the project: key, model and default
@@ -97,8 +104,8 @@ Global options:
   --config <file>  config path relative to the root (default: docs/runbooks/runbooks.config.json)
   --json           print JSON instead of Markdown
 
-Read-only, except move-to-calls, mark-review, enable-roles, merge-roles, rename-case, delete-case and
-delete-context with --write: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
+Read-only, except move-to-calls, mark-review, enable-roles, merge-roles, rename-case, delete-case,
+delete-context, last-run and mark-outdated with --write: prints to stdout, warnings to stderr. Exit 0 on success, 1 when
 contract --strict has findings, 2 on error.
 `
 
@@ -352,6 +359,71 @@ function commandPasses(root, config, options, positionals) {
   return options.json ? json(result) : passesMarkdown(result)
 }
 
+// last-run: merges a report into one runbook's last_run. A dry run unless --write.
+function commandLastRun(root, config, options, positionals) {
+  // parseArgs reads "--merge <id>" and "--write <id>" as values, so a string flag is the id.
+  const id = [options.merge, options.write, positionals[0]].find((value) => typeof value === 'string')
+  const merge = options.merge !== undefined
+  const write = options.write !== undefined
+  if (!id || typeof options.report !== 'string') throw new Error('last-run needs a runbook id and --report <name>')
+  const runbook = loadRunbooks(root, config).find((rb) => rb.id === id)
+  if (!runbook) throw new Error(`no runbook with id "${id}"`)
+  const name = options.report.replace(/^_runs\//, '')
+  const report = reportByName(root, config.paths.runbooks, name)
+  if (!report) throw new Error(`no report "${name}" in _runs`)
+  if (report.runbook !== id) throw new Error(`report ${name} belongs to ${report.runbook}`)
+  const file = path.resolve(root, runbook.path)
+  const text = fs.readFileSync(file, 'utf8')
+  const parts = splitFrontmatter(text)
+  const steps = parseSteps(parts ? parts.body : '')
+  const registry = rolesEnabled(config) ? loadRoles(root, config) : null
+  const expected = expectedCells(runbook, steps, { registry, config })
+  const merged = mergeLastRun(runbook.lastRun, report, expected, { merge, status: runbook.status })
+  const status = { from: runbook.status, to: merged.status }
+  const result = {
+    id,
+    report: name,
+    merge,
+    write,
+    status,
+    lastRun: merged.lastRun,
+    changed: merged.changed,
+    pending: pendingCells(merged.lastRun.cells, expected)
+  }
+  if (write) fs.writeFileSync(file, setLastRun(text, { lastRun: merged.lastRun, status: status.to === status.from ? undefined : status.to }))
+  return options.json ? json(result) : lastRunPlanMarkdown(result)
+}
+
+// mark-outdated: marks the last_run of each runbook outdated. Every edit is computed before any file is written.
+function commandMarkOutdated(root, config, options, positionals) {
+  const ids = [options.write, ...positionals].filter((value) => typeof value === 'string')
+  const write = options.write !== undefined
+  if (ids.length === 0) throw new Error('mark-outdated needs at least one runbook id')
+  const loaded = loadRunbooks(root, config)
+  const result = { runbooks: [], skipped: [], written: [] }
+  const edits = []
+  for (const id of ids) {
+    const rb = loaded.find((r) => r.id === id)
+    if (!rb) throw new Error(`no runbook with id "${id}"`)
+    if (!rb.lastRun) {
+      result.skipped.push({ id, reason: 'no last_run' })
+      continue
+    }
+    result.runbooks.push({ id, path: rb.path })
+    const file = path.resolve(root, rb.path)
+    try {
+      edits.push([file, setLastRun(fs.readFileSync(file, 'utf8'), { lastRun: markOutdated(rb.lastRun) })])
+    } catch (err) {
+      throw new Error(`${rb.path}: ${err.message}. Nothing was written`)
+    }
+  }
+  if (write) {
+    for (const [file, text] of edits) fs.writeFileSync(file, text)
+    result.written = result.runbooks.map((rb) => rb.path)
+  }
+  return options.json ? json(result) : markOutdatedMarkdown({ ...result, write })
+}
+
 function commandMergeRoles(root, config, options) {
   requireTracking(config)
   if (typeof options.file !== 'string') throw new Error('merge-roles needs --file <json>')
@@ -389,7 +461,7 @@ function commandPackageScript(root, config, options) {
   return `${status}: "${PACKAGE_SCRIPT}": "${value}"\n`
 }
 
-const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles']
+const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles', 'last-run', 'mark-outdated']
 
 export function run(argv) {
   const stderr = []
@@ -433,6 +505,8 @@ export function run(argv) {
     else if (['rename-case', 'delete-case', 'delete-context'].includes(command)) stdout = commandCaseEdit(root, config, options, positionals, command)
     else if (command === 'passes') stdout = commandPasses(root, config, options, positionals)
     else if (command === 'merge-roles') stdout = commandMergeRoles(root, config, options)
+    else if (command === 'last-run') stdout = commandLastRun(root, config, options, positionals)
+    else if (command === 'mark-outdated') stdout = commandMarkOutdated(root, config, options, positionals)
     else stdout = commandItems(root, config, options, command, warnings)
     if (command === 'list' || command === 'coverage') {
       const copied = copiedServerWarning(root, config, VERSION)

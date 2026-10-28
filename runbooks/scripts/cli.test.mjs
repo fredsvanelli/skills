@@ -680,3 +680,122 @@ test('model and models commands', () => {
   assert.match(run(['models', '--root', FIXTURE]).stdout, /^\| run --mode test \| haiku \| haiku \|$/m)
   assert.match(run(['models', '--diff', '--root', FIXTURE]).stdout, /^Missing rows: \d+\n\nNo row differs from the default\.\n$/)
 })
+
+const FULL_REPORT = '2026-10-10-0900-billing.issue-invoice.md'
+const PARTIAL_REPORT = '2026-10-12-0900-billing.issue-invoice.md'
+
+function reportText({ runbook = 'billing.issue-invoice', date, partial, rows }) {
+  return `---
+runbook: ${runbook}
+run: ${date.replace(/[ :]/g, '-')}
+date: ${date}
+commit: "def5678"
+branch: main
+mode: test
+executor: the project's test command
+partial: ${partial}
+upstream: live
+roles: []
+cases: []
+viewports: []
+result: passed
+---
+
+# Run
+
+| Step | State | Seen | Evidence |
+|---|---|---|---|
+${rows.map(([step, state]) => `| ${step} | ${state} | seen | \`e.png\` |`).join('\n')}
+`
+}
+
+// A copy of the fixture project whose issue-invoice runbook has two steps, with a full and a partial report in _runs.
+function lastRunProject() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-cli-'))
+  fs.cpSync(FIXTURE, dir, { recursive: true })
+  const file = path.join(dir, 'docs/runbooks/billing/issue-invoice.md')
+  fs.appendFileSync(file, '\n### S01. Open the form\n\nExpected: it opens.\n\n### S02. Send the form\n\nExpected: it sends.\n')
+  const runs = path.join(dir, 'docs/runbooks/_runs')
+  fs.writeFileSync(path.join(runs, FULL_REPORT), reportText({ date: '2026-10-10 09:00', partial: false, rows: [['S01', 'passed'], ['S02', 'failed']] }))
+  fs.writeFileSync(path.join(runs, PARTIAL_REPORT), reportText({ date: '2026-10-12 09:00', partial: true, rows: [['S02', 'passed']] }))
+  return { dir, file }
+}
+
+test('last-run writes a full run, then merges a partial one', (t) => {
+  const { dir, file } = lastRunProject()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const full = run(['last-run', 'billing.issue-invoice', '--report', FULL_REPORT, '--write', '--root', dir])
+  assert.equal(full.code, 0, full.stderr)
+  assert.match(fs.readFileSync(file, 'utf8'), /^  cells:\n    S01: passed r1\n    S02: failed r1$/m)
+  assert.match(fs.readFileSync(file, 'utf8'), /^  result: failed$/m)
+  const merged = run(['last-run', '--report', `_runs/${PARTIAL_REPORT}`, '--merge', 'billing.issue-invoice', '--write', '--json', '--root', dir])
+  assert.equal(merged.code, 0, merged.stderr)
+  const parsed = JSON.parse(merged.stdout)
+  assert.equal(parsed.lastRun.result, 'passed')
+  assert.equal(parsed.lastRun.mixed, true)
+  assert.deepEqual(parsed.changed.map((c) => [c.step, c.from, c.to]), [['S02', 'failed', 'passed']])
+  assert.deepEqual(parsed.pending, [])
+  assert.deepEqual(parsed.status, { from: 'active', to: 'active' })
+  const text = fs.readFileSync(file, 'utf8')
+  assert.match(text, /^  mixed: true$/m)
+  assert.match(text, /^  result: passed$/m)
+  assert.match(text, /^    S01: passed r1$/m)
+  assert.match(text, /^    S02: passed r2$/m)
+})
+
+test('last-run is a dry run without --write', (t) => {
+  const { dir, file } = lastRunProject()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const before = fs.readFileSync(file, 'utf8')
+  const out = run(['last-run', 'billing.issue-invoice', '--report', FULL_REPORT, '--root', dir])
+  assert.equal(out.code, 0, out.stderr)
+  assert.match(out.stdout, /Dry run: nothing written\. Add --write to apply\./)
+  assert.match(out.stdout, /^\| S02 \|.*\| failed \|$/m)
+  assert.equal(fs.readFileSync(file, 'utf8'), before)
+})
+
+test('last-run refuses a partial report without --merge', (t) => {
+  const { dir, file } = lastRunProject()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const before = fs.readFileSync(file, 'utf8')
+  const out = run(['last-run', 'billing.issue-invoice', '--report', PARTIAL_REPORT, '--write', '--root', dir])
+  assert.equal(out.code, 2)
+  assert.match(out.stderr, /--merge/)
+  assert.equal(fs.readFileSync(file, 'utf8'), before)
+})
+
+test('last-run refuses a report of another runbook and names the other errors', (t) => {
+  const { dir } = lastRunProject()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const other = '2026-10-11-0900-billing.cancel-invoice.md'
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/_runs', other), reportText({ runbook: 'billing.cancel-invoice', date: '2026-10-11 09:00', partial: false, rows: [['S01', 'passed']] }))
+  const wrong = run(['last-run', 'billing.issue-invoice', '--report', other, '--root', dir])
+  assert.equal(wrong.code, 2)
+  assert.match(wrong.stderr, /report 2026-10-11-0900-billing\.cancel-invoice\.md belongs to billing\.cancel-invoice/)
+  assert.match(run(['last-run', 'billing.issue-invoice', '--report', '2026-01-01-0000-billing.issue-invoice.md', '--root', dir]).stderr, /no report "2026-01-01-0000-billing\.issue-invoice\.md" in _runs/)
+  assert.match(run(['last-run', 'nope.nope', '--report', FULL_REPORT, '--root', dir]).stderr, /no runbook with id "nope\.nope"/)
+  assert.match(run(['last-run', 'billing.issue-invoice', '--root', dir]).stderr, /last-run needs a runbook id and --report <name>/)
+})
+
+test('mark-outdated marks every cell and skips a runbook with no last_run', (t) => {
+  const { dir, file } = lastRunProject()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  assert.equal(run(['last-run', 'billing.issue-invoice', '--report', FULL_REPORT, '--write', '--root', dir]).code, 0)
+  const ids = ['billing.issue-invoice', 'billing.cancel-invoice']
+  const before = fs.readFileSync(file, 'utf8')
+  const dry = run(['mark-outdated', ...ids, '--json', '--root', dir])
+  assert.equal(dry.code, 0, dry.stderr)
+  assert.deepEqual(JSON.parse(dry.stdout), {
+    runbooks: [{ id: 'billing.issue-invoice', path: 'docs/runbooks/billing/issue-invoice.md' }],
+    skipped: [{ id: 'billing.cancel-invoice', reason: 'no last_run' }],
+    written: []
+  })
+  assert.equal(fs.readFileSync(file, 'utf8'), before)
+  const out = run(['mark-outdated', ...ids, '--write', '--root', dir])
+  assert.equal(out.code, 0, out.stderr)
+  const text = fs.readFileSync(file, 'utf8')
+  assert.match(text, /^  outdated: true$/m)
+  assert.match(text, /^    S01: passed r1 outdated$/m)
+  assert.match(text, /^    S02: failed r1 outdated$/m)
+  assert.equal(run(['mark-outdated', '--root', dir]).code, 2)
+})

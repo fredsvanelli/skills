@@ -176,6 +176,35 @@ export function reviewPlanMarkdown({ title, runbooks, skipped = [], written, wri
   return `${lines.join('\n')}\n`
 }
 
+// A cell as junitMarkdown labels it: the step, then "as <role>", "in <case>" and "@ <viewport>" when it has them.
+const cellLabel = (c) => `${c.step}${c.role ? ` as ${c.role}` : ''}${c.case && c.case !== '*' ? ` in ${c.case}` : ''}${c.viewport ? ` @ ${c.viewport}` : ''}`
+
+// last-run: the status change, the cells that changed, the cells still pending and the new result.
+export function lastRunPlanMarkdown({ id, report, merge, write, status, lastRun, changed, pending }) {
+  const lines = [`Last run of ${id} from ${report}${merge ? ' (merged)' : ''}`, '']
+  lines.push(status.from === status.to ? `Status: ${status.from} (unchanged)` : `Status: ${status.from} to ${status.to}`, '')
+  if (changed.length === 0) lines.push('No cell changed.', '')
+  else {
+    lines.push(table(['Step', 'Role', 'Case', 'Viewport', 'From', 'To'],
+      changed.map((c) => [c.step, c.role ?? '', c.case ?? '', c.viewport ?? '', c.from ?? 'pending', c.to])), '')
+  }
+  if (pending.length > 0) lines.push(`Pending cells: ${pending.map(cellLabel).join(', ')}`, '')
+  lines.push(`Result: ${lastRun.result}`)
+  if (lastRun.mixed) lines.push(`Mixed runs: ${Object.keys(lastRun.runs).length}`)
+  lines.push(write ? `Written to ${id}.` : 'Dry run: nothing written. Add --write to apply.')
+  return `${lines.join('\n')}\n`
+}
+
+// mark-outdated: the runbooks marked, the ones skipped and the files written.
+export function markOutdatedMarkdown({ runbooks, skipped, written, write }) {
+  const lines = ['Marks the last run outdated.', '']
+  lines.push(runbooks.length === 0 ? 'No runbook to change.' : table(['Runbook', 'Path'], runbooks.map((rb) => [rb.id, rb.path])), '')
+  if (skipped.length > 0) lines.push('### Skipped', '', ...bullets(skipped.map((s) => `\`${s.id}\`: ${s.reason}`)), '')
+  if (written.length > 0) lines.push(`Written: ${written.join(', ')}.`)
+  else lines.push(write ? 'Nothing to change.' : 'Dry run: nothing written. Add --write to apply.')
+  return `${lines.join('\n')}\n`
+}
+
 export function caseEditMarkdown({ title, runbooks, skipped = [], folders = [], written, write }) {
   const lines = [title, '']
   lines.push(runbooks.length === 0 ? 'No runbook to change.' : table(['Runbook', 'Path'], runbooks.map((rb) => [rb.id, rb.path])), '')
