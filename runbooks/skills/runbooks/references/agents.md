@@ -4,7 +4,7 @@ A dispatch file is a command file that does not do the work. It picks a model, l
 
 ## Choosing the model
 
-Run this in the main session, with the arguments exactly as the user typed them:
+Run this in the main session. Pass the command and its flags as the user typed them. Replace free text (a question, a `--from text` description, a pasted `--import` reply, the text given to `roles:generate`) with one placeholder word such as `text`, because the resolver reads only the command, the options and whether a positional exists, and free text breaks the shell (an unquoted `?`, an apostrophe, a pasted multi-line reply):
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model <command> <arguments>
@@ -64,7 +64,7 @@ files: <one path per line, every file you wrote or edited; none if no file>
 summary: <what the command prints at the end>
 question: <the question, what you tried, the readings you see, the answer you would pick and why, and the options; or none>
 call: </runbooks:<command> <arguments>; or none>
-escalate: <the runbook and the reason the work needs a more capable model; or none>
+escalate: <runbook> <sync | script>; or none
 blocked by: <what is missing, the exact message; or none>
 next: <what the work needs next, in one line>
 handoff: <what the next stage must know and cannot read from the files; or none>
@@ -86,7 +86,7 @@ When the answer is in a file you can read, or is one of the fixed decisions of t
 
 Where an instructions file says to follow or run another command, the sub-agent stops with `status: call` and `call: /runbooks:<command> <arguments>`.
 
-The main session dispatches that command by its own row. It runs `runbooks.mjs model` for the called command and launches or follows it by the dispatch steps. It carries `--model` to the called command when the user gave it. When the called command ends, the main session sends its report to the first sub-agent with `SendMessage`, and the first sub-agent continues. A command reached through a call never runs its own commit step. The main session commits once, in the dispatch file of the command the user typed, with every file the chain reported.
+The called command inherits any lock or exclusive resource the caller holds (the upstream server, the browser, the test database), because the caller does nothing until the called report arrives. The main session dispatches that command by its own row. It runs `runbooks.mjs model` for the called command and launches or follows it by the dispatch steps. It carries `--model` to the called command when the user gave it. When the called command ends, the main session sends its report to the first sub-agent with `SendMessage`, and the first sub-agent continues. A command reached through a call never runs its own commit step. The main session commits once, in the dispatch file of the command the user typed, with every file the chain reported.
 
 ## Commits
 

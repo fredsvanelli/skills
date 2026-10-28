@@ -52,10 +52,10 @@ A unit is one runbook taken from where it is to a target. A stage is one command
 | Stage | The agent follows | Needs the lock (step 6) | Moves the runbook |
 |---|---|---|---|
 | `map` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/map.md`, with the filter of the goal | no | writes placeholders for the flows no runbook cites |
-| `create` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/create.md`, `--from placeholder <id>` or the source the goal names | only for a `mocked` `ui` runbook, which records its fixtures | `placeholder` to `draft` |
-| `update` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/update.md`, `<id> --from <source>` | as `create` | keeps the status, marks `last_run` outdated |
+| `create` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/create.md`, `--from placeholder <id>` or the source the goal names | only for a `mocked` `ui` runbook, which records its fixtures. The lock passes to the `run --record` call it makes (step 6) | `placeholder` to `draft` |
+| `update` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/update.md`, `<id> --from <source>` | as `create`, with the same hand-over | keeps the status, marks `last_run` outdated |
 | `to-test` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`, `<id>` | yes, it runs the script once | fills `scripts` |
-| `run` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/run.md`, `<id> --mode <mode>` | yes | `draft` to `active` on a full pass |
+| `run` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/run.md`, `<id> --mode <mode>` for a `ui` runbook, `<id> --mode test` for an `api` runbook, which always runs through its script | yes | `draft` to `active` on a full pass |
 
 Targets, from `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md` (Status):
 
@@ -103,7 +103,7 @@ Done when the mode is fixed and every check passed or the user settled it.
 
 Each stage goes to a new agent with a brief. One agent, one stage: the agent ends when its stage ends, and the next stage of the same unit starts another agent with a clean context. An agent that carried `create` into `run` would hold the whole investigation of the code while it drives the browser, and would run out of room or lose track.
 
-**The model.** Resolve it per stage, in this session, with the arguments the stage gets:
+**The model.** Resolve it per stage, in this session, with the arguments the stage gets (`run` gets `<id> --mode <mode>` for a `ui` runbook and `<id> --mode test` for an `api` runbook):
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model <stage command> <stage arguments> [--model <x>]
@@ -119,7 +119,7 @@ Add `--model <x>` only when the user gave it: it forces every stage and every ca
 - The Fixed decisions block, which this command always carries:
 
 ```
-Fixed decisions. Where the command file says to ask with AskUserQuestion, decide by these instead:
+Fixed decisions. Where the instructions file says to ask with AskUserQuestion, decide by these instead:
 - Run mode for ui runbooks: <mode>. Never guided, headed, chrome or prompt.
 - Viewports of a new ui runbook: every viewport in the config, unless the flow is one screen size by design.
 - Design links: link a screen when the design reference is configured and a frame matches the screen by name; else leave `design` empty and say so.
@@ -166,7 +166,7 @@ Repeat until every unit is at its target or skipped:
 2. **Read a report.** Verify the report against the files: after `create` or `update`, `list --json` has the id with the expected `status` and no `problems`; after `run`, `check <id> --json` has `latest.result` and, for a promotion, `status: active`; after `to-test`, `scripts` is not empty and the file exists. A report that says `done` and fails these is `failed`, with the gap as the reason.
    - `done`: the agent is finished and is not used again. Free the lock when the stage held it, then the port check of step 4 item 6; a server left running is stopped. Advance the unit, and keep the report for the brief of its next stage; when it reached its target, commit by step 7.
    - `question`: triage it (below). Other agents keep working meanwhile.
-   - `call`: the agent stops and waits, as for a question. Dispatch the command it names as part of the same unit, by step 5: resolve its model with `runbooks.mjs model` (with `--model` when the user gave it), then launch a new agent with the brief of that command. The called agent counts as one in flight. A called command never commits. When it reports, `SendMessage` its report to the calling agent, which continues its own stage. A call from the called agent is handled the same way. The files of the called report go into the unit's files for step 7.
+   - `call`: the agent stops and waits, as for a question. Dispatch the command it names as part of the same unit, by step 5: resolve its model with `runbooks.mjs model` (with `--model` when the user gave it), then launch a new agent with the brief of that command. The caller does nothing until the called report arrives, so the called agent takes over the caller's lock and its in-flight slot, and gives both back when it ends. Its brief says `Lock: yours` when the caller held the lock. A called command never commits. When it reports, `SendMessage` its report to the calling agent, which continues its own stage. A call from the called agent is handled the same way. The files of the called report go into the unit's files for step 7.
    - `escalate`: the agent ended. Add a `to-test` stage for the runbook it names, resolved by its row, and launch it before the `run` stage is launched again. The `to-test` agent never loosens an assertion. When it reports `done`, launch the `run` stage again on its original model. When the user gave `--model`, nothing escalates: the brief says `Forced model: yes` and the agent does the work itself. A `to-test` stage added this way needs the lock, as in step 3.
    - `blocked` or `failed`: when the cause is the environment (the app stopped answering, the upstream server, a port, a missing env var name), fix it as step 4 says and launch the stage again, once. When a step failed because the Expected and what the surface showed disagree, decide by the table below. Anything else, or a second failure of the same stage, goes to the user.
 
