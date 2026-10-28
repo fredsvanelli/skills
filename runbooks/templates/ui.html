@@ -289,11 +289,16 @@
     const match = /^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})-/.exec(name)
     return match ? { run: `${match[1]}-${match[2]}${match[3]}`, shown: `${match[1]} ${match[2]}:${match[3]}` } : { run: name, shown: name }
   }
+  // last_run.result `incomplete` (a cell is pending) takes the pending color.
   const stateClass = (state) => {
     const value = String(state ?? '')
     if (value === 'passed' || value === 'failed') return value
+    if (value === 'incomplete') return 'pending'
     return value.startsWith('blocked') ? 'blocked' : ''
   }
+  const MIXED_HELP = 'The cells of last_run come from more than one run'
+  // The age counts from the oldest run a cell cites, so name that date when it differs from the newest.
+  const ageNote = (rb) => (rb.oldest && rb.oldest !== rb.date ? `oldest cell ${rb.oldest}, ${ageText(rb.age)}` : ageText(rb.age))
 
   function el(tag, className, ...children) {
     const node = document.createElement(tag)
@@ -449,11 +454,12 @@
     if (rb.problems.length > 0) first.append(el('span', 'problems', rb.problems.join('; ')))
 
     const date = td(`date${rb.stale ? ' stale' : ''}`)
-    if (rb.date) date.append(rb.time ? `${rb.date} ${rb.time}` : rb.date, el('small', null, ageText(rb.age)))
+    if (rb.date) date.append(rb.time ? `${rb.date} ${rb.time}` : rb.date, el('small', null, ageNote(rb)))
     else date.append('never run')
 
     const result = td('nowrap')
     if (rb.result) result.append(badge(rb.result, stateClass(rb.result)))
+    if (rb.mixed) result.append(badge('mixed', null, MIXED_HELP))
     if (rb.outdated) result.append(badge('outdated', null, 'The runbook changed after this run'))
     if (rb.review) result.append(badge('review', 'pending', REVIEW_HELP))
     if (rb.problems.length > 0) result.append(badge('invalid', 'invalid'))
@@ -525,9 +531,10 @@
     if (rb.status) badges.append(badge(rb.status, rb.status))
     if (rb.surface) badges.append(badge(rb.surface))
     for (const tag of rb.tags ?? []) badges.append(badge(tag, tag === 'critical' ? 'critical' : null))
-    if (rb.result) badges.append(badge(`last run ${rb.result} · ${ageText(rb.age)}`, stateClass(rb.result)))
+    if (rb.result) badges.append(badge(`last run ${rb.result} · ${ageNote(rb)}`, stateClass(rb.result)))
     else badges.append(badge('never run', rb.stale ? 'failed' : null))
     if (rb.stale && rb.date) badges.append(badge(`no run in ${staleDays}+ days`, 'stale-badge'))
+    if (rb.mixed) badges.append(badge('mixed', null, MIXED_HELP))
     if (rb.outdated) badges.append(badge('outdated', null, 'The runbook changed after this run'))
     if (rb.review?.length > 0) badges.append(badge('review', 'pending', REVIEW_HELP))
     if (rb.problems.length > 0) badges.append(badge('invalid', 'invalid'))
@@ -582,10 +589,20 @@
     if (rb.lastRun) {
       const parts = [rb.lastRun.date ? (rb.time ? `${rb.lastRun.date} ${rb.time}` : String(rb.lastRun.date)) : 'no date']
       if (rb.lastRun.commit) parts.push(String(rb.lastRun.commit))
+      if (rb.lastRun.result) parts.push(badge(rb.lastRun.result, stateClass(rb.lastRun.result)))
+      if (rb.lastRun.mixed) parts.push(badge('mixed', null, MIXED_HELP))
+      const reports = rb.reports ?? []
+      // An old one-line last_run cites one report and lists no runs.
       const name = typeof rb.lastRun.report === 'string' ? rb.lastRun.report.split('/').pop() : null
-      if (name && rb.reportOnDisk) parts.push(link(reportHash(rb.id, name), null, 'report →'))
-      else if (name) parts.push(el('span', 'muted', 'report not on this machine'))
+      if (reports.length === 0 && name && rb.reportOnDisk) parts.push(link(reportHash(rb.id, name), null, 'report →'))
+      else if (reports.length === 0 && name) parts.push(el('span', 'muted', 'report not on this machine'))
       add('Last run', ...joined(parts))
+      if (rb.oldest && rb.oldest !== rb.lastRun.date) add('Oldest cell', `${rb.oldest} · ${ageText(rb.age)}`)
+      // One line per report a cell cites, oldest first, each with its link or a note that it is not on this machine.
+      add(reports.length > 1 ? 'Reports' : 'Report', ...lines(reports.map((entry) => {
+        const shown = runStamp(entry.name).shown
+        return entry.onDisk ? link(reportHash(rb.id, entry.name), null, `${shown} →`) : el('span', 'muted', `${shown}, not on this machine`)
+      })))
     } else {
       add('Last run', el('span', 'muted', 'never run'))
     }

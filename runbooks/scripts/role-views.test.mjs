@@ -136,3 +136,17 @@ test('role rows read the role result from the cells', () => {
   assert.equal(results.b.failed, 1)
   assert.equal(results.c.never, 1)
 })
+
+test('roleDetail reads the pass states of the role from the cells', () => {
+  const cell = (step, role, viewport, state) => ({ step, role, case: null, viewport, state, run: 'r1', outdated: false })
+  const rb = {
+    id: 'x.y', title: 'X', status: 'active', roles: ['a', 'b'], review: [],
+    lastRun: {
+      date: '2026-10-18', report: '_runs/2026-10-18-0900-x.y.md', legacy: false, runs: {},
+      cells: [cell('S01', 'a', 'desktop', 'passed'), cell('S02', 'a', 'desktop', 'failed'), cell('S01', 'a', 'mobile', 'passed'), cell('S01', 'b', 'desktop', 'passed')],
+    },
+  }
+  const reg = parseRoles({ version: 1, roles: { a: { description: 'a' }, b: { description: 'b' } } })
+  const detail = roleDetail(ROLES, config, reg, [rb], 'a')
+  assert.deepEqual(detail.runbooksOf[0].states, [{ viewport: 'desktop', result: 'failed' }, { viewport: 'mobile', result: 'passed' }])
+})

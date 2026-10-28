@@ -750,7 +750,7 @@ test('last-run is a dry run without --write', (t) => {
   const out = run(['last-run', 'billing.issue-invoice', '--report', FULL_REPORT, '--root', dir])
   assert.equal(out.code, 0, out.stderr)
   assert.match(out.stdout, /Dry run: nothing written\. Add --write to apply\./)
-  assert.match(out.stdout, /^\| S02 \|.*\| failed \|$/m)
+  assert.match(out.stdout, /^\| S02 \|.*\| failed \| 2026-10-10 \|$/m)
   assert.equal(fs.readFileSync(file, 'utf8'), before)
 })
 
@@ -798,6 +798,42 @@ test('mark-outdated marks every cell and skips a runbook with no last_run', (t) 
   assert.match(text, /^    S01: passed r1 outdated$/m)
   assert.match(text, /^    S02: failed r1 outdated$/m)
   assert.equal(run(['mark-outdated', '--root', dir]).code, 2)
+})
+
+test('mark-outdated keeps the one-line shape of an old last_run, so check lists no pending cell', (t) => {
+  const { dir, file } = lastRunProject()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const before = fs.readFileSync(file, 'utf8')
+  const out = run(['mark-outdated', 'billing.issue-invoice', '--write', '--root', dir])
+  assert.equal(out.code, 0, out.stderr)
+  const text = fs.readFileSync(file, 'utf8')
+  const line = 'last_run: { date: 2026-10-01, commit: "abc1234", result: passed, report: _runs/2026-10-01-0900-billing.issue-invoice.md, outdated: true }'
+  assert.equal(text, before.replace(/^last_run: .*$/m, line))
+  const check = run(['check', 'billing.issue-invoice', '--json', '--root', dir])
+  assert.equal(check.code, 0, check.stderr)
+  const parsed = JSON.parse(check.stdout)
+  assert.deepEqual(parsed.pending, [])
+  assert.equal(parsed.lastRun.legacy, true)
+  assert.equal(parsed.lastRun.outdated, true)
+})
+
+test('last-run and mark-outdated refuse a runbook whose last_run has problems and write nothing', (t) => {
+  const { dir, file } = lastRunProject()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const block = `last_run:\n  runs:\n    r1: { date: 2026-10-10, commit: "abc1234", report: _runs/${FULL_REPORT} }\n  cells:\n    S01: passed r1\n    S02: nope r1`
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^last_run:.*$/m, block))
+  const before = fs.readFileSync(file, 'utf8')
+  const lastRun = run(['last-run', 'billing.issue-invoice', '--report', FULL_REPORT, '--write', '--root', dir])
+  assert.equal(lastRun.code, 2)
+  assert.match(lastRun.stderr, /billing\.issue-invoice: last_run\.cells\.S02: state "nope" is not a step state\. Fix last_run by hand first\. Nothing was written/)
+  const marked = run(['mark-outdated', 'billing.issue-invoice', '--write', '--root', dir])
+  assert.equal(marked.code, 2)
+  assert.match(marked.stderr, /billing\.issue-invoice: last_run\.cells\.S02: state "nope" is not a step state/)
+  assert.equal(fs.readFileSync(file, 'utf8'), before)
+  fs.writeFileSync(file, before.replace(/^last_run:\n(?: {2}.*\n)+/m, 'last_run: [a, b]\n'))
+  const notMap = run(['mark-outdated', 'billing.issue-invoice', '--write', '--root', dir])
+  assert.equal(notMap.code, 2)
+  assert.match(notMap.stderr, /billing\.issue-invoice: last_run must be a map/)
 })
 
 test('rename-role-cells renames only last_run cells', (t) => {

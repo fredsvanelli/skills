@@ -151,6 +151,21 @@ function commandCoverage(root, config, options, warnings) {
   return options.json ? json({ scope, ...result }) : coverageMarkdown(result, scope)
 }
 
+// The cells a full run of the runbook fills, from its steps and, with role tracking on, the role registry.
+// `text` is the runbook file when the caller has already read it.
+function expectedCellsOf(root, config, runbook, text = fs.readFileSync(path.resolve(root, runbook.path), 'utf8')) {
+  const parts = splitFrontmatter(text)
+  const steps = parseSteps(parts ? parts.body : '')
+  const registry = rolesEnabled(config) ? loadRoles(root, config) : null
+  return expectedCells(runbook, steps, { registry, config })
+}
+
+// Refuses to rewrite a last_run the reader could not read in full, since the write would drop the cells it skipped.
+function requireReadableLastRun(runbook) {
+  const problem = runbook.problems.find((item) => item.startsWith('last_run'))
+  if (problem) throw new Error(`${runbook.id}: ${problem}. Fix last_run by hand first. Nothing was written`)
+}
+
 function commandCheck(root, config, options, positionals) {
   // parseArgs reads "--full <id>" as a value, so a string --full is the id.
   const id = typeof options.full === 'string' ? options.full : positionals[0]
@@ -161,12 +176,7 @@ function commandCheck(root, config, options, positionals) {
   const latest = latestReport(root, config.paths.runbooks, id, { full })
   const lastRun = runbook.lastRun
   let pending = []
-  if (lastRun && !lastRun.legacy) {
-    const parts = splitFrontmatter(fs.readFileSync(path.resolve(root, runbook.path), 'utf8'))
-    const steps = parseSteps(parts ? parts.body : '')
-    const registry = rolesEnabled(config) ? loadRoles(root, config) : null
-    pending = pendingCells(lastRun.cells, expectedCells(runbook, steps, { registry, config }))
-  }
+  if (lastRun && !lastRun.legacy) pending = pendingCells(lastRun.cells, expectedCellsOf(root, config, runbook))
   const cited = (report) => latest !== null && typeof report === 'string' && `${config.paths.runbooks}/${report}` === latest.path
   const result = {
     id,
@@ -384,12 +394,10 @@ function commandLastRun(root, config, options, positionals) {
   const report = reportByName(root, config.paths.runbooks, name)
   if (!report) throw new Error(`no report "${name}" in _runs`)
   if (report.runbook !== id) throw new Error(`report ${name} belongs to ${report.runbook}`)
+  requireReadableLastRun(runbook)
   const file = path.resolve(root, runbook.path)
   const text = fs.readFileSync(file, 'utf8')
-  const parts = splitFrontmatter(text)
-  const steps = parseSteps(parts ? parts.body : '')
-  const registry = rolesEnabled(config) ? loadRoles(root, config) : null
-  const expected = expectedCells(runbook, steps, { registry, config })
+  const expected = expectedCellsOf(root, config, runbook, text)
   const merged = mergeLastRun(runbook.lastRun, report, expected, { merge, status: runbook.status })
   const status = { from: runbook.status, to: merged.status }
   const result = {
@@ -417,6 +425,7 @@ function commandMarkOutdated(root, config, options, positionals) {
   for (const id of ids) {
     const rb = loaded.find((r) => r.id === id)
     if (!rb) throw new Error(`no runbook with id "${id}"`)
+    requireReadableLastRun(rb)
     if (!rb.lastRun) {
       result.skipped.push({ id, reason: 'no last_run' })
       continue

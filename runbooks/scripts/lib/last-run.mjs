@@ -115,8 +115,24 @@ function scalar(value) {
   return value === null ? null : String(value)
 }
 
-// Serializes a LastRun in the per-cell shape as YAML lines, starting with `last_run:`.
+// The old one-line flow map, `last_run: { date, commit, result, report[, outdated] }`. A missing field is left out.
+function legacyLine(lastRun) {
+  const fields = []
+  if (lastRun.date !== null) fields.push(`date: ${lastRun.date}`)
+  if (lastRun.commit !== null) fields.push(`commit: ${JSON.stringify(lastRun.commit)}`)
+  if (lastRun.result !== null) fields.push(`result: ${lastRun.result}`)
+  if (lastRun.report !== null) fields.push(`report: ${lastRun.report}`)
+  if (lastRun.outdated) fields.push('outdated: true')
+  return `last_run: { ${fields.join(', ')} }`
+}
+
+// A pass key as a flow-map key. YAML reserves `@` at the start of a plain scalar, so such a key is quoted.
+const keyText = (key) => (key.startsWith('@') ? JSON.stringify(key) : key)
+
+// Serializes a LastRun as YAML lines, starting with `last_run:`. A legacy value keeps the old one-line shape,
+// so only a run converts it; any other value is written in the per-cell shape.
 export function lastRunLines(lastRun) {
+  if (lastRun.legacy) return [legacyLine(lastRun)]
   const lines = ['last_run:']
   if (lastRun.date !== null) lines.push(`  date: ${lastRun.date}`)
   if (lastRun.oldest !== null) lines.push(`  oldest: ${lastRun.oldest}`)
@@ -157,7 +173,7 @@ export function lastRunLines(lastRun) {
       if (cells.length === 1 && passKey(cells[0]) === '') {
         lines.push(`    ${step}: ${write(cells[0])}`)
       } else {
-        lines.push(`    ${step}: { ${cells.map((cell) => `${passKey(cell)}: ${write(cell)}`).join(', ')} }`)
+        lines.push(`    ${step}: { ${cells.map((cell) => `${keyText(passKey(cell))}: ${write(cell)}`).join(', ')} }`)
       }
     }
   }
@@ -225,7 +241,7 @@ const reportName = (run) => (run.report ?? '').split('/').pop()
 
 // Merges a run report into last_run. A full report replaces every cell; a partial one, with merge, replaces the cells
 // it ran and keeps the others. Cells outside expected are dropped. Returns the new LastRun, the runbook status and the
-// cells whose state or run changed (from null for a cell that was pending).
+// cells whose state or run changed (from null for a cell that was pending), with the date of the run before and after.
 export function mergeLastRun(previous, report, expected, { merge, status }) {
   if (report.partial && !merge) throw new Error(PARTIAL_WITHOUT_MERGE)
   // Inside this function a cell's run is an id, the report path, so runs keep their identity while keys renumber.
@@ -262,7 +278,16 @@ export function mergeLastRun(previous, report, expected, { merge, status }) {
   for (const cell of kept) {
     const was = before.get(cellKey(cell))
     if (was !== undefined && was.state === cell.state && was.run === cell.run) continue
-    changed.push({ step: cell.step, role: cell.role, case: cell.case, viewport: cell.viewport, from: was?.state ?? null, to: cell.state })
+    changed.push({
+      step: cell.step,
+      role: cell.role,
+      case: cell.case,
+      viewport: cell.viewport,
+      from: was?.state ?? null,
+      to: cell.state,
+      fromDate: was === undefined ? null : runs.get(was.run).date,
+      toDate: runs.get(cell.run).date
+    })
   }
 
   const finalCells = kept.map((cell) => ({ ...cell, run: keyOf.get(cell.run) }))
@@ -297,7 +322,7 @@ export function renameCells(lastRun, { field, from, to }) {
   const cells = lastRun.cells.map((cell) => (cell[field] === from ? { ...cell, [field]: to } : cell))
   const seen = new Set()
   for (const cell of cells) {
-    const key = `${cell.step} ${passKey(cell)}`
+    const key = cellKey(cell)
     if (seen.has(key)) throw new Error(`${cell.step} already has a cell "${passKey(cell)}"`)
     seen.add(key)
   }

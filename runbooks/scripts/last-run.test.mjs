@@ -13,6 +13,7 @@ import {
   readLastRun, lastRunLines, passKey, parsePassKey,
   expectedCells, reportCells, pendingCells, mergeLastRun, markOutdated, renameCells
 } from './lib/last-run.mjs'
+import { lastRunPlanMarkdown } from './lib/format.mjs'
 
 const SHAPE = `last_run:
   date: 2026-10-18
@@ -383,4 +384,38 @@ test('expectedCells covers passes with tracking on and viewports with it off', (
   ])
   const mobileFirst = off.steps.map((s) => (s.step === 'S01' ? { ...s, viewports: ['mobile'] } : s))
   assert.deepEqual(expectedCells(withViewports, mobileFirst, off).filter((c) => c.step === 'S01'), [cell('S01', null, null, 'mobile')])
+})
+
+test('lastRunLines keeps the one-line shape for a legacy value', () => {
+  const { lastRun } = readLastRun({ date: '2026-10-01', commit: 'abc1234', result: 'passed', report: '_runs/x.md' })
+  const marked = markOutdated(lastRun)
+  assert.deepEqual(lastRunLines(marked), ['last_run: { date: 2026-10-01, commit: "abc1234", result: passed, report: _runs/x.md, outdated: true }'])
+  assert.deepEqual(lastRunLines(lastRun), ['last_run: { date: 2026-10-01, commit: "abc1234", result: passed, report: _runs/x.md }'])
+  assert.deepEqual(readLastRun(parseYaml(lastRunLines(marked).join('\n')).last_run).lastRun, marked)
+  assert.deepEqual(lastRunLines(readLastRun({ date: '2026-10-01' }).lastRun), ['last_run: { date: 2026-10-01 }'])
+})
+
+test('lastRunLines quotes a pass key that starts with @ and reads it back', () => {
+  const { lastRun } = readLastRun(valid)
+  const lines = lastRunLines(lastRun)
+  assert.ok(lines.includes('    S03: { "@mobile": failed r2, admin/*@mobile: blocked r1 }'), lines.join('\n'))
+  assert.ok(!lines.some((line) => /[{,] @/.test(line)))
+  assert.deepEqual(readLastRun(parseYaml(lines.join('\n')).last_run).lastRun, lastRun)
+})
+
+test('changed cells carry the date of the run before and after', () => {
+  const full = mergeLastRun(null, report(FULL, false, [['S01', 'passed'], ['S02', 'failed'], ['S03', 'passed']]), plain, { merge: false, status: 'draft' })
+  assert.deepEqual(full.changed.map((c) => [c.step, c.fromDate, c.toDate]), [['S01', null, '2026-10-16'], ['S02', null, '2026-10-16'], ['S03', null, '2026-10-16']])
+  const again = mergeLastRun(full.lastRun, report(PART, true, [['S01', 'passed']]), plain, { merge: true, status: 'draft' })
+  assert.deepEqual(again.changed, [{ step: 'S01', role: null, case: null, viewport: null, from: 'passed', to: 'passed', fromDate: '2026-10-16', toDate: '2026-10-18' }])
+})
+
+test('the last-run plan shows the run of each changed cell, so a re-run with the same state reads as one', () => {
+  const full = mergeLastRun(null, report(FULL, false, [['S01', 'passed'], ['S02', 'failed'], ['S03', 'passed']]), plain, { merge: false, status: 'draft' })
+  const again = mergeLastRun(full.lastRun, report(PART, true, [['S01', 'passed']]), plain, { merge: true, status: 'draft' })
+  const text = lastRunPlanMarkdown({ id: 'billing.issue-invoice', report: PART, merge: true, write: false, status: { from: 'draft', to: 'draft' }, ...again, pending: [] })
+  assert.match(text, /^\| Step \| Role \| Case \| Viewport \| From \| To \| Run \|$/m)
+  assert.match(text, /^\| S01 \| {2}\| {2}\| {2}\| passed \| passed \| 2026-10-16 to 2026-10-18 \|$/m)
+  const first = lastRunPlanMarkdown({ id: 'billing.issue-invoice', report: FULL, merge: false, write: false, status: { from: 'draft', to: 'draft' }, ...full, pending: [] })
+  assert.match(first, /^\| S02 \| {2}\| {2}\| {2}\| pending \| failed \| 2026-10-16 \|$/m)
 })

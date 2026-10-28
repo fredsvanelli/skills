@@ -94,6 +94,12 @@ export function passStates(report, name) {
   })
 }
 
+// The rows a runbook's pass states come from: its last_run cells, or for an old one-line last_run the report it cites.
+function cellsOrReport(rb, reports) {
+  const cells = rb.lastRun?.cells ?? []
+  return cells.length > 0 ? { steps: cells } : reports.get(rb.id)
+}
+
 export function roleDetail(root, config, registry, runbooks, name) {
   if (!registry.names.includes(name)) return null
   const reports = reportsOf(root, config, runbooks)
@@ -105,7 +111,7 @@ export function roleDetail(root, config, registry, runbooks, name) {
       title: rb.title,
       status: rb.status,
       outcomes: outcomes && outcomes.length > 0 ? [...outcomes] : ['allowed'],
-      states: passStates(reports.get(rb.id), name),
+      states: passStates(cellsOrReport(rb, reports), name),
       review: rb.review.length > 0,
     }
   })

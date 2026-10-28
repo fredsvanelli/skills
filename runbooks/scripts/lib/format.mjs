@@ -197,14 +197,18 @@ export function reviewPlanMarkdown({ title, runbooks, skipped = [], written, wri
 // A step, role, case and viewport as one phrase: S01 as admin in vip-team @ mobile. The case * is left out.
 const cellLabel = (c) => `${c.step}${c.role ? ` as ${c.role}` : ''}${c.case && c.case !== '*' ? ` in ${c.case}` : ''}${c.viewport ? ` @ ${c.viewport}` : ''}`
 
-// last-run: the status change, the cells that changed, the cells still pending and the new result.
+// The Run cell of a changed cell: the date of the run that held it, then the date of the run that holds it now.
+const runChange = (c) => (c.fromDate ? `${c.fromDate} to ${c.toDate}` : c.toDate ?? '')
+
+// last-run: the status change, the cells that changed (a re-run with the same state shows only in the Run column),
+// the cells still pending and the new result.
 export function lastRunPlanMarkdown({ id, report, merge, write, status, lastRun, changed, pending }) {
   const lines = [`Last run of ${id} from ${report}${merge ? ' (merged)' : ''}`, '']
   lines.push(status.from === status.to ? `Status: ${status.from} (unchanged)` : `Status: ${status.from} to ${status.to}`, '')
   if (changed.length === 0) lines.push('No cell changed.', '')
   else {
-    lines.push(table(['Step', 'Role', 'Case', 'Viewport', 'From', 'To'],
-      changed.map((c) => [c.step, c.role ?? '', c.case ?? '', c.viewport ?? '', c.from ?? 'pending', c.to])), '')
+    lines.push(table(['Step', 'Role', 'Case', 'Viewport', 'From', 'To', 'Run'],
+      changed.map((c) => [c.step, c.role ?? '', c.case ?? '', c.viewport ?? '', c.from ?? 'pending', c.to, runChange(c)])), '')
   }
   if (pending.length > 0) lines.push(`Pending cells: ${pending.map(cellLabel).join(', ')}`, '')
   lines.push(`Result: ${lastRun.result}`)
