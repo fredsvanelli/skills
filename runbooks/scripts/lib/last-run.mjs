@@ -177,7 +177,7 @@ function allows(only, value) {
 }
 
 // The cells a full run of the runbook fills, step by step. With tracking on (registry not null), every step for every
-// pass of passPlan; with it off, every step for every viewport, or null when the runbook has no viewports.
+// pass of passPlan; with it off, every step for every viewport, with viewport null when the runbook has none.
 // A pass that a step's Roles:, Cases: or Viewports: line leaves out has no cell, as in `junit`.
 export function expectedCells(runbook, steps, { registry, config }) {
   if (registry !== null) {
@@ -186,8 +186,7 @@ export function expectedCells(runbook, steps, { registry, config }) {
       .filter((pass) => allows(step.roles, pass.role) && allows(step.cases, pass.dataCase) && allows(step.viewports, pass.viewport))
       .map((pass) => ({ step: step.step, role: pass.role, case: pass.case, viewport: pass.viewport })))
   }
-  const viewports = runbook.viewports ?? []
-  if (viewports.length === 0) return null
+  const viewports = runbook.viewports?.length > 0 ? runbook.viewports : [null]
   return steps.flatMap((step) => viewports
     .filter((viewport) => allows(step.viewports, viewport))
     .map((viewport) => ({ step: step.step, role: null, case: null, viewport })))
@@ -206,9 +205,8 @@ export function reportCells(report) {
   }))
 }
 
-// The expected cells with no cell of the same step and pass key. None when expected is null.
+// The expected cells with no cell of the same step and pass key.
 export function pendingCells(cells, expected) {
-  if (expected === null) return []
   const held = new Set(cells.map(cellKey))
   return expected
     .filter((cell) => !held.has(cellKey(cell)))
@@ -244,15 +242,15 @@ export function mergeLastRun(previous, report, expected, { merge, status }) {
   const run = { date: (report.date ?? report.name).slice(0, 10), commit: report.commit, report: `_runs/${report.name}` }
   runs.set(run.report, run)
 
-  const wanted = expected === null ? null : new Set(expected.map(cellKey))
+  const wanted = new Set(expected.map(cellKey))
   const cells = new Map(report.partial ? before : [])
   for (const cell of reportCells(report)) {
     const key = cellKey(cell)
-    if (wanted !== null && !wanted.has(key)) continue
+    if (!wanted.has(key)) continue
     if (cell.state === 'no-account' && cells.has(key)) continue
     cells.set(key, { ...cell, run: run.report, outdated: false })
   }
-  const kept = expected === null ? [...cells.values()] : expected.map((cell) => cells.get(cellKey(cell))).filter(Boolean)
+  const kept = expected.map((cell) => cells.get(cellKey(cell))).filter(Boolean)
 
   const ids = [...new Set(kept.map((cell) => cell.run))]
     .sort((a, b) => reportName(runs.get(a)).localeCompare(reportName(runs.get(b))) || a.localeCompare(b))

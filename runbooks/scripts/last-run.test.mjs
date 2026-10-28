@@ -212,7 +212,6 @@ test('a pending cell makes the result incomplete', () => {
   assert.equal(merged.status, 'draft')
   assert.deepEqual(merged.changed.map((c) => [c.step, c.from, c.to]), [['S02', null, 'passed']])
   assert.deepEqual(pendingCells(merged.lastRun.cells, plain), [cell('S01'), cell('S03')])
-  assert.deepEqual(pendingCells(merged.lastRun.cells, null), [])
 })
 
 test('a failed cell outranks blocked, and blocked outranks pending', () => {
@@ -301,16 +300,22 @@ test('a partial report without merge is refused', () => {
 })
 
 test('a report without a date takes the run date from its name', () => {
-  const merged = mergeLastRun(null, { ...report(FULL, false, [['S01', 'passed']]), date: null }, null, { merge: false, status: 'draft' })
+  const merged = mergeLastRun(null, { ...report(FULL, false, [['S01', 'passed']]), date: null }, plain, { merge: false, status: 'draft' })
   assert.equal(merged.lastRun.runs.r1.date, '2026-10-16')
   assert.equal(merged.lastRun.date, '2026-10-16')
 })
 
-test('without expected cells every report cell counts and none is pending', () => {
-  const merged = mergeLastRun(null, report(FULL, false, [['S01', 'passed', '', '', ''], ['S02', 'passed', '', '', '']]), null, { merge: false, status: 'draft' })
-  assert.deepEqual(merged.lastRun.cells.map((c) => [c.step, c.role, c.case, c.viewport]), [['S01', null, null, null], ['S02', null, null, null]])
-  assert.equal(merged.lastRun.result, 'passed')
-  assert.equal(merged.status, 'active')
+test('a plain runbook expects one cell per step, so a merge leaves the other steps pending', () => {
+  // Tracking off and no viewports: the real path from expectedCells, a legacy previous and --steps S02 --merge.
+  const steps = ['S01', 'S02', 'S03'].map((step) => ({ step, roles: [], cases: [], viewports: [] }))
+  const expected = expectedCells({ viewports: [] }, steps, { registry: null, config: {} })
+  assert.deepEqual(expected, plain)
+  const { lastRun: legacy } = readLastRun({ date: '2026-10-01', commit: 'abc1234', result: 'passed', report: '_runs/x.md' })
+  const merged = mergeLastRun(legacy, report(PART, true, [['S02', 'passed', '', '', '']]), expected, { merge: true, status: 'draft' })
+  assert.deepEqual(merged.lastRun.cells.map((c) => [c.step, c.role, c.case, c.viewport, c.state]), [['S02', null, null, null, 'passed']])
+  assert.equal(merged.lastRun.result, 'incomplete')
+  assert.equal(merged.status, 'draft')
+  assert.deepEqual(pendingCells(merged.lastRun.cells, expected), [cell('S01'), cell('S03')])
 })
 
 test('reportCells reads empty columns as null and leaves the run unset', () => {
@@ -342,7 +347,7 @@ test('expectedCells covers passes with tracking on and viewports with it off', (
 
   // Tracking off: the same runbook read with no registry.
   const off = { ...on, registry: null }
-  assert.equal(expectedCells(off.runbook, off.steps, off), null)
+  assert.deepEqual(expectedCells(off.runbook, off.steps, off), [cell('S01'), cell('S02')])
   const withViewports = { ...off.runbook, viewports: ['desktop', 'mobile'] }
   assert.deepEqual(expectedCells(withViewports, off.steps, off), [
     cell('S01', null, null, 'desktop'), cell('S01', null, null, 'mobile'),
