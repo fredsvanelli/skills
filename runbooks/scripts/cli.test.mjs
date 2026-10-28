@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url'
 import { spawn, spawnSync } from 'node:child_process'
 import net from 'node:net'
 import { run } from './runbooks.mjs'
-import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript } from './lib/upstream.mjs'
+import { upstreamOptions, copiedServerWarning, copiedServerProblem } from './lib/upstream.mjs'
+import { packageScripts } from './lib/package-scripts.mjs'
+import { writeUiCopy } from './lib/ui-copy.mjs'
 import { VERSION, createUpstreamServer } from './upstream-server.mjs'
 import { parseArgs } from './lib/args.mjs'
 import { loadConfig } from './lib/config.mjs'
@@ -302,39 +304,51 @@ test('ui-copy follows paths.runbooks', () => {
   assert.ok(fs.existsSync(path.join(dir, 'qa/runbooks/runbooks-ui.mjs')))
 })
 
-test('packageScript adds, keeps and replaces the runbooks:upstream script', () => {
+const UI_SCRIPT = 'node docs/runbooks/runbooks-ui.mjs'
+const statuses = (items) => items.map(({ name, status }) => `${name} ${status}`)
+
+test('packageScripts adds and keeps the runbooks:ui and runbooks:upstream scripts', () => {
   const dir = upstreamProject({ serverFile: 'tests\\e2e\\runbooks-upstream.mjs' })
   const config = configOf(dir)
-  assert.equal(packageScript(dir, config).status, 'no-package')
+  assert.deepEqual(statuses(packageScripts(dir, config)), ['runbooks:ui no-package', 'runbooks:upstream no-package'])
   const file = path.join(dir, 'package.json')
   fs.writeFileSync(file, '{\n    "name": "app",\n    "scripts": {\n        "dev": "next dev"\n    }\n}')
-  assert.deepEqual(packageScript(dir, config), { status: 'missing', value: 'node tests/e2e/runbooks-upstream.mjs', current: null })
-  assert.equal(packageScript(dir, config, { write: true }).status, 'added')
+  assert.deepEqual(packageScripts(dir, config), [
+    { name: 'runbooks:ui', status: 'missing', value: UI_SCRIPT, current: null },
+    { name: 'runbooks:upstream', status: 'missing', value: 'node tests/e2e/runbooks-upstream.mjs', current: null },
+  ])
+  assert.deepEqual(statuses(packageScripts(dir, config, { write: true })), ['runbooks:ui added', 'runbooks:upstream added'])
   assert.equal(
     fs.readFileSync(file, 'utf8'),
-    '{\n    "name": "app",\n    "scripts": {\n        "dev": "next dev",\n        "runbooks:upstream": "node tests/e2e/runbooks-upstream.mjs"\n    }\n}',
+    `{\n    "name": "app",\n    "scripts": {\n        "dev": "next dev",\n        "runbooks:ui": "${UI_SCRIPT}",\n        "runbooks:upstream": "node tests/e2e/runbooks-upstream.mjs"\n    }\n}`,
   )
-  assert.equal(packageScript(dir, config).status, 'unchanged')
+  assert.deepEqual(statuses(packageScripts(dir, config)), ['runbooks:ui unchanged', 'runbooks:upstream unchanged'])
 })
 
-test('packageScript reports and replaces a different script, and adds scripts when absent', () => {
+test('packageScripts replaces a different script only with replace, and adds scripts when absent', () => {
   const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
   const file = path.join(dir, 'package.json')
   fs.writeFileSync(file, '{\n\t"scripts": { "runbooks:upstream": "node old.mjs" }\n}\n')
-  assert.deepEqual(packageScript(dir, configOf(dir)), { status: 'differs', value: 'node tests/runbooks-upstream.mjs', current: 'node old.mjs' })
-  assert.equal(packageScript(dir, configOf(dir), { write: true }).status, 'replaced')
-  assert.match(fs.readFileSync(file, 'utf8'), /^\{\n\t"scripts": \{\n\t\t"runbooks:upstream": "node tests\/runbooks-upstream\.mjs"\n\t\}\n\}\n$/)
+  const upstream = (items) => items.find(({ name }) => name === 'runbooks:upstream')
+  assert.deepEqual(upstream(packageScripts(dir, configOf(dir))), { name: 'runbooks:upstream', status: 'differs', value: 'node tests/runbooks-upstream.mjs', current: 'node old.mjs' })
+  assert.deepEqual(statuses(packageScripts(dir, configOf(dir), { write: true })), ['runbooks:ui added', 'runbooks:upstream differs'])
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).scripts['runbooks:upstream'], 'node old.mjs')
+  assert.equal(upstream(packageScripts(dir, configOf(dir), { write: true, replace: true })).status, 'replaced')
+  assert.match(fs.readFileSync(file, 'utf8'), /^\{\n\t"scripts": \{\n\t\t"runbooks:upstream": "node tests\/runbooks-upstream\.mjs",\n\t\t"runbooks:ui": "node docs\/runbooks\/runbooks-ui\.mjs"\n\t\}\n\}\n$/)
   fs.writeFileSync(file, '{ "name": "app" }\n')
-  packageScript(dir, configOf(dir), { write: true })
-  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).scripts, { 'runbooks:upstream': 'node tests/runbooks-upstream.mjs' })
+  packageScripts(dir, configOf(dir), { write: true })
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).scripts, { 'runbooks:ui': UI_SCRIPT, 'runbooks:upstream': 'node tests/runbooks-upstream.mjs' })
 })
 
-test('packageScript keeps CRLF line endings', () => {
+test('packageScripts keeps CRLF line endings', () => {
   const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
   const file = path.join(dir, 'package.json')
   fs.writeFileSync(file, '{\r\n  "name": "app"\r\n}\r\n')
-  packageScript(dir, configOf(dir), { write: true })
-  assert.equal(fs.readFileSync(file, 'utf8'), '{\r\n  "name": "app",\r\n  "scripts": {\r\n    "runbooks:upstream": "node tests/runbooks-upstream.mjs"\r\n  }\r\n}\r\n')
+  packageScripts(dir, configOf(dir), { write: true })
+  assert.equal(
+    fs.readFileSync(file, 'utf8'),
+    `{\r\n  "name": "app",\r\n  "scripts": {\r\n    "runbooks:ui": "${UI_SCRIPT}",\r\n    "runbooks:upstream": "node tests/runbooks-upstream.mjs"\r\n  }\r\n}\r\n`,
+  )
 })
 
 test('upstream-copy reads and prints a serverFile written with backslashes as a forward-slash path', () => {
@@ -345,18 +359,78 @@ test('upstream-copy reads and prints a serverFile written with backslashes as a 
   assert.deepEqual([code, stdout], [0, 'tests/runbooks-upstream.mjs\n'])
 })
 
-test('packageScript needs upstream.serverFile', () => {
-  const dir = upstreamProject({})
-  assert.throws(() => packageScript(dir, configOf(dir)), /^Error: upstream\.serverFile is not set: run \/runbooks:setup to copy the server first$/)
+test('packageScripts writes only runbooks:ui without upstream.serverFile', () => {
+  for (const upstream of [null, {}]) {
+    const dir = upstreamProject(upstream)
+    fs.writeFileSync(path.join(dir, 'package.json'), '{\n  "scripts": {}\n}\n')
+    assert.deepEqual(packageScripts(dir, configOf(dir), { write: true }), [{ name: 'runbooks:ui', status: 'added', value: UI_SCRIPT, current: null }])
+  }
 })
 
-test('package-script prints one line', () => {
+test('package-script prints one line per script', () => {
   const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
-  assert.equal(run(['package-script', '--root', dir]).stdout, 'no package.json: start the server with node tests/runbooks-upstream.mjs\n')
+  assert.equal(
+    run(['package-script', '--root', dir]).stdout,
+    `no package.json: start the UI with ${UI_SCRIPT}\nno package.json: start the server with node tests/runbooks-upstream.mjs\n`,
+  )
   fs.writeFileSync(path.join(dir, 'package.json'), '{}\n')
-  assert.equal(run(['package-script', '--root', dir, '--write']).stdout, 'added: "runbooks:upstream": "node tests/runbooks-upstream.mjs"\n')
-  fs.writeFileSync(path.join(dir, 'package.json'), '{ "scripts": { "runbooks:upstream": "node old.mjs" } }\n')
-  assert.equal(run(['package-script', '--root', dir]).stdout, 'differs: "runbooks:upstream" is "node old.mjs", expected "node tests/runbooks-upstream.mjs"\n')
+  assert.equal(
+    run(['package-script', '--root', dir, '--write']).stdout,
+    `added: "runbooks:ui": "${UI_SCRIPT}"\nadded: "runbooks:upstream": "node tests/runbooks-upstream.mjs"\n`,
+  )
+  fs.writeFileSync(path.join(dir, 'package.json'), `{ "scripts": { "runbooks:ui": "${UI_SCRIPT}", "runbooks:upstream": "node old.mjs" } }\n`)
+  assert.equal(
+    run(['package-script', '--root', dir]).stdout,
+    `unchanged: "runbooks:ui": "${UI_SCRIPT}"\ndiffers: "runbooks:upstream" is "node old.mjs", expected "node tests/runbooks-upstream.mjs"\n`,
+  )
+})
+
+test('package-script --write keeps a project runbooks:ui script until --replace', () => {
+  const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
+  fs.writeFileSync(path.join(dir, 'package.json'), '{\n  "scripts": { "runbooks:ui": "vite" }\n}\n')
+  assert.equal(
+    run(['package-script', '--root', dir, '--write']).stdout,
+    `differs: "runbooks:ui" is "vite", expected "${UI_SCRIPT}"\nadded: "runbooks:upstream": "node tests/runbooks-upstream.mjs"\n`,
+  )
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).scripts['runbooks:ui'], 'vite')
+  assert.match(run(['package-script', '--root', dir, '--write', '--replace']).stdout, /^replaced: "runbooks:ui" is "vite"/)
+})
+
+const npmOnPath = () => spawnSync('npm', ['--version'], { encoding: 'utf8' }).status === 0
+
+// Retries a listen on the port for up to two seconds, so a child that exits a moment after npm does not fail the test.
+async function portFrees(port) {
+  for (let i = 0; i < 20; i++) {
+    const free = await new Promise((resolve) => {
+      const probe = net.createServer().once('error', () => resolve(false))
+      probe.listen(port, '127.0.0.1', () => probe.close(() => resolve(true)))
+    })
+    if (free) return true
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  return false
+}
+
+test('npm run runbooks:ui starts the copy, and SIGTERM to npm frees the port', { skip: !npmOnPath() }, async (t) => {
+  const dir = upstreamProject(null)
+  fs.writeFileSync(path.join(dir, 'package.json'), '{ "name": "app", "private": true }\n')
+  writeUiCopy(dir, configOf(dir), VERSION)
+  packageScripts(dir, configOf(dir), { write: true })
+  const npm = spawn('npm', ['run', 'runbooks:ui', '--', '--port', '0'], { cwd: dir })
+  t.after(() => npm.kill('SIGKILL'))
+  const port = await new Promise((resolve, reject) => {
+    let out = ''
+    npm.stdout.on('data', (chunk) => {
+      out += chunk
+      const match = /runbooks-ui listening on http:\/\/127\.0\.0\.1:(\d+)/.exec(out)
+      if (match) resolve(Number(match[1]))
+    })
+    npm.on('exit', (code) => reject(new Error(`npm exited ${code}: ${out}`)))
+  })
+  const exited = new Promise((resolve) => npm.once('exit', resolve))
+  npm.kill('SIGTERM')
+  await exited
+  assert.equal(await portFrees(port), true)
 })
 
 test('list and coverage warn about the copied server', () => {

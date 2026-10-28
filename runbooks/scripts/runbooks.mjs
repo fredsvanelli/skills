@@ -16,7 +16,8 @@ import { setLastRun } from './lib/frontmatter-edit.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
 import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
-import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript, serverFileOf, PACKAGE_SCRIPT } from './lib/upstream.mjs'
+import { upstreamOptions, copiedServerWarning, copiedServerProblem, serverFileOf } from './lib/upstream.mjs'
+import { packageScripts } from './lib/package-scripts.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { startUi } from './ui-server.mjs'
 import { uiCopyFile, uiCopyProblem, writeUiCopy } from './lib/ui-copy.mjs'
@@ -53,8 +54,9 @@ Commands:
                 Ctrl+C. It serves plugin development: a project starts its own copy with npm run runbooks:upstream
   upstream-copy prints upstream.serverFile when the copied server is there and from this plugin version; else prints
                 why and exits 1
-  package-script [--write] adds "runbooks:upstream": "node <upstream.serverFile>" to the scripts of package.json.
-                A dry run unless --write
+  package-script [--write [--replace]] adds "runbooks:ui": "node <paths.runbooks>/runbooks-ui.mjs" and, with
+                upstream.serverFile, "runbooks:upstream": "node <upstream.serverFile>" to the scripts of package.json.
+                One line per script. A dry run unless --write; a script with another value changes only with --replace
   contract      [--strict] checks the calls of every ui runbook against upstream.schema, and the fixtures of
                 every mocked one against its calls and the schema (docs/adr/0005); --strict exits 1 on a finding
   move-to-calls [--source n] [--write] moves the endpoint ids of an upstream API in another repository
@@ -509,10 +511,12 @@ function commandModels(config, options) {
 }
 
 function commandPackageScript(root, config, options) {
-  const { status, value, current } = packageScript(root, config, { write: options.write === true })
-  if (status === 'no-package') return `no package.json: start the server with ${value}\n`
-  if (status === 'differs' || status === 'replaced') return `${status}: "${PACKAGE_SCRIPT}" is "${current}", expected "${value}"\n`
-  return `${status}: "${PACKAGE_SCRIPT}": "${value}"\n`
+  const items = packageScripts(root, config, { write: options.write === true, replace: options.replace === true })
+  return items.map(({ name, status, value, current }) => {
+    if (status === 'no-package') return `no package.json: start ${name === 'runbooks:ui' ? 'the UI' : 'the server'} with ${value}\n`
+    if (status === 'differs' || status === 'replaced') return `${status}: "${name}" is "${current}", expected "${value}"\n`
+    return `${status}: "${name}": "${value}"\n`
+  }).join('')
 }
 
 const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'ui-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles', 'last-run', 'mark-outdated', 'rename-role-cells']
