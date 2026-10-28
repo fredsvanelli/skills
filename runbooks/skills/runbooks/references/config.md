@@ -261,7 +261,7 @@ The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design
 | `redactHeaders` | `[]` | header names the recorder drops, besides `set-cookie`, `authorization` and `cookie`. Case does not matter |
 | `redactBodyKeys` | `[]` | key names the recorder drops from recorded request bodies and GraphQL variables, besides `password`, `token` and `secret`. A key whose name contains one of them is dropped, at any depth. Case does not matter |
 | `tokenEnv` | `""` | env var holding a service token, for an upstream API without password login |
-| `serverFile` | `null` | where `setup` copied the upstream server in the project (`<tests.ui.dir>/runbooks-upstream.mjs`) |
+| `serverFile` | `null` | where `setup` copied the upstream server, relative to this project: `<tests.ui.dir>/runbooks-upstream.mjs`, `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs` with a UI tests repository, or `<paths.runbooks>/runbooks-upstream.mjs` without `tests.ui`. The `runbooks:upstream` script of `package.json` runs it, and `run` starts it (`upstream.md`, "The copy in the project") |
 
 ```json
 "upstream": {
