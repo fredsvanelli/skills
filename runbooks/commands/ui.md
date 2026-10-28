@@ -13,7 +13,7 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `--port n` | the port the page listens on. Without it, the script picks its default port |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | accepted for consistency with the other commands: `inline`, `haiku`, `sonnet`, `opus` or `fable`. `ui` always runs in the main session, so it changes nothing |
 
 Examples: `/runbooks:ui`, `/runbooks:ui --port 4800`.
 

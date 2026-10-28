@@ -1,6 +1,6 @@
 {
   "name": "runbooks",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "UAT runbooks kept as a project's verified knowledge base: write, run in the browser or through API test scripts, audit against the code, measure coverage.",
   "author": { "name": "Fred Vanelli" },
   "repository": "https://github.com/fredsvanelli/skills"

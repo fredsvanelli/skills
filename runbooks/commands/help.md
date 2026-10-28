@@ -39,6 +39,7 @@ This file only dispatches. The procedure is in `${CLAUDE_PLUGIN_ROOT}/skills/run
 | `roles` | `skills/runbooks/references/config.md` (Roles), `skills/runbooks/references/format.md` (Roles, Review), `skills/runbooks/references/run-modes.md` (Roles), `skills/runbooks/references/coverage.md` (By role), `commands/roles/*.md`, `skills/runbooks/instructions/roles/generate.md` |
 | `contexts` | `skills/runbooks/references/config.md` (Roles), `skills/runbooks/references/format.md` (Contexts and cases), `skills/runbooks/references/upstream.md` (Case layer), `docs/adr/0006-a-case-is-a-run-dimension-inside-a-role.md`, `commands/contexts/*.md` |
 | `permissions` | `skills/runbooks/references/config.md` (Roles), `commands/permissions/manage.md`, `skills/runbooks/instructions/roles/generate.md` |
+| `models` | `skills/runbooks/references/agents.md`, `skills/runbooks/references/config.md` (Models), `docs/adr/0010-each-command-runs-on-the-model-its-row-names.md` |
 | `commits` | `skills/runbooks/references/commits.md` |
 | `commands` | the `## Parameters` section and the opening paragraphs of every file in `commands/` |
 
