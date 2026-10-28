@@ -1,5 +1,7 @@
 # Update a runbook: instructions
 
+When you run this file in the main session (model `inline`), the arguments and answers of the dispatch file stand in for the brief.
+
 You update the runbook named in your brief after the change its source describes. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/update.md`.
 
 You cannot ask the user. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.

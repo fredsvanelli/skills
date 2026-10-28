@@ -9,7 +9,7 @@ A runbook is a versioned UAT script for one flow: preconditions, ordered steps, 
 
 ## Commands
 
-Each command file holds the full procedure. When the user asks for one of these in their own words, read the file and follow it as if they had typed the command.
+Each command file holds the procedure or, for the commands that run in a sub-agent, the dispatch steps that lead to it. When the user asks for one of these in their own words, read the file and follow it as if they had typed the command.
 
 | Request | Command | File |
 |---|---|---|

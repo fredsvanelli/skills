@@ -1,5 +1,7 @@
 # Run runbooks: instructions
 
+When you run this file in the main session (model `inline`), the arguments and answers of the dispatch file stand in for the brief, and you start and stop the upstream server yourself in every mode.
+
 You run the group of runbooks your brief names, in the mode and with the flags it gives. The main session selected the runbooks, asked the mode and the `--waive` reason, and gave each runbook its run id. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/run.md`.
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md` (step states, dependency tree, status) and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/run-modes.md` (the mode you will use). For a `ui` runbook, also `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md` (the upstream modes, the server and its control routes). With role tracking on (`roles.enabled` in the config), also the Roles sections of `run-modes.md` and `format.md`, and for a runbook with cases the "Contexts and cases" section of `format.md`. The role steps below apply only then, and the case steps only to a runbook with cases (`cases` in the `list --json` output is not empty).

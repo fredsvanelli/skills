@@ -170,3 +170,15 @@ test('setup writes the model table and settings has a models group', () => {
   assert.match(setup, /models --diff --json/)
   assert.match(settings, /^\| `models` \|/m)
 })
+
+test('every dispatch command names an instructions file that exists', () => {
+  const missing = []
+  for (const rel of findFiles(PLUGIN_ROOT, 'commands/**/*.md')) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')
+    if (!/^## Dispatch\b/m.test(text)) continue
+    const named = [...text.matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/(skills\/runbooks\/instructions\/[\w./-]+\.md)/g)]
+    if (named.length === 0) missing.push(`${rel} names no instructions file`)
+    for (const match of named) if (!fs.existsSync(path.join(PLUGIN_ROOT, match[1]))) missing.push(`${rel} -> ${match[1]}`)
+  }
+  assert.deepEqual(missing, [])
+})

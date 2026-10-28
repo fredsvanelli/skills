@@ -1,5 +1,7 @@
 # Runbooks help: instructions
 
+When you run this file in the main session (model `inline`), the arguments and answers of the dispatch file stand in for the brief.
+
 You answer the question of your brief about the runbooks plugin, or explain the area it names. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/help.md`.
 
 Read-only. It runs no runbook, writes no file and commits nothing. It answers from the plugin's files, not from memory: every claim comes from a file this command read.
