@@ -16,9 +16,11 @@ import { setLastRun } from './lib/frontmatter-edit.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
 import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
-import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript, serverFileOf, PACKAGE_SCRIPT } from './lib/upstream.mjs'
+import { upstreamOptions, copiedServerWarning, copiedServerProblem, serverFileOf } from './lib/upstream.mjs'
+import { packageScripts } from './lib/package-scripts.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
-import { serveUi } from './ui-server.mjs'
+import { startUi } from './ui-server.mjs'
+import { uiCopyFile, uiCopyProblem, writeUiCopy } from './lib/ui-copy.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown, modelsMarkdown, lastRunPlanMarkdown, markOutdatedMarkdown } from './lib/format.mjs'
 import { roleRows, roleDetail, affectedByChange, affectedByContext, contextRows, citingRole } from './lib/role-views.mjs'
 import { moveToCalls } from './lib/move-to-calls.mjs'
@@ -52,8 +54,9 @@ Commands:
                 Ctrl+C. It serves plugin development: a project starts its own copy with npm run runbooks:upstream
   upstream-copy prints upstream.serverFile when the copied server is there and from this plugin version; else prints
                 why and exits 1
-  package-script [--write] adds "runbooks:upstream": "node <upstream.serverFile>" to the scripts of package.json.
-                A dry run unless --write
+  package-script [--write [--replace]] [--only runbooks:ui|runbooks:upstream] adds "runbooks:ui": "node <paths.runbooks>/runbooks-ui.mjs" and, with
+                upstream.serverFile, "runbooks:upstream": "node <upstream.serverFile>" to the scripts of package.json.
+                One line per script. A dry run unless --write; a script with another value changes only with --replace
   contract      [--strict] checks the calls of every ui runbook against upstream.schema, and the fixtures of
                 every mocked one against its calls and the schema (docs/adr/0005); --strict exits 1 on a finding
   move-to-calls [--source n] [--write] moves the endpoint ids of an upstream API in another repository
@@ -99,7 +102,10 @@ Commands:
   models        --defaults [--json] prints the default table and needs no config
   models        --diff [--json] counts the default rows the config lacks and lists the rows whose model differs
   ui            [--port n] starts the read-only UI server on 127.0.0.1 (default port 4020) in the foreground
-                and prints its address; stop it with Ctrl+C
+                and prints its address; stop it with Ctrl+C. It serves plugin development: a project starts its own
+                copy with npm run runbooks:ui
+  ui-copy       [--write] prints <paths.runbooks>/runbooks-ui.mjs when the copied UI server is there and from this
+                plugin version; else prints why and exits 1. --write writes or refreshes it
 
 Global options:
   --root <dir>     project root (default: current directory)
@@ -505,13 +511,16 @@ function commandModels(config, options) {
 }
 
 function commandPackageScript(root, config, options) {
-  const { status, value, current } = packageScript(root, config, { write: options.write === true })
-  if (status === 'no-package') return `no package.json: start the server with ${value}\n`
-  if (status === 'differs' || status === 'replaced') return `${status}: "${PACKAGE_SCRIPT}" is "${current}", expected "${value}"\n`
-  return `${status}: "${PACKAGE_SCRIPT}": "${value}"\n`
+  const only = options.only === undefined ? null : String(options.only)
+  const items = packageScripts(root, config, { write: options.write === true, replace: options.replace === true, only })
+  return items.map(({ name, status, value, current }) => {
+    if (status === 'no-package') return `no package.json: start ${name === 'runbooks:ui' ? 'the UI' : 'the server'} with ${value}\n`
+    if (status === 'differs' || status === 'replaced') return `${status}: "${name}" is "${current}", expected "${value}"\n`
+    return `${status}: "${name}": "${value}"\n`
+  }).join('')
 }
 
-const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles', 'last-run', 'mark-outdated', 'rename-role-cells']
+const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'ui-copy', 'package-script', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles', 'last-run', 'mark-outdated', 'rename-role-cells']
 
 export function run(argv) {
   const stderr = []
@@ -541,6 +550,13 @@ export function run(argv) {
       const problem = copiedServerProblem(root, config, VERSION)
       code = problem ? 1 : 0
       stdout = `${problem ?? serverFileOf(config)}\n`
+    } else if (command === 'ui-copy' && options.write) {
+      const { status, file } = writeUiCopy(root, config, VERSION)
+      stdout = `${status}: ${file}\n`
+    } else if (command === 'ui-copy') {
+      const problem = uiCopyProblem(root, config, VERSION)
+      code = problem ? 1 : 0
+      stdout = `${problem ?? uiCopyFile(config)}\n`
     } else if (command === 'package-script') stdout = commandPackageScript(root, config, options)
     else if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
@@ -585,20 +601,7 @@ if (invokedPath && invokedPath === fs.realpathSync(fileURLToPath(import.meta.url
       process.exit(2)
     }
   } else if (argv[0] === 'ui' && !argv.includes('--help')) {
-    try {
-      const { options } = parseArgs(argv)
-      const port = options.port === undefined ? 4020 : Number(options.port)
-      if (options.port !== undefined && (typeof options.port !== 'string' || !/^\d+$/.test(options.port) || port > 65535)) {
-        throw new Error('--port must be an integer from 0 to 65535')
-      }
-      const root = path.resolve(typeof options.root === 'string' ? options.root : process.cwd())
-      const configPath = typeof options.config === 'string' ? options.config : undefined
-      loadConfig(root, configPath)
-      serveUi({ root, configPath, port })
-    } catch (err) {
-      process.stderr.write(`runbooks: ${err.message}\n`)
-      process.exit(2)
-    }
+    startUi(argv)
   } else {
     const result = run(argv)
     process.stdout.write(result.stdout)

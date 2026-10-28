@@ -15,7 +15,7 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:to-test` | writes or adopts the test script of a runbook, in the project's test library |
 | `/runbooks:audit` | checks runbooks still match the code |
 | `/runbooks:coverage` | coverage report, overall or per capability, feature, slice or path |
-| `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
+| `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage, through `npm run runbooks:ui` |
 | `/runbooks:upgrade` | updates the installed plugin to the latest version from its marketplace |
 | `/runbooks:help` | answers a question about the plugin from its own docs, optionally limited to one area (`--about roles`) |
 | `/runbooks:whats-next` | compares the runbooks with the code and the latest commits or uncommitted changes, and suggests the three commands that make the most sense to run now |
@@ -32,6 +32,8 @@ UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. 
 | `/runbooks:permissions:manage` | changes what a role may do on each capability/feature key and marks the runbooks the change reaches for review |
 
 With `roles.enabled` on, the project keeps a role registry in `roles.json` inside the runbooks folder. A runbook lists the roles it covers, or `roles: all` for every registered role, and each run, script and audit pass then repeats once per role, with the expected outcome per role in each step (`allowed`, `read-only`, `hidden`, `denied` or `partial`). Steps that do not apply to a role, or a role without a test account, get their own states instead of failing. Changing a role or its permissions marks the runbooks it reaches with a `review` reason, which `/runbooks:update` clears once their role lines are right. Setup asks whether to track roles and settings can turn tracking on later; with it off, everything behaves as before. See Roles in [config](skills/runbooks/references/config.md) and in [format](skills/runbooks/references/format.md).
+
+The page of `/runbooks:ui` runs from a copy in the project. `setup` writes `<paths.runbooks>/runbooks-ui.mjs`, a file generated from the plugin's UI server, and adds a `runbooks:ui` script, so `npm run runbooks:ui` opens the page without Claude Code. `/runbooks:ui` checks that the copy matches the plugin version and runs that script ([ADR 0013](docs/adr/0013-the-ui-runs-from-a-generated-copy-in-the-project.md)).
 
 A `ui` runbook reaches its upstream API in one of two modes. In `live` mode, it calls the real API with test data. In `mocked` mode, the upstream server serves fixtures, and the app points at that server through the env var named in `upstream.urlEnv`. `setup` copies the server into the project and adds a `runbooks:upstream` script, so `npm run runbooks:upstream` starts it from the config; `run` starts the same copy ([ADR 0011](docs/adr/0011-the-agent-runs-the-projects-copy-of-the-upstream-server.md)). The project default is `upstream.mode` in the config, and a runbook can override it with `upstream:`. A mocked runbook proves what the screen shows and sends. It never covers an endpoint. See [upstream mode](skills/runbooks/references/upstream.md).
 
