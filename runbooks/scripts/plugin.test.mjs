@@ -29,13 +29,32 @@ test('no command or instruction starts the plugin copy of the upstream server', 
   assert.deepEqual(starts, [])
 })
 
+test('no command or instruction starts the plugin copy of the UI server', () => {
+  const starts = markdownFiles()
+    .filter((rel) => rel.startsWith('commands/') || rel.startsWith('skills/runbooks/instructions/'))
+    .filter((rel) => /runbooks\.mjs" ui(?![-\w])/.test(fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')))
+  assert.deepEqual(starts, [])
+})
+
 const readPlugin = (rel) => fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')
+
+test('/runbooks:ui checks the copy and starts it through npm run runbooks:ui', () => {
+  const ui = readPlugin('commands/ui.md')
+  assert.match(ui, /runbooks\.mjs" ui-copy/)
+  assert.match(ui, /npm run runbooks:ui/)
+})
+
+test('setup writes the UI copy for every stack before package-script', () => {
+  const setup = readPlugin('commands/setup.md')
+  const copy = setup.indexOf('ui-copy --write')
+  assert.ok(copy !== -1 && copy < setup.indexOf('package-script'))
+})
 
 test('settings and setup run package-script only once the config is written, and commit package.json', () => {
   const settings = readPlugin('commands/settings.md')
   assert.match(settings.slice(settings.indexOf('## 4. Write'), settings.indexOf('## 5.')), /package-script/)
   assert.match(settings.slice(settings.indexOf('## 6. Commit'), settings.indexOf('Write in the config')), /`package\.json`/)
-  assert.match(readPlugin('commands/setup.md'), /- npm script: once the config with `upstream\.serverFile` is written/)
+  assert.match(readPlugin('commands/setup.md'), /- npm scripts: once the config is written, because the command reads `paths\.runbooks` and `upstream\.serverFile` from it/)
 })
 
 test('a CI job in a UI tests repository starts the copy by its path in that repository', () => {

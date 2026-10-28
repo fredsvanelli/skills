@@ -217,7 +217,7 @@ When the config has an `upstream` block, `setup` copies the server into the proj
 - with `tests.ui.root` pointing to a UI tests repository: `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`. The fixtures stay in this repository: that repository's CI checks out this one and passes `--root` or `--fixtures` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`);
 - without `tests.ui`: `<paths.runbooks>/runbooks-upstream.mjs`.
 
-`setup` also adds `"runbooks:upstream": "node <upstream.serverFile>"` to the scripts of `package.json` (`runbooks.mjs package-script`), so `npm run runbooks:upstream` starts the copy from the config. A project without `package.json` starts it with `node <upstream.serverFile>`.
+`setup` also adds `"runbooks:upstream": "node <upstream.serverFile>"` to the scripts of `package.json` (`runbooks.mjs package-script`, which writes `runbooks:ui` too), so `npm run runbooks:upstream` starts the copy from the config. A project without `package.json` starts it with `node <upstream.serverFile>`.
 
 The copy carries the plugin version in its header comment and in `export const VERSION`. `list` and `coverage` warn when the copy is missing or from another version, and do not warn while a UI tests repository that holds it is not cloned. `run`, `to-test` and the orchestrator check it with `runbooks.mjs upstream-copy`, which prints the copy's path, or why it cannot run and exits 1: no copy, a copy from another version, or a UI tests repository that is not cloned. They then stop before the first step and offer `/runbooks:setup`, and never copy or refresh the server themselves. `/runbooks:setup` refreshes the copy, and `/runbooks:upgrade` offers to run it.
 

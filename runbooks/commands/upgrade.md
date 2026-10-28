@@ -47,7 +47,7 @@ Run `claude plugin list --json` again and read the new `version` of each install
 - the installs left alone in step 1 (other projects), with their `projectPath` and version;
 - that the new version loads after restarting Claude Code.
 
-When a version changed, offer `/runbooks:setup` after the restart: running it again is safe, and it brings the project's config and folders in line with what the new version expects. When the config has `upstream.serverFile`, say that `/runbooks:setup` also refreshes the copied upstream server at that path, which `list` and `coverage` warn about when its version differs from the plugin's. `upgrade` itself still copies nothing.
+When a version changed, offer `/runbooks:setup` after the restart: running it again is safe, and it brings the project's config and folders in line with what the new version expects. Say that `/runbooks:setup` also refreshes the UI copy at `<paths.runbooks>/runbooks-ui.mjs`, and that `/runbooks:ui` stops until it does, because it starts only a copy from the plugin's version. When the config has `upstream.serverFile`, say that `/runbooks:setup` also refreshes the copied upstream server at that path, which `list` and `coverage` warn about when its version differs from the plugin's. `upgrade` itself still copies nothing.
 
 When `runbooks.mjs list` warns that an `entries` source or a `slices` glob is outside the project, say that the endpoints of an API in another repository no longer count here, and that `/runbooks:setup` or `/runbooks:settings sources` moves them to `calls` with a dry run first (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). From runbooks 2.0 such a path is a config error.
 
