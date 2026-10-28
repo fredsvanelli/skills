@@ -19,7 +19,9 @@ Examples: `/runbooks:ui`, `/runbooks:ui --port 4800`.
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+`ui` always runs in the main session, because its server must keep running after the command ends. `--model` is accepted and changes nothing.
+
+## Steps
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" ui $ARGUMENTS` with the Bash tool in the background, so it outlives the turn.
 2. Wait for its first line, `runbooks-ui listening on http://127.0.0.1:<port>`, and give the user that URL as a link. Exit code 2 means the server did not start; show its message. For a taken port, offer `--port`. For a missing config, offer `/runbooks:setup`.

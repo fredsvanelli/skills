@@ -30,6 +30,8 @@ Examples: `/runbooks:list`, `/runbooks:list --capability billing --status draft`
 
 With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
+## Steps
+
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list $ARGUMENTS`.
 2. Show the table as printed. For each `warning:` line on stderr, add the runbook path and what to fix; the warning text names the problem.
 3. With `--affected`:

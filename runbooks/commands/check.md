@@ -26,6 +26,8 @@ By default the latest run is the newest report of the id, partial runs (`--steps
 
 With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
+## Steps
+
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" check $ARGUMENTS --json`.
    - Exit code 2 means the script could not run. Show its message: an unknown id gets the ids from `... list` that look closest; a missing config gets an offer of `/runbooks:setup`.
 2. When `latest` is `null`, say that the runbook has never been run, or, with `--full`, that it has never had a full run. When `lastRun.report` is set anyway, add that `last_run` cites a report that does not exist. Then offer `/runbooks:run <id>`. Stop.
