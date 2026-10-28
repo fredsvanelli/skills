@@ -97,11 +97,14 @@ export function serveUi({ root, configPath, port, html }) {
     process.exit(0)
   }
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop)
-  // npm runs the script through sh, which dies on SIGTERM without passing it on: a new parent means it is gone.
-  const parent = process.ppid
-  setInterval(() => {
-    if (process.ppid !== parent) stop()
-  }, 500).unref()
+  // npm runs the script through sh, which dies on SIGTERM without passing it on: a new parent means it is gone. Only
+  // under npm run runbooks:ui, because a copy started with `node ... &` must outlive the shell that started it.
+  if (process.env.npm_lifecycle_event === 'runbooks:ui') {
+    const parent = process.ppid
+    setInterval(() => {
+      if (process.ppid !== parent) stop()
+    }, 500).unref()
+  }
   return server
 }
 

@@ -15,5 +15,5 @@
 - The copy is about 260 KB of generated text in the project, and a refresh shows as a change to the whole file. `setup` writes it without a diff.
 - The copy lives in this repository also when the UI tests live in another one (ADR 0007), because the page reads this repository's runbooks.
 - The copy runs the config's `entries` command sources when the page asks, as the plugin's server does.
-- npm runs the script through `sh`, which dies on SIGTERM without passing it to `node`. The UI server stops when its parent process changes, so stopping `npm run runbooks:ui` frees the port.
+- npm runs the script through `sh`, which dies on SIGTERM without passing it to `node`. Started by `npm run runbooks:ui`, the UI server stops when its parent process changes, so stopping npm frees the port. Started with `node` directly, it keeps running after the shell that started it exits, as the upstream server does.
 - `runbooks.mjs ui` stays for plugin development. No command starts it.

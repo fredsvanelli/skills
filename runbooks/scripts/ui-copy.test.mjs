@@ -81,6 +81,25 @@ test('the copy resolves --root from the current folder', async (t) => {
   assert.match(line, /^runbooks-ui listening on /)
 })
 
+test('the copy keeps running after the shell that started it with node exits', async (t) => {
+  const { tmp, root } = project()
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
+  // The shell starts the copy in the background, waits for its listening line, writes its pid and exits.
+  const script = `${JSON.stringify(process.execPath)} ${COPY} --port 0 > out.txt 2>&1 & echo $! > pid.txt
+    while ! grep -q listening out.txt; do sleep 0.1; done`
+  const env = { ...process.env }
+  delete env.npm_lifecycle_event
+  const shell = spawnSync('sh', ['-c', script], { cwd: root, env, timeout: 10000 })
+  assert.equal(shell.status, 0)
+  const pid = Number(fs.readFileSync(path.join(root, 'pid.txt'), 'utf8'))
+  t.after(() => {
+    try { process.kill(pid, 'SIGTERM') } catch {}
+  })
+  const base = /http:\/\/127\.0\.0\.1:\d+/.exec(fs.readFileSync(path.join(root, 'out.txt'), 'utf8'))[0]
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  assert.equal((await fetch(`${base}/`)).status, 200)
+})
+
 test('the copy exits 2 with a runbooks: line when the root has no config', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-ui-copy-noconfig-'))
   fs.mkdirSync(path.join(dir, 'docs/runbooks'), { recursive: true })
