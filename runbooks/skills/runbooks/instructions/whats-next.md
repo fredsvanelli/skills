@@ -21,7 +21,7 @@ Every `runbooks.mjs` call below is `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runboo
 3. From the config, keep `stack`, `language`, `git.base`, `staleDays`, `roles.enabled`, `accounts`, `tests`, `upstream` and `design`. Note what setup left unfinished:
    - a surface the stack allows with no `tests.<surface>`, or with no `command` (`api` needs it; `ui` needs it only for scripts);
    - `ui` in the stack with an empty `app.baseUrl` or no `accounts`;
-   - `ui` in the stack with the `mcp.headless` or `mcp.headed` server missing from `.mcp.json`;
+   - `ui` in the stack with the `mcp.headless` or `mcp.headed` server missing from the active host's MCP configuration (`.mcp.json` on Claude, `.codex/config.toml` or the session's configured servers on Codex). A missing Claude file is not unfinished Codex setup. Check session tools too: when the server is configured but tools are not loaded, explain reconnect/restart rather than suggesting setup to rewrite an existing server;
    - the obsolete `paths.e2e` key, which `setup` migrates;
    - `entries` or `slices` empty, so coverage has nothing to measure.
 

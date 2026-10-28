@@ -232,7 +232,7 @@ How each system is read, and what a runbook cites:
 | `system` | Read through | A reference in a runbook |
 |---|---|---|
 | `figma` | the `mcp` server, or the exported files in `files` | a frame link with its `node-id` (`https://www.figma.com/design/AbC123/Billing?node-id=12-34`), or a file path |
-| `claude-design` | the Artifact tool when available and signed in; otherwise use an exported file. No server to add | a claude.ai link to a design |
+| `claude-design` | the Artifact tool when available; on an authentication error retain this source and follow the host's sign-in flow. When the tool is absent, select `system: files` with `design.files` for exported images/PDFs. No server to add | a claude.ai link to a design |
 | `adobe-xd` | artboards exported as PNG into `files`. Adobe XD has no MCP server | a file path |
 | `files` | the files in `files`, read as images or PDF | a file path |
 | `other` | the `mcp` server the user added, or the files in `files` | what that server takes (a link or an id), or a file path |
@@ -241,9 +241,9 @@ The Figma servers `setup` offers live in `${RUNBOOKS_PLUGIN_ROOT}/templates/desi
 
 | Template | Server | Needs |
 |---|---|---|
-| `figma-remote` | Figma's remote MCP server | sign-in with Figma through `/mcp`, once |
+| `figma-remote` | Figma's remote MCP server | sign-in through the host's MCP flow (`/mcp` on Claude, `codex mcp login figma` on Codex), once |
 | `figma-desktop` | Figma's desktop MCP server, served by the Figma desktop app | the app open, with its MCP server turned on in Dev Mode |
-| `figma-framelink` | the `figma-developer-mcp` package, pinned to the version `npm view figma-developer-mcp version` prints | a Figma personal access token in the env var `FIGMA_API_KEY` of the shell that starts Claude Code. `.mcp.json` holds only `${FIGMA_API_KEY}`, never the token |
+| `figma-framelink` | the `figma-developer-mcp` package, pinned to the version `npm view figma-developer-mcp version` prints | a Figma personal access token in the MCP process environment variable `FIGMA_API_KEY`. Claude JSON references `${FIGMA_API_KEY}`; Codex TOML uses `env_vars = ["FIGMA_API_KEY"]`. Never store the token in either config |
 
 ## Upstream
 
