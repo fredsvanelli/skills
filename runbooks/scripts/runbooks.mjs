@@ -14,7 +14,7 @@ import { latestReport } from './lib/reports.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
 import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
-import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript, PACKAGE_SCRIPT } from './lib/upstream.mjs'
+import { upstreamOptions, copiedServerWarning, copiedServerProblem, packageScript, serverFileOf, PACKAGE_SCRIPT } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown, modelsMarkdown } from './lib/format.mjs'
@@ -418,7 +418,7 @@ export function run(argv) {
     else if (command === 'upstream-copy') {
       const problem = copiedServerProblem(root, config, VERSION)
       code = problem ? 1 : 0
-      stdout = `${problem ?? config.upstream.serverFile}\n`
+      stdout = `${problem ?? serverFileOf(config)}\n`
     } else if (command === 'package-script') stdout = commandPackageScript(root, config, options)
     else if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)

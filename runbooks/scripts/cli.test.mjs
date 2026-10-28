@@ -303,6 +303,22 @@ test('packageScript reports and replaces a different script, and adds scripts wh
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).scripts, { 'runbooks:upstream': 'node tests/runbooks-upstream.mjs' })
 })
 
+test('packageScript keeps CRLF line endings', () => {
+  const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
+  const file = path.join(dir, 'package.json')
+  fs.writeFileSync(file, '{\r\n  "name": "app"\r\n}\r\n')
+  packageScript(dir, configOf(dir), { write: true })
+  assert.equal(fs.readFileSync(file, 'utf8'), '{\r\n  "name": "app",\r\n  "scripts": {\r\n    "runbooks:upstream": "node tests/runbooks-upstream.mjs"\r\n  }\r\n}\r\n')
+})
+
+test('upstream-copy reads and prints a serverFile written with backslashes as a forward-slash path', () => {
+  const dir = upstreamProject({ serverFile: 'tests\\runbooks-upstream.mjs' })
+  fs.mkdirSync(path.join(dir, 'tests'))
+  fs.writeFileSync(path.join(dir, 'tests/runbooks-upstream.mjs'), `export const VERSION = '${VERSION}'\n`)
+  const { code, stdout } = run(['upstream-copy', '--root', dir])
+  assert.deepEqual([code, stdout], [0, 'tests/runbooks-upstream.mjs\n'])
+})
+
 test('packageScript needs upstream.serverFile', () => {
   const dir = upstreamProject({})
   assert.throws(() => packageScript(dir, configOf(dir)), /^Error: upstream\.serverFile is not set: run \/runbooks:setup to copy the server first$/)

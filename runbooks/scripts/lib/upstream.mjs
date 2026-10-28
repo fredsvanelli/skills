@@ -16,6 +16,9 @@ function uncloned(root, config) {
   return testsRoot && isOutside(root, testsRoot) && !fs.existsSync(path.resolve(root, testsRoot)) ? testsRoot : null
 }
 
+// upstream.serverFile with forward slashes, so a path written on Windows resolves on POSIX and survives a shell.
+export const serverFileOf = (config) => config.upstream?.serverFile?.replaceAll('\\', '/') ?? null
+
 // Compares the copied server's VERSION with the plugin's. Reads the file as text and never imports it.
 function fileProblem(root, file, version) {
   const full = path.resolve(root, file)
@@ -27,7 +30,7 @@ function fileProblem(root, file, version) {
 
 // The warning list and coverage print. A copy in a UI tests repository that is not cloned here is not missing.
 export function copiedServerWarning(root, config, version) {
-  const file = config.upstream?.serverFile
+  const file = serverFileOf(config)
   if (!file || uncloned(root, config)) return null
   return fileProblem(root, file, version)
 }
@@ -35,7 +38,7 @@ export function copiedServerWarning(root, config, version) {
 // Why run cannot start the copied server, or null when it can: run needs the copy, so nothing here is lenient.
 export function copiedServerProblem(root, config, version) {
   if (!config.upstream) return 'the config has no upstream block. Run /runbooks:setup'
-  const file = config.upstream.serverFile
+  const file = serverFileOf(config)
   if (!file) return 'upstream.serverFile is not set: run /runbooks:setup to copy the server'
   const testsRoot = uncloned(root, config)
   if (testsRoot) return `upstream.serverFile ${file} is in ${testsRoot}, which is not cloned: clone it there or run /runbooks:setup`
@@ -45,11 +48,11 @@ export function copiedServerProblem(root, config, version) {
 export const PACKAGE_SCRIPT = 'runbooks:upstream'
 
 // Compares the runbooks:upstream script of package.json with `node <upstream.serverFile>`, and writes it with write.
-// A write keeps the file's indent, its key order and its final newline.
+// A write keeps the file's indent, its key order, its line endings and its final newline.
 export function packageScript(root, config, { write = false } = {}) {
-  const file = config.upstream?.serverFile
+  const file = serverFileOf(config)
   if (!file) throw new Error('upstream.serverFile is not set: run /runbooks:setup to copy the server first')
-  const value = `node ${file.replaceAll('\\', '/')}`
+  const value = `node ${file}`
   const packagePath = path.join(root, 'package.json')
   if (!fs.existsSync(packagePath)) return { status: 'no-package', value, current: null }
   const text = fs.readFileSync(packagePath, 'utf8')
@@ -59,7 +62,9 @@ export function packageScript(root, config, { write = false } = {}) {
   if (write) {
     pkg.scripts = { ...pkg.scripts, [PACKAGE_SCRIPT]: value }
     const indent = /^[ \t]+(?=")/m.exec(text)?.[0] ?? '  '
-    fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, indent)}${text.endsWith('\n') ? '\n' : ''}`)
+    const eol = text.includes('\r\n') ? '\r\n' : '\n'
+    const json = JSON.stringify(pkg, null, indent).replaceAll('\n', eol)
+    fs.writeFileSync(packagePath, `${json}${text.endsWith('\n') ? eol : ''}`)
   }
   const status = current === null ? (write ? 'added' : 'missing') : write ? 'replaced' : 'differs'
   return { status, value, current }

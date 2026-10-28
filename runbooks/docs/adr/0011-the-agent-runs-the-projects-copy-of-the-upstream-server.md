@@ -11,7 +11,7 @@
 
 ## Consequences
 
-- Every plugin upgrade that changes the server stops `run` until `/runbooks:setup` refreshes the copy. `/runbooks:upgrade` already offers `setup`.
+- The copy's `VERSION` is the plugin version, so every plugin upgrade, even one that leaves the server unchanged, stops `run` until `/runbooks:setup` refreshes the copy. `/runbooks:upgrade` already offers `setup`. Teammates on different plugin versions stop each other's runs until they match.
 - A live-only project gets the copy and the script too, unused until its first mocked runbook.
 - With `tests.ui.root`, the copy lives in the UI tests repository, so `run` and `npm run runbooks:upstream` need that repository cloned next to this one.
 - Started with `--fixtures`, the copy behaves as before and reads no config, so existing CI jobs and framework configs keep working.
