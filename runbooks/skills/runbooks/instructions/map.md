@@ -2,19 +2,19 @@
 
 When you run this file in the main session (model `inline`), the arguments and answers of the dispatch file stand in for the brief.
 
-You map the code into placeholder runbooks, one per flow no runbook cites yet. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/map.md`.
+You map the code into placeholder runbooks, one per flow no runbook cites yet. The parameters are in `${RUNBOOKS_PLUGIN_ROOT}/commands/map.md`.
 
-You cannot ask the user. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
+When executing as a child, you cannot ask the user. When the main session executes this file inline, it asks the user directly and handles calls through the dispatcher. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
 
 The filter in your brief (`<filter>` below) is what the user typed: `--capability x`, `--slice name`, `--path glob`, or nothing.
 
-Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`.
+Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`.
 
 A placeholder is a runbook with frontmatter and a Goal but no steps (`status: placeholder`). It marks a flow that still needs a runbook. `/runbooks:create` fills it later. This command writes new placeholders only and never edits an existing runbook, placeholders included, so running it again maps only what is still unmapped.
 
 ## 1. Find what no runbook cites
 
-1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" coverage <filter> --json`. Exit code 2 stops the command; show the message. Keep the numbers for step 4.
+1. `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" coverage <filter> --json`. Exit code 2 stops the command; show the message. Keep the numbers for step 4.
 2. `entries.uncovered` and `requirements.uncovered` are the items no runbook cites in any status. Map only these. Slice and path filters reach entries only, so with a filter, map a requirement only when it belongs to a flow mapped in this scope.
 3. `... list --status placeholder --json`: the existing placeholders. An `orphans` item whose runbook is one of them is a stale placeholder for step 4.
 
@@ -41,7 +41,7 @@ Done when every uncovered item is in a placeholder or on the not-mapped list wit
 
 ## 3. Write the placeholders
 
-Path `<paths.runbooks>/<capability>/<flow>.md`, from `${CLAUDE_PLUGIN_ROOT}/templates/placeholder.md`:
+Path `<paths.runbooks>/<capability>/<flow>.md`, from `${RUNBOOKS_PLUGIN_ROOT}/templates/placeholder.md`:
 
 - `surface`: `ui` or `api`, from the group the flow came from;
 - `title` and `Goal`: the user outcome or business operation, in the config language;
@@ -55,7 +55,7 @@ Then run `... list --json` and confirm every new placeholder has an empty `probl
 
 ## 4. Report
 
-Your report follows "The report" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. List in `files:` every placeholder you wrote. Put in `summary:`:
+Your report follows "The report" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. List in `files:` every placeholder you wrote. Put in `summary:`:
 
 - a table per capability: placeholder id, surface, title, entries, requirements, fitted tests (each marked candidate or evidence only, and full or partial, with what it leaves out when partial);
 - the existing-runbook list: each test file with the runbook it fits, offering `/runbooks:to-test <id>` for runbooks whose `scripts` is empty;
@@ -63,6 +63,6 @@ Your report follows "The report" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/refer
 - the not-mapped list with reasons;
 - the stale placeholders from step 1, each with the ids that no longer exist;
 - the entry and requirement counts from step 1 next to the new ones: uncovered before, planned after;
-- the three placeholders to create first, ranked by risk of the flow as in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/coverage.md`. On a tie, a placeholder with fitted tests comes first: its steps and Expected already have evidence.
+- the three placeholders to create first, ranked by risk of the flow as in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/coverage.md`. On a tie, a placeholder with fitted tests comes first: its steps and Expected already have evidence.
 
 Done when every uncovered item is in a placeholder or on the not-mapped list, every existing test is fitted or listed, every new placeholder has an empty `problems` list, and `summary:` holds the map.

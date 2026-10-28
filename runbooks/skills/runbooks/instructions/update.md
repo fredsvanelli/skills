@@ -2,21 +2,21 @@
 
 When you run this file in the main session (model `inline`), the arguments and answers of the dispatch file stand in for the brief.
 
-You update the runbook named in your brief after the change its source describes. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/update.md`.
+You update the runbook named in your brief after the change its source describes. The parameters are in `${RUNBOOKS_PLUGIN_ROOT}/commands/update.md`.
 
-You cannot ask the user. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
+When executing as a child, you cannot ask the user. When the main session executes this file inline, it asks the user directly and handles calls through the dispatcher. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
 
-Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, and for a `ui` runbook `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
+Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, and for a `ui` runbook `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 
-An update changes what the runbook expects, so it is investigated like a new runbook, but only where the change reaches. Every edited or added `ui` step names a real route, a real control and the exact text the UI shows; every `api` step a real endpoint, role, request and the exact status and body (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/create.md`, step 3).
+An update changes what the runbook expects, so it is investigated like a new runbook, but only where the change reaches. Every edited or added `ui` step names a real route, a real control and the exact text the UI shows; every `api` step a real endpoint, role, request and the exact status and body (`${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/create.md`, step 3).
 
 With role tracking on (`roles.enabled` in the config), also read the Roles and Review sections of `references/format.md` and `references/config.md`. The role steps below apply only then. With tracking off, ignore them.
 
 ## 1. Load the runbook
 
-1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json`: find the id. A runbook with `problems` is fixed in this update too; a `deprecated` one is not updated (offer `/runbooks:create` instead).
+1. `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json`: find the id. A runbook with `problems` is fixed in this update too; a `deprecated` one is not updated (offer `/runbooks:create` instead).
 2. Read the runbook. Write down its steps with their `Parents:`, the highest step number, `covers`, `sources`, `status` and `last_run`. For a `ui` runbook, also its `upstream` mode (the `upstream` field of the list output, which is the effective mode) and, when it is `mocked`, the output of `... fixtures <id> --json`.
-3. With role tracking on, read the runbook's `review` first and show each entry: its reason, its date and its fields (`references/format.md`, Review). Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` for each role the runbook runs, for its effective permissions. Every entry becomes a change on the list of step 2:
+3. With role tracking on, read the runbook's `review` first and show each entry: its reason, its date and its fields (`references/format.md`, Review). Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` for each role the runbook runs, for its effective permissions. Every entry becomes a change on the list of step 2:
    - `roles-enabled`: every Expected needs role lines, and each `As:` step becomes role lines;
    - `role-permissions`: the role's lines for the steps that reach the key in `key`, only the lines that apply in `case` when the entry has one;
    - `role-created`: the new role has no lines yet;
@@ -104,7 +104,7 @@ Then:
 - `design`: the references from step 3 added or replaced, the ones of screens no step reaches any more removed, and the `Design:` lines of the steps that end on them;
 - `roles`, with role tracking on: `all` when the frontmatter has no `roles`. An explicit list such as `[admin]` is not turned into `all` on its own: ask with `AskUserQuestion` whether it is a deliberate subset, keep it on a yes and convert it to `all` only on a no. The role lines and `Roles:` lines from step 3 are written in each step, and each `As:` line they replace is removed;
 - `cases`, with cases: `all` when the frontmatter has no `cases` and the runbook now runs per case, with the Preconditions `Cases:` list holding one line per case. A list of cases stays a list, with a new case added only when the user asks;
-- `review`, with role tracking on: ask with `AskUserQuestion`, per role, whether the Expected lines written or kept are right. On a runbook with cases, ask per role and case for the roles that run per case. The same confirmation clears `context-created` and `case-created` entries, which only `update` clears. Once the user confirms every role, clear the key with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id> --clear` as a dry run, show what it would do, ask, and then run it again with `--write`. When the user confirms only some roles, the key stays and the summary names the roles still to confirm. Clearing `review` never touches `last_run.outdated`, which follows the last bullet of this list;
+- `review`, with role tracking on: ask with `AskUserQuestion`, per role, whether the Expected lines written or kept are right. On a runbook with cases, ask per role and case for the roles that run per case. The same confirmation clears `context-created` and `case-created` entries, which only `update` clears. Once the user confirms every role, clear the key with `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id> --clear` as a dry run, show what it would do, ask, and then run it again with `--write`. When the user confirms only some roles, the key stays and the summary names the roles still to confirm. Clearing `review` never touches `last_run.outdated`, which follows the last bullet of this list;
 - `viewports`: the answer from step 3, when it changed; a size the config lacks goes into the config `viewports`, as in `create`;
 - "Not covered": add what the surface cannot show about the change, and remove what a step now proves;
 - `upstream`: write `upstream: live|mocked` only when the target mode differs from the config `upstream.mode`, and remove the field when it does not;
@@ -113,19 +113,19 @@ Then:
   - to `mocked`, record them. After a step change in a `mocked` runbook, re-record the fixtures the edited, added and removed steps reach: delete the affected files first, and the whole `<Sxx>/` folder of a removed step, because the recorder keeps an equal fixture and saves a differing response in the step's folder. Then record as `create` does (step 5): `/runbooks:run <id> --record` when `upstream.baseUrl` answers (report `status: call` with that call; the main session runs it and sends you its report), over the data the Preconditions create and never over data that already sits in the environment, else from `upstream.schema`, else by hand. Each fixture has a `source` (`recorded <YYYY-MM-DD> from <origin>`, `schema`, or `hand-written: <reason>`). Remove volatile query keys such as `_t`, and volatile payload keys such as a timestamp or a client-generated id, from the recorded files. Run `... fixtures <id> --json` and fix every problem it lists;
   - a `mocked` step that `run` marked `blocked` for an unmatched request is the same case: the missing fixture is recorded here. When the `unmatched` entry names an `operationName`, the fixture answers that GraphQL operation and carries its name in `request.operationName`. When the entry has `variables` or `body`, copy it into the fixture's `request.variables` or `request.body`;
 - `scripts` of an `api` runbook: leave the files alone here. The next `/runbooks:run` finds new step ids without a test and completes the script, and `/runbooks:audit` finds assertions that no longer match;
-- `status` stays as it is. When `last_run` is set and this update changed a step, a precondition, `cases`, `viewports`, `design` or `upstream`, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-outdated <id> --write`, which marks every cell and the whole `last_run` outdated and keeps the rest: the run verified the old text. A run clears `outdated` on the cells it ran, and `last_run.outdated` goes away when no cell has it.
+- `status` stays as it is. When `last_run` is set and this update changed a step, a precondition, `cases`, `viewports`, `design` or `upstream`, run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-outdated <id> --write`, which marks every cell and the whole `last_run` outdated and keeps the rest: the run verified the old text. A run clears `outdated` on the cells it ran, and `last_run.outdated` goes away when no cell has it.
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and confirm the runbook has an empty `problems` list.
+Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and confirm the runbook has an empty `problems` list.
 
 ## 6. Report
 
-Your report follows "The report" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. List in `files:` the runbook, its fixtures and the config when you added a viewport to it. Put in `summary:`:
+Your report follows "The report" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. List in `files:` the runbook, its fixtures and the config when you added a viewport to it. Put in `summary:`:
 
 - A table of the steps that changed: number, edited / added / removed, and what changed in one line. When no step changed, say so and name the sections that did. Then the preconditions that changed.
 - The steps as a tree with their parents.
 - The entries and requirements added or dropped, and the "Not covered" changes.
 - The viewports added or dropped, with the viewports added to the config.
-- With role tracking on: the role lines added, changed or removed per step, the `As:` steps rewritten, and the review entries cleared or still open. With cases: `cases`, the Preconditions `Cases:` lines and the case role lines added, changed or removed, and the passes from `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" passes <id>`.
+- With role tracking on: the role lines added, changed or removed per step, the `As:` steps rewritten, and the review entries cleared or still open. With cases: `cases`, the Preconditions `Cases:` lines and the case role lines added, changed or removed, and the passes from `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" passes <id>`.
 - The design references added, replaced or removed.
 - The unverified steps: every edited and added step and their children.
 - The upstream mode change, when there is one, with the steps rewritten and the "Not covered" lines added or removed.

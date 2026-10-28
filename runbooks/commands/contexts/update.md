@@ -1,10 +1,12 @@
 ---
 description: Change a context's keys, cases or description, then mark the runbooks the change reaches for review
-argument-hint: "[name] [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "[name] [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Update a context
+
+Before following this procedure, read [runtime setup](../../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -13,22 +15,22 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `[name]` | the context to change. Without it, the command lists the contexts and asks which one |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:contexts:update`, `/runbooks:contexts:update client-access`.
 
-Edits `<paths.runbooks>/roles.json` and, for a renamed or deleted case, the runbooks and their `+<case>` fixture folders. Marks affected runbooks with `review`. A context is a question about the record that changes what a role may do on some keys, and a case is one answer to it. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review". Commit policy: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
+Edits `<paths.runbooks>/roles.json` and, for a renamed or deleted case, the runbooks and their `+<case>` fixture folders. Marks affected runbooks with `review`. A context is a question about the record that changes what a role may do on some keys, and a case is one answer to it. Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review". Commit policy: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Load the context
 
 1. Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop.
-2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts` and show the table: context, description, keys, cases and runbook count. A registry with no contexts has nothing to change. Say so, offer `/runbooks:contexts:create`, and stop.
+2. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts` and show the table: context, description, keys, cases and runbook count. A registry with no contexts has nothing to change. Say so, offer `/runbooks:contexts:create`, and stop.
 3. Without `[name]`, ask which context with `AskUserQuestion`. A name the registry does not have gets the same question.
 4. Read `roles.json`. Keep `version`, `actions`, `contexts` and each role's entries on the keys of the context.
 
@@ -39,7 +41,7 @@ Done when you hold the context and the registry.
 Ask with `AskUserQuestion`, multi-select, which parts change: keys, cases, description. Then ask the details of each part, in rounds of four:
 
 - Keys: add, remove, or both.
-  - Add a key. Offer the keys of `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and of the matrix that no context lists. Check that the key does not belong to another context through a `<capability>/*` entry, because a key belongs to one context.
+  - Add a key. Offer the keys of `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and of the matrix that no context lists. Check that the key does not belong to another context through a `<capability>/*` entry, because a key belongs to one context.
   - Remove a key. Offer the context's keys. Say that a role's map on that key must become a list, and ask which case's actions the list keeps, with the cases as options.
 - Cases: add, rename or delete, any of them.
   - Add a case. Ask the kebab-case name, unique across every context, and the sentence that says which record it describes. Say that a role with a map on a key of the context has no access in the new case until the user runs `/runbooks:permissions:manage` for it.
@@ -55,12 +57,12 @@ Show the diff of `roles.json`. Keep the file's key order, with `version` first a
 
 For a renamed or deleted case, also run the matching subcommand without `--write`, and show what it changes in the runbooks and the fixture folders:
 
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" rename-case <from> <to>`
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" delete-case <name>`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" rename-case <from> <to>`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" delete-case <name>`
 
 They are dry runs without `--write`. They edit runbooks and move `+<case>` folders, and never `roles.json`. `rename-case` refuses a new name that is already a case. Both commands exit 2 and write nothing when a runbook of the context has a `last_run` problem they cannot read; say which runbook and problem, and tell the user to fix that `last_run` by hand first. `delete-case` skips a runbook whose `cases` lists only that case, or that has a step running only in it, and does not write it. When the dry run skips any runbook, stop before any write: tell the user which runbooks and why, say that they need another case first (or `/runbooks:update <id>`), and end the step without writing. A delete leaves the `+<case>` folders in place and lists them with `to: null`; step 8 deals with them.
 
-For a removed key, no subcommand runs, so its runbooks keep `cases`, `Cases:` lines and case role lines. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name> --key <key>` now, before the write, and show the runbooks. After the write the key is no longer in the context and the command would not list them.
+For a removed key, no subcommand runs, so its runbooks keep `cases`, `Cases:` lines and case role lines. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name> --key <key>` now, before the write, and show the runbooks. After the write the key is no longer in the context and the command would not list them.
 
 For a new key or a new case, no subcommand runs. `/runbooks:update` later gives the runbooks it reaches their `cases`, Preconditions and role lines.
 
@@ -75,9 +77,9 @@ On a yes, in this order:
 1. The subcommand again with `--write`, when step 3 ran one.
 2. `roles.json`.
 
-Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, restore every written file with `git checkout -- <paths>` after telling the user, and stop. Moved fixture folders go back with `git mv` in the other direction, or with `git checkout -- <paths>` when they were tracked.
+Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, restore every written file with `git checkout -- <paths>` after telling the user, and stop. Moved fixture folders go back with `git mv` in the other direction, or with `git checkout -- <paths>` when they were tracked.
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` too. Show the user each runbook that gains a problem after a rename or a delete. After a key removal, the runbooks from step 3 report loader problems (`cases needs a context`, and a role line with a case that has no context) until `/runbooks:update` clears them.
+Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` too. Show the user each runbook that gains a problem after a rename or a delete. After a key removal, the runbooks from step 3 report loader problems (`cases needs a context`, and a role line with a case that has no context) until `/runbooks:update` clears them.
 
 Done when the subcommand and `roles.json` are written and the script loads the registry.
 
@@ -85,11 +87,11 @@ Done when the subcommand and `roles.json` are written and the script loads the r
 
 - A key added to the context gives the reason `context-created`. The runbooks it reaches now run per case and need `cases`, a Preconditions `Cases:` list and case role lines:
 
-  `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name> --key <key>`
+  `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name> --key <key>`
 - A new case gives the reason `case-created`. The same command without `--key` lists its runbooks, which need the case's Preconditions line and role lines.
 - A key removed from the context gives `role-permissions` for each role whose map became a list. For each such role, compare the effective actions of each case before the write with the list that remains. Where they differ, run:
 
-  `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <role> --key <key>`
+  `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <role> --key <key>`
 
   The role's list is in `roles.json` by now, so the command lists the runbooks of the key. The runbooks from step 3 still hold `cases`, `Cases:` lines and case role lines, and step 8 offers `/runbooks:update` for each.
 - A renamed case, a deleted case and a changed description mark nothing. The subcommand already rewrote the runbooks.
@@ -102,9 +104,9 @@ Then ask with `AskUserQuestion`: mark all, mark none, or pick some. On "pick som
 
 Build the command for the chosen runbooks:
 
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason context-created --context <name>`
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason case-created --case <case>`
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <role> --key <key> --change "<one line>"`, with a `--change` text such as `vip-outside kept: edit removed`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason context-created --context <name>`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason case-created --case <case>`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <role> --key <key> --change "<one line>"`, with a `--change` text such as `vip-outside kept: edit removed`
 
 Run each without `--write` first, show what it would add to each runbook, and ask whether to write. On a yes, run it again with `--write`.
 

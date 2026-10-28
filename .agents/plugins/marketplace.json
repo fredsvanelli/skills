@@ -1,0 +1,32 @@
+{
+  "name": "fredsvanelli",
+  "interface": {
+    "displayName": "Fred Vanelli skills"
+  },
+  "plugins": [
+    {
+      "name": "runbooks",
+      "source": {
+        "source": "local",
+        "path": "./runbooks"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "utils",
+      "source": {
+        "source": "local",
+        "path": "./utils"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 ---
 description: Drive agents that take runbooks through the whole flow (map, create, run, to-test) in parallel until a goal is met
-argument-hint: "[--goal \"<text>\"] [--max-agents <n>] [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "[--goal \"<text>\"] [--max-agents <n>] [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Orchestrate runbook agents
+
+Before following this procedure, read [runtime setup](../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -14,15 +16,15 @@ Arguments: `$ARGUMENTS`
 |---|---|
 | `--goal "<text>"` | what the runbooks should look like when the command ends, in your own words: a capability (`Implement all clients runbooks`), one runbook (`Implement users.create runbook until it's active`), a state (`Make every draft runbook active`), a change (`Update the billing runbooks after the diff from develop`). Without it, the command asks |
 | `--max-agents <n>` | how many agents work at the same time. Default 4. An integer of 1 or more |
-| `--model m` | force every stage on that model: `inline` (same model as this session), `haiku`, `sonnet`, `opus` or `fable`. Without it, each stage takes the model of its command's row in the config table. This command itself always runs in the main session |
+| `--model m` | force every stage on that model: `inline` (sequential execution in this session), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex. Without it, each stage takes the model of its command's row in the config table. This command itself always runs in the main session |
 
 Examples: `/runbooks:orchestrator`, `/runbooks:orchestrator --goal "Implement all clients runbooks"`, `/runbooks:orchestrator --goal "Implement users.create runbook until it's active" --max-agents 2`.
 
 With no argument, the command asks for both. With only `--goal`, it keeps the default of 4 agents.
 
-This command launches and supervises agents, and writes no runbook itself. It reads the install, turns the goal into units of work, and then launches agents that follow the instructions files of the other commands, one stage at a time, each on the model of its command's row. It answers the agents' questions when a file or a rule settles them, and relays the others to the user. It commits what the agents wrote. It stops when the goal is met or when the user interrupts it, and not before.
+This command normally launches and supervises agents. With `--model inline`, it executes stages sequentially in the main session. With no subagent tool and no forced model, offer that sequential mode or stop and wait for the user's choice; do not claim parallel execution. It reads the install, turns the goal into units of work, and then launches agents that follow the instructions files of the other commands, one stage at a time, each on the model of its command's row. It answers the agents' questions when a file or a rule settles them, and relays the others to the user. It commits what the agents wrote. It stops when the goal is met or when the user interrupts it, and not before.
 
-Every `runbooks.mjs` call below is `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" <command>`, run from the project root. Read `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/SKILL.md` and `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md` first; the agents read them too.
+Every `runbooks.mjs` call below is `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" <command>`, run from the project root. Read `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/SKILL.md` and `${RUNBOOKS_PLUGIN_ROOT}/CONTEXT.md` first; the agents read them too.
 
 Write to the user in the config `language`, else English. Write the briefs to the agents in English. Command names, ids, file names and the terms of `CONTEXT.md` stay as they are.
 
@@ -31,7 +33,9 @@ Write to the user in the config `language`, else English. Write the briefs to th
 1. `--goal` is the text after it, quoted or up to the next `--` parameter. `--max-agents` must be an integer of 1 or more; anything else gets the error and the default of 4, said in the output. `--model` is kept and passed to every stage (step 5). A bad value exits with code 2 in `runbooks.mjs model`: show its message and stop.
 2. Run `git status --porcelain` and keep the list: a file that is dirty now is never staged by this command (step 7).
 
-Done when you hold the goal (or know it is missing) and the agent count.
+Cap concurrent children to the actual available slots (including any session-wide limit), reserving capacity for nested calls where possible. Report the effective count. A paused child may still consume a slot.
+
+Done when you hold the goal (or know it is missing) and the effective agent count.
 
 ## 2. Read the install
 
@@ -51,13 +55,13 @@ A unit is one runbook taken from where it is to a target. A stage is one command
 
 | Stage | The agent follows | Needs the lock (step 6) | Moves the runbook |
 |---|---|---|---|
-| `map` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/map.md`, with the filter of the goal | no | writes placeholders for the flows no runbook cites |
-| `create` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/create.md`, `--from placeholder <id>` or the source the goal names | only for a `mocked` `ui` runbook, which records its fixtures. The lock passes to the `run --record` call it makes (step 6) | `placeholder` to `draft` |
-| `update` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/update.md`, `<id> --from <source>` | as `create`, with the same hand-over | keeps the status, marks `last_run` outdated |
-| `to-test` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`, `<id>` | yes, it runs the script once | fills `scripts` |
-| `run` | `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/run.md`, `<id> --mode <mode>` for a `ui` runbook, `<id> --mode test` for an `api` runbook, which always runs through its script | yes | `draft` to `active` on a full pass |
+| `map` | `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/map.md`, with the filter of the goal | no | writes placeholders for the flows no runbook cites |
+| `create` | `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/create.md`, `--from placeholder <id>` or the source the goal names | only for a `mocked` `ui` runbook, which records its fixtures. The lock passes to the `run --record` call it makes (step 6) | `placeholder` to `draft` |
+| `update` | `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/update.md`, `<id> --from <source>` | as `create`, with the same hand-over | keeps the status, marks `last_run` outdated |
+| `to-test` | `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`, `<id>` | yes, it runs the script once | fills `scripts` |
+| `run` | `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/run.md`, `<id> --mode <mode>` for a `ui` runbook, `<id> --mode test` for an `api` runbook, which always runs through its script | yes | `draft` to `active` on a full pass |
 
-Targets, from `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md` (Status):
+Targets, from `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md` (Status):
 
 | Target | Means | Goal words |
 |---|---|---|
@@ -90,7 +94,7 @@ Done when every unit has its stages, and the user has seen the plan.
 
 An agent cannot fix any of these, so check them once, before the first launch:
 
-1. **Run mode for `ui` runbooks.** `headless` when `.mcp.json` has the `mcp.headless` server and its tools are in this session; else `script` (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/run-modes.md`). `guided`, `headed`, `chrome` and `prompt` are never used here: they need a person or a visible browser. Say which mode the plan uses.
+1. **Run mode for `ui` runbooks.** `headless` when the active host's MCP configuration has the `mcp.headless` server and its tools are in this session; else `script` (`${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/run-modes.md`). `guided`, `headed`, `chrome` and `prompt` are never used here: they need a person or a visible browser. Say which mode the plan uses.
 2. **The app.** With a `ui` run in the plan, `curl -s -o /dev/null -w '%{http_code}' <app.baseUrl>`. When it does not answer, ask with `AskUserQuestion`: start it yourself with `app.start` in the background and check again, or wait while the user starts it (the user answers when it is up), or stop. Check again after the answer.
 3. **The upstream API.** With a `live` `ui` runbook in the plan and `upstream.baseUrl` set, the same check on it; `upstream.start` when it does not answer, the same question.
 4. **Accounts.** For each role the units' runbooks run, the env var names of its `accounts` entry exist in `mcp.secretsFile`: `grep -c '^NAME=' <file>`, never a value. A missing name is one question to the user now, not a blocked run later. With role tracking on, a role with no entry gets `no-account` and the run goes on; say which roles.
@@ -107,12 +111,12 @@ Each stage goes to a new agent with a brief. One agent, one stage: the agent end
 **The model.** Resolve it per stage, in this session, with the arguments the stage gets (`run` gets `<id> --mode <mode>` for a `ui` runbook and `<id> --mode test` for an `api` runbook):
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model <stage command> <stage arguments> [--model <x>]
+node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" model --runtime "${RUNBOOKS_RUNTIME}" <stage command> <stage arguments> [--model <x>]
 ```
 
-Add `--model <x>` only when the user gave it: it forces every stage and every call, and turns off escalation. The output is `inline`, `haiku`, `sonnet`, `opus` or `fable`. Launch the `Agent` with `model` set to it. For `inline`, launch the `Agent` with no `model`: the stage runs on the model of this session, and it is still a sub-agent. Never read the table yourself. `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` ("Choosing the model") says more, and says what to do when the model cannot launch. This command itself stays in the main session whatever `--model` says.
+Add `--model <x>` only when the user gave it: it forces every stage and every call, and turns off escalation. The resolver and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` choose how to execute. `inline` executes the stage here sequentially, with no child; Codex `inherit` spawns with the session model. Explicit IDs and Claude aliases follow their runtime's launch rules. Do not pass `inline` or `inherit` as a model ID. A forced model propagates through calls and disables escalation. This orchestrator stays in the main session.
 
-**The brief.** The brief is all the agent knows, so it holds every decision the agent would otherwise ask, and the handoff of the stage before. Fill "The brief" of `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`, with `${CLAUDE_PLUGIN_ROOT}` replaced by its value, and these values:
+**The brief.** The brief is all the agent knows, so it holds every decision the agent would otherwise ask, and the handoff of the stage before. Fill "The brief" of `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`, with `${RUNBOOKS_PLUGIN_ROOT}` replaced by its value, and these values:
 
 - `Command:` the stage, `/runbooks:<command> <arguments>`.
 - `Command file:` (the "Instructions file" line) `<plugin root>/skills/runbooks/instructions/<command>.md`, as the table of step 3 gives.
@@ -137,7 +141,7 @@ Runbook: <id> (<surface>, upstream <mode>, status <status>). Target of its unit:
 Previous stages of this unit: <one line each with its result, or "none">.
 Handoff from the stage before: <its handoff lines, or "none">.
 Lock: <"yours: you may start the upstream server, open the browser and run the test command. Stop the server before you end." | "not yours: do not start the upstream server, open a browser or run the test command. If the stage cannot finish without one, stop and report it.">
-Files you own: <runbook path>, <fixtures folder>, <script path or default path>. Write nothing else: not the config, roles.json, .mcp.json, other runbooks, CI files or the project's tests outside your script.
+Files you own: <runbook path>, <fixtures folder>, <script path or default path>. Write nothing else: not the config, roles.json, host MCP configuration, other runbooks, CI files or the project's tests outside your script.
 Do not guess product behavior: a result that looks like a bug (a role that gets in where its siblings get 403, a message that contradicts the screen, a spec the code disagrees with) is a question, with both readings and the two lines below filled, because without them the orchestrator cannot tell a misread from a bug.
 ```
 
@@ -151,7 +155,7 @@ expected from: <only with a question about a disagreement: where the Expected ca
 seen from: <only with that question: the code file and line that produce what was seen, or "not found">
 ```
 
-The only messages an agent gets after its brief are the answer to a question it reported and the report of a call it made (step 6), through `SendMessage`. Nothing else continues an agent: no second stage, no "now run it". When a stage ends, so does its agent.
+The only messages an agent gets after its brief are the answer to a question it reported and the report of a call it made (step 6), through the runtime's message/resume tools, as `agents.md` describes. Nothing else continues an agent: no second stage, no "now run it". When a stage ends, so does its agent.
 
 ## 6. Run the loop
 
@@ -162,12 +166,12 @@ The lock is the one thing agents share: the app, the browser, the upstream serve
 Repeat until every unit is at its target or skipped:
 
 1. **Dispatch.** While fewer than `--max-agents` agents are in flight and a unit has a next stage: a stage that needs the lock launches only when no one holds it, and takes it. Among the ready stages, launch the lock stage first when the lock is free, then the stages of the units closest to their target. The `map` unit runs alone, before the others launch.
-   - Every stage, the first of a unit or a later one, is a new `Agent` call with the brief and the `model` of step 5. A later stage carries the reports of the earlier stages in its brief, the `handoff` lines above all. Never send a later stage to the agent of the earlier one: its context is spent on work the new stage does not need.
-   - `SendMessage` is used for two things: the answer to a question an agent reported, and the report of a call it made, so that agent finishes its own stage. Load the tool with `ToolSearch` (`select:SendMessage`) when it is not loaded.
+   - Every stage, the first of a unit or a later one, uses the execution mode and brief of step 5: a fresh native child for delegated work, or sequential main-session execution for `inline`. A later stage carries the reports of the earlier stages in its brief, the `handoff` lines above all. Never send a later stage to the agent of the earlier one: its context is spent on work the new stage does not need.
+   - `SendMessage` is used for two things: the answer to a question an agent reported, and the report of a call it made, so that agent finishes its own stage. On Claude load `SendMessage` when needed. On Codex use message for running children and resume/followup for ended or idle children; a plain message may not start a turn.
 2. **Read a report.** Verify the report against the files: after `create` or `update`, `list --json` has the id with the expected `status` and no `problems`; after `run`, `check <id> --json` has `latest.result` and, for a promotion, `status: active`; after `to-test`, `scripts` is not empty and the file exists. A report that says `done` and fails these is `failed`, with the gap as the reason.
    - `done`: the agent is finished and is not used again. Free the lock when the stage held it, then the port check of step 4 item 6; a server left running is stopped. Advance the unit, and keep the report for the brief of its next stage; when it reached its target, commit by step 7.
    - `question`: triage it (below). Other agents keep working meanwhile.
-   - `call`: the agent stops and waits, as for a question. Dispatch the command it names as part of the same unit, by step 5: resolve its model with `runbooks.mjs model` (with `--model` when the user gave it), then launch a new agent with the brief of that command. The caller does nothing until the called report arrives, so the called agent takes over the caller's lock and its in-flight slot, and gives both back when it ends. Its brief says `Lock: yours` when the caller held the lock. A called command never commits. When it reports, `SendMessage` its report to the calling agent, which continues its own stage. A call from the called agent is handled the same way. The files of the called report go into the unit's files for step 7.
+   - `call`: the agent stops and waits, as for a question. Dispatch the command it names as part of the same unit, by step 5: resolve its model with `runbooks.mjs model` (with `--model` when the user gave it), then launch a new agent with the brief of that command. The caller does nothing until the called report arrives, so the called work takes over the caller's lock and gives it back when it ends. Check actual free slots; a paused caller still consumes a host slot. Queue the call when capacity is full; if nothing can free a slot, report the limit and offer inline execution without ignoring a forced model. Its brief says `Lock: yours` when the caller held the lock. A called command never commits. When it reports, deliver its report and resume the calling agent by `agents.md` lifecycle rules, which continues its own stage. A call from the called agent is handled the same way. The files of the called report go into the unit's files for step 7.
    - `escalate`: the agent ended. Add a `to-test` stage for the runbook it names, resolved by its row, and launch it before the `run` stage is launched again. The `to-test` agent never loosens an assertion. When it reports `done`, launch the `run` stage again on its original model. When the user gave `--model`, nothing escalates: the brief says `Forced model: yes` and the agent does the work itself. A `to-test` stage added this way needs the lock, as in step 3.
    - `blocked` or `failed`: when the cause is the environment (the app stopped answering, the upstream server, a port, a missing env var name), fix it as step 4 says and launch the stage again, once. When a step failed because the Expected and what the surface showed disagree, decide by the table below. Anything else, or a second failure of the same stage, goes to the user.
 
@@ -196,7 +200,7 @@ Done when every unit is at its target or skipped, or the user stopped the comman
 
 ## 7. Commit
 
-The agents never commit. This command does, by `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`, policy `commits.runbooks`, with the files each agent reported and nothing else:
+The agents never commit. This command does, by `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/commits.md`, policy `commits.runbooks`, with the files each agent reported and nothing else:
 
 - `auto`: one commit per unit when it reaches its target, staged by path (`git add -- <path> ...`), with `git.messageFormat` and a summary that names the unit and its stages (`add clients.create runbook, script and first run`, `run billing.issue-invoice: passed`). A unit with a file that was dirty at step 1 behaves as `ask`, and says why.
 - `ask`: no question per unit. Gather the files and ask once at the close, one proposed commit per unit, Commit or Leave uncommitted for each.

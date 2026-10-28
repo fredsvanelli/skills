@@ -1,10 +1,12 @@
 ---
 description: Answer a question about the runbooks plugin, from its own docs, optionally limited to one area
-argument-hint: "[--about area] [\"question\"] [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "[--about area] [\"question\"] [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Runbooks help
+
+Before following this procedure, read [runtime setup](../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -14,11 +16,11 @@ Arguments: `$ARGUMENTS`
 |---|---|
 | `--about area` | optional: the area of the question, by the names in the "Areas" table below (`roles`, `upstream`, `coverage`). Without it, the command picks the area from the question |
 | `"question"` | optional: what the user wants to know, in any language. Without it, the command explains the area: what it is, the terms it uses and its commands |
-| `--model m` | force the model of the sub-agent this command launches: `inline` (the main session runs it), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | force the model of the sub-agent this command launches: `inline` (the main session runs it), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:help`, `/runbooks:help --about roles "How roles work?"`, `/runbooks:help --about upstream`, `/runbooks:help "Why does my mocked runbook not count as coverage?"`.
 
-This file only dispatches. The procedure is in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/help.md`. Dispatching follows `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`: read it before step 2. It covers the model, the brief, the report, questions, calls, commits and a model that cannot launch.
+This file only dispatches. The procedure is in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/help.md`. Dispatching follows `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`: read it before step 2. It covers the model, the brief, the report, questions, calls, commits and a model that cannot launch.
 
 ## Areas
 
@@ -39,15 +41,16 @@ This file only dispatches. The procedure is in `${CLAUDE_PLUGIN_ROOT}/skills/run
 | `roles` | `skills/runbooks/references/config.md` (Roles), `skills/runbooks/references/format.md` (Roles, Review), `skills/runbooks/references/run-modes.md` (Roles), `skills/runbooks/references/coverage.md` (By role), `commands/roles/*.md`, `skills/runbooks/instructions/roles/generate.md` |
 | `contexts` | `skills/runbooks/references/config.md` (Roles), `skills/runbooks/references/format.md` (Contexts and cases), `skills/runbooks/references/upstream.md` (Case layer), `docs/adr/0006-a-case-is-a-run-dimension-inside-a-role.md`, `commands/contexts/*.md` |
 | `permissions` | `skills/runbooks/references/config.md` (Roles), `commands/permissions/manage.md`, `skills/runbooks/instructions/roles/generate.md` |
+| `codex`, `runtime`, `install` | `README.md`, `skills/runbooks/references/runtime.md`, `skills/runbooks/references/agents.md` |
 | `models` | `skills/runbooks/references/agents.md`, `skills/runbooks/references/config.md` (Models), `docs/adr/0010-each-command-runs-on-the-model-its-row-names.md` |
 | `commits` | `skills/runbooks/references/commits.md` |
 | `commands` | the `## Parameters` section and the opening paragraphs of every file in `commands/` |
 
-Every path is under `${CLAUDE_PLUGIN_ROOT}`.
+Every path is under `${RUNBOOKS_PLUGIN_ROOT}`.
 
 ## Dispatch
 
-1. Resolve the model with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model help [--about <area>] [--model <x>] [text]`, where `text` stands for the question, if any. When it prints `inline`, read `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/help.md` and follow it in this session. Otherwise follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with the command `help` and that instructions file; the sub-agent finds the areas table in this file, under "Areas".
+1. Resolve the model with `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" model --runtime "${RUNBOOKS_RUNTIME}" help [--about <area>] [--model <x>] [text]`, where `text` stands for the question, if any. When it prints `inline`, read `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/help.md` and follow it in this session. Otherwise follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with the command `help` and that instructions file; the sub-agent finds the areas table in this file, under "Areas".
 2. Print the `summary:` of the report as written. It is the answer.
 
 Done when the user has the answer.

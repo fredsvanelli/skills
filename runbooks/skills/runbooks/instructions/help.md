@@ -2,13 +2,13 @@
 
 When you run this file in the main session (model `inline`), the arguments and answers of the dispatch file stand in for the brief.
 
-You answer the question of your brief about the runbooks plugin, or explain the area it names. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/help.md`.
+You answer the question of your brief about the runbooks plugin, or explain the area it names. The parameters are in `${RUNBOOKS_PLUGIN_ROOT}/commands/help.md`.
 
 Read-only. It runs no runbook, writes no file and commits nothing. It answers from the plugin's files, not from memory: every claim comes from a file this command read.
 
 ## 1. Choose the area
 
-The areas table is in `${CLAUDE_PLUGIN_ROOT}/commands/help.md`, under "Areas". Every path in it is under `${CLAUDE_PLUGIN_ROOT}`.
+The areas table is in `${RUNBOOKS_PLUGIN_ROOT}/commands/help.md`, under "Areas". Every path in it is under `${RUNBOOKS_PLUGIN_ROOT}`.
 
 1. With `--about`, take its area. A name that is a command (`run`, `coverage`) or a term from `CONTEXT.md` (`case`, `outcome`, `surface`) maps to the area that holds it. An unknown name gets the list of areas, with the closest ones first, and the command stops.
 2. Without `--about`, pick the area from the question: the terms of `CONTEXT.md` it uses and the commands it names. When two areas fit, read both. When nothing fits, use `overview`.
@@ -18,9 +18,9 @@ Done when you hold the area, or the command stopped with the list of areas.
 
 ## 2. Read
 
-1. Read `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md` and the files of the area. In a long reference, read the sections the table names, then the other sections the question reaches.
+1. Read `${RUNBOOKS_PLUGIN_ROOT}/CONTEXT.md` and the files of the area. In a long reference, read the sections the table names, then the other sections the question reaches.
 2. Follow a link or a file name in those files when the question needs it, for example an ADR a reference cites or a command a reference names.
-3. When `docs/runbooks/runbooks.config.json` exists in the project, read it. It tells which parts apply here: the `stack`, whether `roles.enabled` is on, the default `upstream.mode`. Read the project's `roles.json` or a runbook only when the question is about this project ("Which roles do I have?", "Why is `billing.issue-invoice` stale?"), and prefer the script for it: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, `... list`, `... check <id>`.
+3. When `docs/runbooks/runbooks.config.json` exists in the project, read it. It tells which parts apply here: the `stack`, whether `roles.enabled` is on, the default `upstream.mode`. Read the project's `roles.json` or a runbook only when the question is about this project ("Which roles do I have?", "Why is `billing.issue-invoice` stale?"), and prefer the script for it: `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, `... list`, `... check <id>`.
 
 Done when you hold the passages that answer the question.
 
@@ -34,10 +34,10 @@ Write in the language of the question. Without a question, use the config `langu
 - Without a question, explain the area: what it is for, its terms, how its pieces relate, and its commands.
 - End with the files the answer came from, each with its section, so the user can read further.
 
-When the files do not answer the question, say so and say what they cover instead. Do not fill the gap with a guess. When the answer depends on the script's behavior and no reference describes it, read `${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs` or its `lib/` and say the answer came from the code.
+When the files do not answer the question, say so and say what they cover instead. Do not fill the gap with a guess. When the answer depends on the script's behavior and no reference describes it, read `${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs` or its `lib/` and say the answer came from the code.
 
 ## 4. Report
 
-Your report follows "The report" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. It lists no file. Put the answer in `summary:`, with the files it came from.
+Your report follows "The report" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. It lists no file. Put the answer in `summary:`, with the files it came from.
 
 Done when `summary:` holds the answer, or says that the plugin's files do not have one, and lists the files to read further.

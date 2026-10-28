@@ -1,10 +1,12 @@
 ---
 description: Register a new context of the role registry with its keys and cases, then mark the runbooks it reaches for review
-argument-hint: "[name] [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "[name] [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Create a context
+
+Before following this procedure, read [runtime setup](../../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -13,22 +15,22 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `[name]` | the new context, kebab-case and not used by another context. Without it, the command asks |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:contexts:create`, `/runbooks:contexts:create client-access`.
 
-Adds the context to `<paths.runbooks>/roles.json` and marks the runbooks it reaches with `review`. A context is a question about the record that changes what a role may do on some keys, and a case is one answer to it. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review". Commit policy: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
+Adds the context to `<paths.runbooks>/roles.json` and marks the runbooks it reaches with `review`. A context is a question about the record that changes what a role may do on some keys, and a case is one answer to it. Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review". Commit policy: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Load the registry
 
 1. Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop.
-2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts` and show the table: context, description, keys, cases and runbook count. A registry with no contexts prints `No contexts.`
+2. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts` and show the table: context, description, keys, cases and runbook count. A registry with no contexts prints `No contexts.`
 3. Read `roles.json`. Keep `version`, `actions`, `contexts` and the roles.
 4. With `[name]`, check that no context has it. A name the registry already has gets `/runbooks:contexts:update <name>` as the command to change it, and the command stops.
 
@@ -40,7 +42,7 @@ Ask with `AskUserQuestion`, in rounds of four:
 
 1. The name, when `$ARGUMENTS` has none. A name that is not kebab-case, or that another context has, is asked again with the reason.
 2. The description: one line, the question about the record.
-3. The keys. Offer the keys of `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and of the matrix, as `<capability>/<feature>` or `<capability>/*`. Do not offer a key that already belongs to another context, directly or through a `<capability>/*` entry, because a key belongs to one context.
+3. The keys. Offer the keys of `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and of the matrix, as `<capability>/<feature>` or `<capability>/*`. Do not offer a key that already belongs to another context, directly or through a `<capability>/*` entry, because a key belongs to one context.
 4. The cases, at least two. Each case has a kebab-case name, unique across every context, and one sentence that says which record it describes.
 
 The first context changes a file at `"version": 1` to `"version": 2`.
@@ -59,7 +61,7 @@ Done when the user has seen the diff.
 
 Ask whether to write, once. Write only after a yes; on a no, write nothing and stop.
 
-On a yes, write `roles.json`. Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, restore the file with `git checkout -- <path>` after telling the user, and stop.
+On a yes, write `roles.json`. Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, restore the file with `git checkout -- <path>` after telling the user, and stop.
 
 Done when `roles.json` is written and the script loads the registry.
 
@@ -67,13 +69,13 @@ Done when `roles.json` is written and the script loads the registry.
 
 The runbooks on the new keys now run per case and need `cases`, a Preconditions `Cases:` list and case role lines. List them:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name>`
+`node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name>`
 
 Show them with their key, one per line. When no runbook is reached, say so and go to step 6.
 
 Ask with `AskUserQuestion`: mark all, mark none, or pick some. On "pick some", ask which runbooks, multi-select in rounds of four, each with its keys in the label. Then run, for the chosen ids:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason context-created --context <name>`
+`node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason context-created --context <name>`
 
 Run it without `--write` first, show what it would add to each runbook, and ask whether to write. On a yes, run it again with `--write`.
 

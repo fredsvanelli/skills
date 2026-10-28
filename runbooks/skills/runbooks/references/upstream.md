@@ -1,6 +1,6 @@
 # Upstream mode
 
-A `ui` runbook depends on an upstream API: the API its screens call. The upstream mode says how the runbook reaches it. Terms: `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md`. Why the mock is a plugin server: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0003-mocked-upstream-served-by-plugin-server.md`. Config keys: `config.md`, "Upstream".
+A `ui` runbook depends on an upstream API: the API its screens call. The upstream mode says how the runbook reaches it. Terms: `${RUNBOOKS_PLUGIN_ROOT}/CONTEXT.md`. Why the mock is a plugin server: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0003-mocked-upstream-served-by-plugin-server.md`. Config keys: `config.md`, "Upstream".
 
 ## Modes
 
@@ -15,7 +15,7 @@ Every browser mode (`guided`, `headless`, `headed`, `chrome`, `prompt`, `script`
 
 Design comparison happens only in browser runs. A mocked runbook keeps its `design` references.
 
-A mocked runbook proves what the screen shows and the request the screen sends. It never proves what the API saves. A step that would check persistence checks the request instead (method, URL, body), and persistence goes under "Not covered". Why a mocked runbook covers no endpoint: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`.
+A mocked runbook proves what the screen shows and the request the screen sends. It never proves what the API saves. A step that would check persistence checks the request instead (method, URL, body), and persistence goes under "Not covered". Why a mocked runbook covers no endpoint: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`.
 
 ### Live runbooks
 
@@ -28,7 +28,7 @@ The upstream API answers at `upstream.baseUrl`, started locally by its own repos
 
 ### Another repository
 
-When the upstream API lives in another repository, that repository has its own runbooks install, and neither reads the other's files (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`):
+When the upstream API lives in another repository, that repository has its own runbooks install, and neither reads the other's files (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`):
 
 - Its endpoints are not entries of this project. A `ui` runbook lists the operations its screens reach in `calls`, as `METHOD /path` with `{param}` segments (`format.md`, the `calls` key). `calls` never counts as coverage and never makes an orphan; the API's own install covers its endpoints through `api` runbooks.
 - The contract is the OpenAPI 3 JSON document the API publishes, kept in this repository at `upstream.schema` (`docs/runbooks/_contract/openapi.json` by default). The plugin fetches nothing: a job in this project's CI brings each new version in, from the API's release, artifact or package, and opens a pull request with it. In that pull request, `runbooks.mjs contract --strict` fails on what the new version breaks, and `list --affected` names the runbooks it reaches (see "Contract").
@@ -86,7 +86,7 @@ Which command touches fixtures:
 
 ### GraphQL operations
 
-A GraphQL app sends every operation as `POST /graphql`, so method and path cannot tell `Client` from `GroupsByPartyId`. A fixture names the operation it answers in `request.operationName`, and a runbook holds one fixture per operation the page sends. Why the match stays on the request plus this one name: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0008-graphql-fixtures-match-on-the-operation-name.md`.
+A GraphQL app sends every operation as `POST /graphql`, so method and path cannot tell `Client` from `GroupsByPartyId`. A fixture names the operation it answers in `request.operationName`, and a runbook holds one fixture per operation the page sends. Why the match stays on the request plus this one name: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0008-graphql-fixtures-match-on-the-operation-name.md`.
 
 ```json
 {
@@ -108,7 +108,7 @@ One operation can go out several times with different variables, such as a page 
 }
 ```
 
-In a batch, each item is matched with its own `operationName` and `variables`. Why a partial object is not a query language: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0009-fixtures-match-on-a-partial-payload.md`.
+In a batch, each item is matched with its own `operationName` and `variables`. Why a partial object is not a query language: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0009-fixtures-match-on-a-partial-payload.md`.
 
 A body that is a JSON array is a batch. It is answered item by item when at least one item has a fixture with `operationName`, and only those fixtures answer items:
 
@@ -171,7 +171,7 @@ Lookup goes from the most specific folder to the least: step, role and case; ste
 ### Checking fixtures
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" fixtures <id> [--json]
+node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" fixtures <id> [--json]
 ```
 
 The command loads the fixtures of a `ui` runbook, counts them by `source`, and lists problems: a file that is not valid JSON, a missing `request.method`, `request.path` or `response.status`, a `request.operationName` that is not a non-empty string, a `request.variables` that is not an object or has no `request.operationName`, a `request.body` beside a `request.operationName`, a `request.body` that is not an object or array, and a folder that is not a step folder. With `upstream.schema` set, it also checks each JSON response body against the operation in the OpenAPI 3 JSON file. A fixture with no matching operation or status is a problem too. A fixture with `request.operationName` answers a GraphQL operation, which an OpenAPI document does not describe, so it skips this check. Problems are findings, so the command exits 0 with them. It exits 2 only when the id or the config is unusable (an unknown id, a runbook that is not `ui`, a missing schema file).
@@ -189,7 +189,7 @@ node <upstream.serverFile> [--root dir] [--port n] [--mode mocked|live|record] [
 
 Without `--fixtures`, the copy reads `<root>/docs/runbooks/runbooks.config.json`, where the root is `--root` (resolved from the current folder) or the current folder, and resolves the config's paths from that root. It takes the port, the fixtures folder (`upstream.fixtures`, by default `<paths.runbooks>/_fixtures`), the target (`upstream.baseUrl`) and the redact lists from the `upstream` block. It starts in `live` mode when `upstream.baseUrl` is set and in `mocked` mode otherwise. `upstream.mode` is the default of a runbook, and the agent and scripts select each runbook's mode anyway. The flags override the config, and the others select the runbook, role, case and step at startup. It prints `runbooks-upstream listening on http://127.0.0.1:<port>` and stops on SIGINT or SIGTERM. Started by `npm run runbooks:upstream`, it also stops when npm exits, because npm runs the script through `sh`, which does not pass SIGTERM on. Started with `node` directly, it keeps running after the shell that started it exits, as a CI step that runs `node <upstream.serverFile> &` needs. When the port is taken, it exits 2 with a message that names the port and `upstream.port`. A missing config, a config that is not valid JSON, or one without an `upstream` block also exits 2, with a message that names the fix.
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" upstream` starts the plugin's own file from the config the same way. It serves plugin development; no command uses it.
+`node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" upstream` starts the plugin's own file from the config the same way. It serves plugin development; no command uses it.
 
 The server answers in one of three modes, which a select call changes without a restart:
 
@@ -211,10 +211,10 @@ Matching in `mocked` mode:
 
 ### The copy in the project
 
-When the config has an `upstream` block, `setup` copies the server into the project and writes the path in `upstream.serverFile` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0011-the-agent-runs-the-projects-copy-of-the-upstream-server.md`):
+When the config has an `upstream` block, `setup` copies the server into the project and writes the path in `upstream.serverFile` (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0011-the-agent-runs-the-projects-copy-of-the-upstream-server.md`):
 
 - with `tests.ui`: `<tests.ui.dir>/runbooks-upstream.mjs`;
-- with `tests.ui.root` pointing to a UI tests repository: `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`. The fixtures stay in this repository: that repository's CI checks out this one and passes `--root` or `--fixtures` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`);
+- with `tests.ui.root` pointing to a UI tests repository: `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`. The fixtures stay in this repository: that repository's CI checks out this one and passes `--root` or `--fixtures` (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`);
 - without `tests.ui`: `<paths.runbooks>/runbooks-upstream.mjs`.
 
 `setup` also adds `"runbooks:upstream": "node <upstream.serverFile>"` to the scripts of `package.json` (`runbooks.mjs package-script`, which writes `runbooks:ui` too), so `npm run runbooks:upstream` starts the copy from the config. A project without `package.json` starts it with `node <upstream.serverFile>`.
@@ -310,7 +310,7 @@ A script keeps the design comparison out: only a browser run compares a screen w
 ## Contract
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contract [--strict] [--json]
+node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contract [--strict] [--json]
 ```
 
 The command checks every `ui` runbook that reaches the upstream API: the ones with `calls`, and the `mocked` ones, whose fixtures answer for it. `deprecated` runbooks are left out. Each finding names the runbook and its kind:
@@ -318,11 +318,11 @@ The command checks every `ui` runbook that reaches the upstream API: the ones wi
 | Kind | Finding |
 |---|---|
 | `call` | a call matches no operation of `upstream.schema`. Parameter names do not matter (`{id}` matches `{quoteId}`), and the server path of the document's first `servers` entry may lead the call (`/v1/quotes`) |
-| `fixture` | a fixture of a mocked runbook requests what none of its `calls`, and none of its `covers.entries`, names. A monorepo keeps its own endpoints in `covers.entries` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`) |
+| `fixture` | a fixture of a mocked runbook requests what none of its `calls`, and none of its `covers.entries`, names. A monorepo keeps its own endpoints in `covers.entries` (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`) |
 | `fixture` | a fixture the schema rejects, as `fixtures <id>` reports it (`Fixtures`, "Checking fixtures"), or a fixture file that does not load. A fixture with `request.operationName` is not checked against the schema |
 
 Without `upstream.schema`, only the fixtures are checked against the calls, and the report says so. A mocked runbook over a GraphQL API lists `POST /graphql` in `calls`. When `upstream.schema` is an OpenAPI file without that path, the call is a `call` finding. Findings exit 0; with `--strict` they exit 1, so a CI job can fail on them. The command exits 2 when the config has no `upstream` block or the schema file is missing or not JSON.
 
 `list --affected` reads the same file. When `upstream.schema` is among the changed files, it compares the version at the merge base with the working tree, operation by operation, with `$ref`s resolved and the path item's parameters merged in. Prose (`description`, `summary`, `title`, examples, tags) and `x-` keys change nothing. A runbook whose `calls` name an operation that was added, changed or removed is affected, with the reason `upstream schema: <METHOD /path> changed` (or `added`, `removed`). A schema that did not exist at the base gives no reason, because there is nothing to compare.
 
-In CI, the plugin is not installed. A job that runs the contract checks out the plugin's repository, pinned to the commit of the version the project uses, and runs `node <checkout>/runbooks/scripts/runbooks.mjs contract --strict` from the project root. It runs in the pull request that brings in a new version of the schema, and in every pull request that changes fixtures or calls. The plugin does not write that job: CI is the project's (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`, item 8).
+In CI, the plugin is not installed. A job that runs the contract checks out the plugin's repository, pinned to the commit of the version the project uses, and runs `node <checkout>/runbooks/scripts/runbooks.mjs contract --strict` from the project root. It runs in the pull request that brings in a new version of the schema, and in every pull request that changes fixtures or calls. The plugin does not write that job: CI is the project's (`${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`, item 8).

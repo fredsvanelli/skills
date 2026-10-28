@@ -9,11 +9,11 @@ An item is **covered** when an `active` runbook lists its id in `covers`, **pend
 
 ### By surface
 
-When the `stack` is `backend` or `fullstack`, an entry counts only through runbooks of its own surface: an `api-endpoint` through `api` runbooks, any other entry through `ui` runbooks. A `ui` runbook still lists the endpoints its screens call, so `list --affected` finds it when one changes, but that reference does not cover the endpoint. The by-slice table then has one row per slice and surface. A `frontend` stack keeps one row per slice, and its runbooks cover any entry they cite. Why: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0002-endpoint-coverage-by-surface.md`.
+When the `stack` is `backend` or `fullstack`, an entry counts only through runbooks of its own surface: an `api-endpoint` through `api` runbooks, any other entry through `ui` runbooks. A `ui` runbook still lists the endpoints its screens call, so `list --affected` finds it when one changes, but that reference does not cover the endpoint. The by-slice table then has one row per slice and surface. A `frontend` stack keeps one row per slice, and its runbooks cover any entry they cite. Why: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0002-endpoint-coverage-by-surface.md`.
 
-A `mocked` `ui` runbook never covers an endpoint, whatever the stack, because fixtures answer its requests and not the API. It covers its `ui-route` entries, and keeps the endpoints in `covers.entries` for `list --affected`. An endpoint that only mocked runbooks cite stays uncovered and shows as "cited, not covered (mocked)" in the Markdown and in `/runbooks:ui`. Why: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`.
+A `mocked` `ui` runbook never covers an endpoint, whatever the stack, because fixtures answer its requests and not the API. It covers its `ui-route` entries, and keeps the endpoints in `covers.entries` for `list --affected`. An endpoint that only mocked runbooks cite stays uncovered and shows as "cited, not covered (mocked)" in the Markdown and in `/runbooks:ui`. Why: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0004-mocked-runbooks-never-cover-endpoints.md`.
 
-A `ui` runbook's `calls` never count. They name operations of an upstream API in another repository, whose own install covers its endpoints, so they are not entries here and never make an orphan. Why: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`.
+A `ui` runbook's `calls` never count. They name operations of an upstream API in another repository, whose own install covers its endpoints, so they are not entries here and never make an orphan. Why: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`.
 
 Requirements count through runbooks of any surface.
 

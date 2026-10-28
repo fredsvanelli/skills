@@ -10,11 +10,11 @@ const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 const markdownFiles = () => findFiles(PLUGIN_ROOT, '**/*.md').filter((rel) => !rel.startsWith('scripts/__fixtures__/'))
 
-test('every ${CLAUDE_PLUGIN_ROOT} path in the plugin docs exists', () => {
+test('every ${RUNBOOKS_PLUGIN_ROOT} path in the plugin docs exists', () => {
   const missing = []
   for (const rel of markdownFiles()) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')
-    for (const match of text.matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/([\w./-]+)/g)) {
+    for (const match of text.matchAll(/\$\{RUNBOOKS_PLUGIN_ROOT\}\/([\w./-]+)/g)) {
       const target = match[1].replace(/[.]+$/, '')
       if (!fs.existsSync(path.join(PLUGIN_ROOT, target))) missing.push(`${rel} -> ${target}`)
     }
@@ -231,8 +231,8 @@ test('orchestrator stages take the model of their command row', () => {
 test('setup writes the model table and settings has a models group', () => {
   const setup = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/setup.md'), 'utf8')
   const settings = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/settings.md'), 'utf8')
-  assert.match(setup, /models --defaults --json/)
-  assert.match(setup, /models --diff --json/)
+  assert.match(setup, /models --runtime "\$\{RUNBOOKS_RUNTIME\}" --defaults --json/)
+  assert.match(setup, /models --runtime "\$\{RUNBOOKS_RUNTIME\}" --diff --json/)
   assert.match(settings, /^\| `models` \|/m)
 })
 
@@ -241,7 +241,7 @@ test('every dispatch command names an instructions file that exists', () => {
   for (const rel of findFiles(PLUGIN_ROOT, 'commands/**/*.md')) {
     const text = fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')
     if (!/^## Dispatch\b/m.test(text)) continue
-    const named = [...text.matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/(skills\/runbooks\/instructions\/[\w./-]+\.md)/g)]
+    const named = [...text.matchAll(/\$\{RUNBOOKS_PLUGIN_ROOT\}\/(skills\/runbooks\/instructions\/[\w./-]+\.md)/g)]
     if (named.length === 0) missing.push(`${rel} names no instructions file`)
     for (const match of named) if (!fs.existsSync(path.join(PLUGIN_ROOT, match[1]))) missing.push(`${rel} -> ${match[1]}`)
   }

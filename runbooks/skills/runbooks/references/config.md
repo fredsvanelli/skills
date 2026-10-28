@@ -1,6 +1,6 @@
 # Config: docs/runbooks/runbooks.config.json
 
-`setup` writes this file from `${CLAUDE_PLUGIN_ROOT}/templates/runbooks.config.json`. `runbooks.mjs` fills missing keys with the defaults below.
+`setup` writes this file from `${RUNBOOKS_PLUGIN_ROOT}/templates/runbooks.config.json`. `runbooks.mjs` fills missing keys with the defaults below.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -25,7 +25,7 @@
 | `git.protected` | `["main"]` | branches where `auto` commits fall back to `ask` |
 | `git.messageFormat` | `docs(runbooks): {summary}` | commit message; `{summary}` is replaced |
 | `commits.runbooks/setup` | `ask/ask` | commit policy per artifact (`never`, `ask`, `auto`) |
-| `mcp.headless` / `mcp.headed` | `runbooks-playwright` / `runbooks-playwright-headed` | `.mcp.json` server names for the automated modes |
+| `mcp.headless` / `mcp.headed` | `runbooks-playwright` / `runbooks-playwright-headed` | active-host MCP server names (`.mcp.json` on Claude, `.codex/config.toml` on Codex) for the automated modes |
 | `mcp.secretsFile` | `.env.local` | dotenv file passed to Playwright MCP `--secrets`; must be gitignored |
 | `viewports.<name>` | `{}` | `{ width, height }` in CSS pixels: a screen size `ui` runbooks cite in their `viewports` (below) |
 | `design` | `null` | the design reference `run` compares `ui` steps with (below); `null` means the project has none. Only in a stack with `ui` |
@@ -42,7 +42,7 @@ One key per surface the stack allows, `tests.ui` and `tests.api`. A key for a su
 | `framework` | the test library: `playwright`, `cypress`, `jest`, `vitest`, `phpunit`, `pest`, ... `to-test` writes scripts with it |
 | `dir` | the folder new scripts go in |
 | `command` | runs scripts and writes a JUnit XML report. `{files}` is replaced by the script paths, `{junit}` by `.runbooks/junit/<run id>.xml` |
-| `root` | optional: the folder the command runs in, relative to the project root (`"apps/api"`), as in `entries` sources. `dir` is relative to it. `tests.api.root` stays inside the project: a `root` outside it warns, and from runbooks 2.0 it is a config error (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). `tests.ui.root` may point to a UI tests repository (`"../project-001-e2e"`); a runbook's `scripts` then start with that path (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`) |
+| `root` | optional: the folder the command runs in, relative to the project root (`"apps/api"`), as in `entries` sources. `dir` is relative to it. `tests.api.root` stays inside the project: a `root` outside it warns, and from runbooks 2.0 it is a config error (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). `tests.ui.root` may point to a UI tests repository (`"../project-001-e2e"`); a runbook's `scripts` then start with that path (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`) |
 | `baseUrl` | optional, `api` only: set when the scripts call a running server (Playwright `request`, `cy.request`, supertest against a URL); `run` then checks it answers |
 
 ```json
@@ -219,7 +219,7 @@ The sizes in the example fit the Tailwind defaults: 390 is below `sm`, 768 is wh
 |---|---|
 | `system` | `figma`, `claude-design`, `adobe-xd`, `files` or `other` |
 | `name` | for `other`: the tool's name (Penpot, Sketch, Framer, ...) |
-| `mcp` | the `.mcp.json` server that reads the designs. Required for `figma` and `other` unless `files` is set |
+| `mcp` | the active-host MCP server that reads the designs. Required for `figma` and `other` unless `files` is set |
 | `files` | a glob of designs exported into the repository (PNG, JPG, WebP, SVG, PDF). Required for `files` and `adobe-xd` |
 | `url` | optional: the design file or project the runbooks' frames come from (a Figma file link, a Claude Design link). `create` searches there first |
 
@@ -232,12 +232,12 @@ How each system is read, and what a runbook cites:
 | `system` | Read through | A reference in a runbook |
 |---|---|---|
 | `figma` | the `mcp` server, or the exported files in `files` | a frame link with its `node-id` (`https://www.figma.com/design/AbC123/Billing?node-id=12-34`), or a file path |
-| `claude-design` | the Artifact tool, with Claude Code signed in to claude.ai. No server to add | a claude.ai link to a design |
+| `claude-design` | the Artifact tool when available and signed in; otherwise use an exported file. No server to add | a claude.ai link to a design |
 | `adobe-xd` | artboards exported as PNG into `files`. Adobe XD has no MCP server | a file path |
 | `files` | the files in `files`, read as images or PDF | a file path |
 | `other` | the `mcp` server the user added, or the files in `files` | what that server takes (a link or an id), or a file path |
 
-The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design-servers.json`, and each one is written to `.mcp.json` under the name `figma`:
+The Figma servers `setup` offers live in `${RUNBOOKS_PLUGIN_ROOT}/templates/design-servers.json`, and each one is merged under the name `figma` into the active host's MCP configuration (see `runtime.md` for JSON-to-TOML translation):
 
 | Template | Server | Needs |
 |---|---|---|
@@ -247,7 +247,7 @@ The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design
 
 ## Upstream
 
-`setup` writes it when the stack has `ui` and the upstream API is not served by the app's own process. A config without it behaves as `live`. The block is a config error in a `backend` stack. The modes, the server and the fixtures: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
+`setup` writes it when the stack has `ui` and the upstream API is not served by the app's own process. A config without it behaves as `live`. The block is a config error in a `backend` stack. The modes, the server and the fixtures: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -285,7 +285,7 @@ Errors the loader raises:
 
 ## Models
 
-The optional `models` block sets which model runs each command. It maps a row key to one of `inline`, `haiku`, `sonnet`, `opus` or `fable`. `inline` runs the command in the main session, with no sub-agent. Any other value launches the command's sub-agents on that model. The five values run from least to most capable in that order. A config without `models` uses the default table below, and a project's rows replace the default rows with the same key.
+On Claude Code, the optional `models` block sets which model runs each command. It maps a row key to one of `inline`, `haiku`, `sonnet`, `opus` or `fable`. `inline` runs the command in the main session, with no sub-agent. Any other value launches the command's sub-agents on that model. The five values run from least to most capable in that order. A config without `models` uses the default table below, and a project's rows replace the default rows with the same key.
 
 A key is a command name followed by options and `<placeholder>` positionals, as in `run --mode test` or `help <question>`. A row matches an invocation when the command is the same, every option in the key is given (an option with a value must have that value), and a placeholder has a positional argument to match. When several rows match, the row with the most options and placeholders wins. On a tie, the more capable model wins. An invocation that no row matches runs `inline`. `--model <value>` on the command line overrides every row.
 
@@ -330,9 +330,43 @@ A key that is not a command with options and placeholders, an empty key, or a ke
 
 `setup` writes the table into a project that has no `models` key. `/runbooks:settings models` changes it.
 
+### Codex models
+
+Codex uses a separate optional `codex.models` object with the same row keys. Its
+defaults keep every `inline` row above and replace every delegated Claude alias
+with `inherit`, which delegates using the current session model. Legacy projects
+need no migration to be read on Codex; absent Codex rows receive those defaults.
+The helper does not write the configuration while reading it.
+
+```json
+{
+  "models": { "create": "opus" },
+  "codex": { "models": { "create": "inherit", "coverage": "inline" } }
+}
+```
+
+`inline` executes in the main session. `inherit` delegates with no model override.
+An explicit model ID must be supported by the active Codex session. The helper
+validates a nonempty ID of up to 200 characters: letters/digits first, then
+letters/digits, `.`, `_`, `:`, `/` or `-`, with no `..` sequence. Claude aliases
+are rejected. Runtime availability is checked at dispatch, not guessed by the
+helper. A forced unavailable model stops; see `agents.md` for fallback behavior.
+
+The most specific matching row wins as on Claude. Equally specific Codex rows
+keep the first matching row in the effective table (defaults followed by new
+project rows; replacing an existing row does not move it). No capability ranking
+is inferred from OpenAI model names. `--model` overrides row selection and passes
+through internal calls. `setup` and `settings models` edit only the active host's
+block, preserving the other one.
+
+Use `runbooks.mjs model <command> <args> --runtime codex --json` and
+`runbooks.mjs models --runtime codex [--defaults|--diff] --json`. Omit the runtime
+only for legacy Claude behavior. An unknown runtime is an error. Invalid Codex
+row keys are ignored with warnings under `codex.models`, as for Claude rows.
+
 ## Sources
 
-Each `entries` or `requirements` item is one source. Every source accepts `root`, a folder of the project relative to its root (for a monorepo: `"apps/api"`). Ids from a rooted source keep the root in their `file` (`apps/api/src/app/...`), and `slices` globs match that same path. An API in another repository is never a source: CI checks out this repository alone, so the source would never run there (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`).
+Each `entries` or `requirements` item is one source. Every source accepts `root`, a folder of the project relative to its root (for a monorepo: `"apps/api"`). Ids from a rooted source keep the root in their `file` (`apps/api/src/app/...`), and `slices` globs match that same path. An API in another repository is never a source: CI checks out this repository alone, so the source would never run there (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`).
 
 | `extractor` | Fields | Produces |
 |---|---|---|

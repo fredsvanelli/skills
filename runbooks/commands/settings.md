@@ -1,10 +1,12 @@
 ---
 description: Change what setup configured (stack, test libraries, design reference, app, accounts, viewports, sources, git and commit policy, MCP servers)
-argument-hint: "[group ...] [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "[group ...] [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Runbook settings
+
+Before following this procedure, read [runtime setup](../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -13,25 +15,36 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `[group ...]` | optional: the groups to change, by the names in the table of step 2 (`design`, `commits`, `roles`, `models`). Without it, the command shows the current settings and asks what to change |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:settings`, `/runbooks:settings design`, `/runbooks:settings stack tests`.
 
 Changes one part of a project that `/runbooks:setup` already prepared, without going through every setup question again. It changes the config and the files that depend on the changed keys, shows the diff of every file before writing, and writes only after the user approves.
 
-Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md` and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The questions and the detection for each group are the ones in `${CLAUDE_PLUGIN_ROOT}/commands/setup.md`; this command asks only those of the chosen groups.
+Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md` and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The questions and the detection for each group are the ones in `${RUNBOOKS_PLUGIN_ROOT}/commands/setup.md`; this command asks only those of the chosen groups.
 
 Run `git status --porcelain` now and keep the list: a file that is already dirty changes how its commit works (`commits.md`). When `tests.ui.root` points to a UI tests repository, keep `git -C <tests.ui.root> status --porcelain` too.
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+
+## Host-specific files
+
+Use the active host from runtime setup. Here **MCP config** means `.mcp.json`
+(`mcpServers`) on Claude, or `.codex/config.toml` (`mcp_servers` tables) on Codex.
+For Codex, merge TOML tables as runtime setup describes; JSON templates are source
+values, not text to paste into TOML. Preserve other servers/keys and only replace
+approved fields. New server definitions include absolute project paths for
+secrets/evidence, so the MCP process need not share the agent's working directory.
+The **model block** is `models` on Claude or `codex.models` on Codex; read/write
+only that block, and pass the active runtime to every model helper.
 
 ## 1. Read the current settings
 
 1. Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop; when `docs/runbooks/runbook.config.json` exists instead, say that setup migrates it from the old plugin name. When it has no `stack` or still has `paths.e2e`, say that `/runbooks:setup` migrates it, offer it, and stop.
-2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep, per runbook, its `surface`, `roles`, `viewports`, `design`, `upstream` and `problems`. Step 3 uses them to find runbooks a change breaks.
-3. Read the `mcpServers` of `.mcp.json`, when it exists.
+2. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep, per runbook, its `surface`, `roles`, `viewports`, `design`, `upstream` and `problems`. Step 3 uses them to find runbooks a change breaks.
+3. Read the active MCP config when it exists: `mcpServers` JSON on Claude or `mcp_servers` TOML tables on Codex, plus the servers available in this session.
 
 Done when you hold the config, the runbook list and the MCP servers.
 
@@ -46,7 +59,7 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `language` | `language` |
 | `stack` | `stack`, and the `tests.<surface>` blocks it adds or removes |
 | `tests` | `tests.<surface>`: `tech`, `framework`, `dir`, `command`, `root`, `baseUrl`. `tests.ui.root` may point to a UI tests repository (ADR 0007) |
-| `design` | `design`, and its server in `.mcp.json`. Only with `ui` |
+| `design` | `design`, and its server in MCP config. Only with `ui` |
 | `app` | `app.baseUrl`, `app.start`, `uiText`, `data.seedHint` |
 | `accounts` | `accounts.<role>`. Only with `ui`. With tracking on, each key must be a registered role |
 | `viewports` | `viewports.<name>`. Only with `ui` |
@@ -58,7 +71,7 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `roles` | `roles.enabled`. Turns role tracking on with the flow of `setup.md`; it does not turn it off. When tracking is already on, choosing the group shows the current value and changes nothing |
 | `stale` | `staleDays` |
 | `models` | `models`: the model per command and parameter. `--model` overrides it for one invocation |
-| `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in `.mcp.json`. Only with `ui` |
+| `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in MCP config. Only with `ui` |
 
 `paths.runbooks` is not in any group: the config lives at `docs/runbooks/runbooks.config.json` whatever it says, and moving the runbooks means moving their reports and ignore rules too. When the user asks for it, say so and stop.
 
@@ -70,7 +83,7 @@ Ask with `AskUserQuestion`, in rounds of four, each question with the current va
 
 Setup does not ask `staleDays`, because the default fits a new project, so the `stale` group has its own question: one `AskUserQuestion` with the current value as "Keep `<value>`" and the options `14`, `30` and `60`. The user types any other positive integer under "Other". A value that is not a positive integer is asked again, because the loader rejects it.
 
-The `models` group has its own questions. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" models` and print its table (key, model, default). Ask with `AskUserQuestion`, multi-select, in rounds of four rows, which rows to change. Then ask each chosen row for its new value. The question takes four options: offer "Keep `<value>`" as the recommended option, "Reset to default `<default>`" when the value differs from the default, and the most likely other values. Say that the remaining values (`inline`, `haiku`, `sonnet`, `opus`, `fable`) can be typed under "Other". The loader rejects any other value, so ask again when the user types one. Write only the rows that changed. The group needs no entry in the table below, because no other file depends on it.
+The `models` group changes only the active model block and has its own questions. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" models --runtime "${RUNBOOKS_RUNTIME}"` and print its table (key, model, default). Ask with `AskUserQuestion`, multi-select, in rounds of four rows, which rows to change. Then ask each chosen row for its new value. The question takes four options: offer "Keep `<value>`" as the recommended option, "Reset to default `<default>`" when the value differs from the default, and the most likely other values. Say that the remaining values (`inline`, `haiku`, `sonnet`, `opus`, `fable` on Claude; `inline`, `inherit` and available explicit model IDs on Codex) can be typed under "Other". Validate the value for the active runtime; on Codex an explicit ID must also be supported by the session before launch. Ask again on a validation error. Write only the rows that changed. The group needs no entry in the table below, because no other file depends on it.
 
 Some changes reach past their own key. Work out each one from the table below, ask what it needs, and add its files to the write list:
 
@@ -78,22 +91,22 @@ Some changes reach past their own key. Work out each one from the table below, a
 |---|---|
 | `stack` gains `ui` | ask the design, `app.baseUrl`, `app.start`, `accounts` and the Playwright MCP servers, as setup does; `tests.ui` stays optional |
 | `stack` gains `api` | ask `tests.api`, which is required; fill the API scripts checklist of the agents block (`setup.md` step 3); say that endpoint coverage drops on the next `/runbooks:coverage`, because endpoints then count only through `api` runbooks (`references/coverage.md`, By surface) |
-| `stack` loses a surface | remove `tests.<surface>`. Losing `ui` sets `design` to `null`, removes the `upstream` block in the same write (the loader rejects `upstream` in a stack without `ui`) and offers to remove the two Playwright servers from `.mcp.json`; losing `api` removes the API scripts checklist from the agents block. List the runbooks of that surface: they become invalid, and the user decides whether to deprecate them (`/runbooks:update`) or keep the stack |
+| `stack` loses a surface | remove `tests.<surface>`. Losing `ui` sets `design` to `null`, removes the `upstream` block in the same write (the loader rejects `upstream` in a stack without `ui`) and offers to remove the two Playwright servers from MCP config; losing `api` removes the API scripts checklist from the agents block. List the runbooks of that surface: they become invalid, and the user decides whether to deprecate them (`/runbooks:update`) or keep the stack |
 | `tests.<surface>.framework` | install it when missing, after a yes, as setup does; `dir` and `command` follow the new framework. List the runbooks whose `scripts` belong to the old one: their scripts no longer run with the new command, and `/runbooks:to-test` rewrites them |
 | `tests.<surface>.command` or `root` | run the test check of `setup.md` step 3 before writing the config |
 | `tests.ui.root` moves to a UI tests repository, to another path, or back into this one | ask "Where the UI tests live" and its follow-up items of `setup.md` step 2: the path, the folder check and the test library detection in that folder, then the framework, `dir` and `command` questions with what it found. List the runbooks whose `scripts` start with the old `<root>/<dir>` (`list --json`). When the user moved those files to the new place, offer to rewrite the paths in the same write; otherwise the paths stay, the runbooks fail in mode `test`, and `/runbooks:to-test` writes the scripts again. When `upstream.serverFile` is set, copy the server to the new place as the next row says. Files written in the UI tests repository go on a write list of their own, committed there (`commits.md`, UI tests repository) |
 | `tests.api` changes how scripts are written | refill the API scripts checklist of the agents block |
-| `design.system` or `design.mcp` | write or replace the design server in `.mcp.json` from `${CLAUDE_PLUGIN_ROOT}/templates/design-servers.json` (`setup.md` step 3); offer to remove the old server when no other key names it. List the runbooks with `design` references: references of the old system no longer open, and `/runbooks:update` relinks them |
+| `design.system` or `design.mcp` | write or replace the design server in MCP config from `${RUNBOOKS_PLUGIN_ROOT}/templates/design-servers.json` (`setup.md` step 3); offer to remove the old server when no other key names it. List the runbooks with `design` references: references of the old system no longer open, and `/runbooks:update` relinks them |
 | `design` becomes `null` | list the runbooks with `design` references: they become invalid until `/runbooks:update` removes them |
 | a viewport renamed or removed | list the runbooks that cite it in `viewports`, in a `Viewports:` line or in a `design` key `<name>.<viewport>`; offer to apply the rename to them in the same write |
 | an account role renamed or removed | list the runbooks that cite it in `roles` or `As:`; offer to apply the rename to them in the same write. With tracking on, point to `/runbooks:roles:update` (rename) and `/runbooks:roles:delete` (remove), which update the registry, the runbooks and the fixtures together, and change nothing here |
 | `roles.enabled` becomes true | run the role flow of `setup.md`: step 1 (role sources), the "Track roles?" follow-up questions of step 2 (found roles, then the matrix), and the Roles bullet of step 3 (write `roles.json` and the config, make every `accounts` key a role, `enable-roles` dry run, then `--write` after a yes). When the stack has `api`, add the Roles bullet of `api-practices.md` to the API scripts checklist of the agents block. Add the config to the write list for the `setup` commit, and `roles.json` and the changed runbooks for the `runbooks` commit |
 | `roles.enabled` becomes false, including a user who picks `roles` while tracking is on and asks to turn it off | refuse and write nothing for this key: "This version does not support turning role tracking off." Keep `roles.json` and the runbooks as they are |
-| `mcp.secretsFile` or `paths.evidence` | rewrite the arguments of the two Playwright servers in `.mcp.json`; confirm the secrets file is ignored with `git check-ignore -q <file>`, and stop when it is not. A new `paths.evidence` must be ignored too |
-| `mcp.headless` or `mcp.headed` | rename the server in `.mcp.json` |
+| `mcp.secretsFile` or `paths.evidence` | rewrite the arguments of the two Playwright servers in MCP config; confirm the secrets file is ignored with `git check-ignore -q <file>`, and stop when it is not. A new `paths.evidence` must be ignored too |
+| `mcp.headless` or `mcp.headed` | rename the server in MCP config |
 | `upstream.mode` | list the `ui` runbooks whose effective mode changes: those with no `upstream:` in their frontmatter, whose `upstream` in the list differs from the new default. Offer `/runbooks:update <id>` for each, because `update` records or deletes the fixtures and rewrites the steps (`references/upstream.md`, Changing a runbook's mode). When the new default is `mocked`, say that endpoints then count only through `live` runbooks. When it is `live`, say that the fixtures stay on disk until `update` deletes them |
-| `upstream.serverFile`, `tests.ui.root` or `tests.ui.dir` changes while `serverFile` is set, or the `upstream` block is added, or `upstream.mode` becomes `mocked` (or the first mocked runbook appears), while `serverFile` is null | copy `${CLAUDE_PLUGIN_ROOT}/scripts/upstream-server.mjs` to `<tests.ui.dir>/runbooks-upstream.mjs` (`<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs` with a root, `<paths.runbooks>/runbooks-upstream.mjs` without `tests.ui`) and write that path, relative to this project, to `upstream.serverFile`. Show the diff before overwriting an existing file. An old copy at a previous path stays in place, because the plugin deletes no project file; name it in the summary so the user can delete it. Put the copy and `package.json` on the write list, so `runbooks:upstream` points at the new path; step 4 writes the script once the config is on disk. With `tests.ui`, show the framework start command again, as `setup.md` step 3 does |
-| an `entries` source with a `root` outside the project is removed, or the loader warned about one (`sources` group) | the endpoints it read belong to another repository (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" move-to-calls --source <index>` while its folder exists, else `move-to-calls` once the source is gone. Show its dry run: the ids each runbook moves to `calls`, the entry coverage before and after, and the orphans it leaves for `/runbooks:update`. On a yes, run it again with `--write` before the config loses the source, remove the `slices` globs that start with `../` in the same write, and add the runbooks to the write list. A config without `upstream` cannot hold `calls`: ask the `upstream` group first |
+| `upstream.serverFile`, `tests.ui.root` or `tests.ui.dir` changes while `serverFile` is set, or the `upstream` block is added, or `upstream.mode` becomes `mocked` (or the first mocked runbook appears), while `serverFile` is null | copy `${RUNBOOKS_PLUGIN_ROOT}/scripts/upstream-server.mjs` to `<tests.ui.dir>/runbooks-upstream.mjs` (`<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs` with a root, `<paths.runbooks>/runbooks-upstream.mjs` without `tests.ui`) and write that path, relative to this project, to `upstream.serverFile`. Show the diff before overwriting an existing file. An old copy at a previous path stays in place, because the plugin deletes no project file; name it in the summary so the user can delete it. Put the copy and `package.json` on the write list, so `runbooks:upstream` points at the new path; step 4 writes the script once the config is on disk. With `tests.ui`, show the framework start command again, as `setup.md` step 3 does |
+| an `entries` source with a `root` outside the project is removed, or the loader warned about one (`sources` group) | the endpoints it read belong to another repository (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`). Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" move-to-calls --source <index>` while its folder exists, else `move-to-calls` once the source is gone. Show its dry run: the ids each runbook moves to `calls`, the entry coverage before and after, and the orphans it leaves for `/runbooks:update`. On a yes, run it again with `--write` before the config loses the source, remove the `slices` globs that start with `../` in the same write, and add the runbooks to the write list. A config without `upstream` cannot hold `calls`: ask the `upstream` group first |
 | `app.start`, `upstream.start` or `data.seedHint` holds a `cd` into a folder next to this project | show it and offer an `upstream.start` hint that names the API's repository and its command instead (`setup.md` step 2) |
 | `upstream.root` is set | remove it: no command reads it |
 | `git.base` or `git.protected` | confirm each branch exists with `git rev-parse --verify` |
@@ -106,11 +119,11 @@ Done when every chosen key has a new value or was kept, and every file the chang
 
 Show the diff of every file on the write list and ask whether to write it. For `package.json`, the diff is the `"runbooks:upstream": "node <new upstream.serverFile>"` line. Write only after a yes; on a no, write nothing and stop.
 
-When `package.json` is on the list, write the config first, because `package-script` reads `upstream.serverFile` from it. Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" package-script --write --replace --only runbooks:upstream`; the yes above covers it. `--only` keeps the `runbooks:ui` script as it is, because the user approved the `runbooks:upstream` line only. When it prints `no package.json`, keep its line for the summary.
+When `package.json` is on the list, write the config first, because `package-script` reads `upstream.serverFile` from it. Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" package-script --write --replace --only runbooks:upstream`; the yes above covers it. `--only` keeps the `runbooks:ui` script as it is, because the user approved the `runbooks:upstream` line only. When it prints `no package.json`, keep its line for the summary.
 
 Then validate:
 
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" entries` and `... requirements` exit 0, and every warning is understood. Fix the config until they do.
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" entries` and `... requirements` exit 0, and every warning is understood. Fix the config until they do.
 - `... list --json`: compare `problems` with step 1. A runbook with a new problem is one the table of step 3 listed; when it is not, fix the config or tell the user.
 
 Done when the files are written and the script runs clean, or every new problem is on the list the user saw.
@@ -123,11 +136,11 @@ Print, before any commit question:
 - the files written, each marked created or updated;
 - the runbooks the change made invalid or stale, each with the command that fixes it;
 - when the server copy moved: the old path, left in place for the user to delete;
-- when `.mcp.json` changed: that new servers load in a new session or through `/mcp`, and what the design server needs before its first use (`setup.md` step 6).
+- when MCP config changed: that new servers load in a new session or through `/mcp`, and what the design server needs before its first use (`setup.md` step 6).
 
 ## 6. Commit
 
-Commit the config, the agents block, `.mcp.json`, `package.json` and the server copy in this repository by the `setup` policy, and `roles.json` and the runbooks renamed, moved to `calls` or changed by `enable-roles` in step 3 by the `runbooks` policy. Files written in the UI tests repository get a commit of their own there, by the `setup` policy (`commits.md`, UI tests repository). Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
+Commit the config, the agents block, MCP config, `package.json` and the server copy in this repository by the `setup` policy, and `roles.json` and the runbooks renamed, moved to `calls` or changed by `enable-roles` in step 3 by the `runbooks` policy. Files written in the UI tests repository get a commit of their own there, by the `setup` policy (`commits.md`, UI tests repository). Ask an `ask` question only after the summary from step 5 is on screen; the question names the files and the message and does not repeat the summary.
 
 Write in the config `language`.
 

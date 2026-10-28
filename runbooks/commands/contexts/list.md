@@ -1,10 +1,12 @@
 ---
 description: List the contexts of the role registry, or show one context with its runbooks
-argument-hint: "[name] [--json] [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "[name] [--json] [--model <model>]"
 disable-model-invocation: true
 ---
 
 # List contexts
+
+Before following this procedure, read [runtime setup](../../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -14,15 +16,15 @@ Arguments: `$ARGUMENTS`
 |---|---|
 | `[name]` | show one context instead of the whole list: its row and the runbooks on its keys |
 | `--json` | print the rows as JSON, for scripts |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:contexts:list`, `/runbooks:contexts:list client-access`, `/runbooks:contexts:list --json`.
 
-Read-only. It writes nothing and commits nothing. To change a context, use `/runbooks:contexts:create`, `/runbooks:contexts:update` or `/runbooks:contexts:delete`. Contexts and cases: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles".
+Read-only. It writes nothing and commits nothing. To change a context, use `/runbooks:contexts:create`, `/runbooks:contexts:update` or `/runbooks:contexts:delete`. Contexts and cases: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles".
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Check that tracking is on
 
@@ -32,8 +34,8 @@ Done when tracking is on, or the command stopped with that message.
 
 ## 2. Print
 
-- Without a name: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts`, or the same with `--json` when `$ARGUMENTS` has it. Print the table as the script gives it: context, description, keys, cases and runbook count. A registry with no contexts prints `No contexts.`
-- With a name: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts <name>` prints the context's row. Then `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name>` prints the runbooks on its keys. Pass `--json` to both when `$ARGUMENTS` has it. A name the registry does not have makes the script exit 2 with `no context "<name>"`. Show that message and the table from a run without a name.
+- Without a name: `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts`, or the same with `--json` when `$ARGUMENTS` has it. Print the table as the script gives it: context, description, keys, cases and runbook count. A registry with no contexts prints `No contexts.`
+- With a name: `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts <name>` prints the context's row. Then `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name>` prints the runbooks on its keys. Pass `--json` to both when `$ARGUMENTS` has it. A name the registry does not have makes the script exit 2 with `no context "<name>"`. Show that message and the table from a run without a name.
 
 The script exits 2 with `role tracking is off; /runbooks:settings roles turns it on` when tracking is off. Show that message and stop.
 

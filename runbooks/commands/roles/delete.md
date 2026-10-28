@@ -1,10 +1,12 @@
 ---
 description: Remove a role from the registry, the config and the runbooks that cite it
-argument-hint: "<name> [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "<name> [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Delete a role
+
+Before following this procedure, read [runtime setup](../../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -13,30 +15,30 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `<name>` | the role to delete. Required. `anonymous` cannot be deleted |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:roles:delete support-agent`.
 
-Removes the role from `<paths.runbooks>/roles.json`, `accounts.<name>` from the config and every line that names the role from the runbooks. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Roles" and "Review", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
+Removes the role from `<paths.runbooks>/roles.json`, `accounts.<name>` from the config and every line that names the role from the runbooks. Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Roles" and "Review", and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Load the role
 
 1. Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop.
-2. Without `<name>`, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, show the roles, and ask which one with `AskUserQuestion`. A name the registry does not have gets the same list.
+2. Without `<name>`, run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, show the roles, and ask which one with `AskUserQuestion`. A name the registry does not have gets the same list.
 3. When the name is `anonymous`, say that the role is built in and stop.
-4. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` and keep its effective matrix. Read `roles.json`.
+4. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` and keep its effective matrix. Read `roles.json`.
 
 Done when you hold the role and its matrix.
 
 ## 2. List what cites the role
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --citing <name>` and show it: the runbooks that cite the role in `roles`, in a `Roles:` line, in a role line, in an `As:` line or in a `review` entry, and the heirs (roles that inherit from it, directly or not).
+Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --citing <name>` and show it: the runbooks that cite the role in `roles`, in a `Roles:` line, in a role line, in an `As:` line or in a `review` entry, and the heirs (roles that inherit from it, directly or not).
 
 Done when the user has seen the runbooks and the heirs.
 
@@ -45,7 +47,7 @@ Done when the user has seen the runbooks and the heirs.
 Skip this step when the role has no heirs. Otherwise ask with `AskUserQuestion`, before anything is written, one question for all heirs:
 
 - Copy: the goal is that no heir's effective matrix changes. Before any write, run `roles <heir>` for each heir. For each key the heir inherited through the deleted role, write the heir's current effective actions for that key as its own entry, because an own entry replaces every inherited one (`config.md`). Leave keys that came only from other parents alone. The heir's own entries stay.
-- Drop: the heirs lose what they inherited from the role. For each key where an heir's effective actions shrink, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <heir> --key <key>` and collect the runbooks. They get `review` with `role-deleted` in step 5.
+- Drop: the heirs lose what they inherited from the role. For each key where an heir's effective actions shrink, run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <heir> --key <key>` and collect the runbooks. They get `review` with `role-deleted` in step 5.
 
 Both answers remove the role from every heir's `inherits`. A copied entry has no `origins` entry, because the copy is the user's decision.
 
@@ -63,7 +65,7 @@ The write has four parts, in one go:
 
 Show the diff of every file and ask whether to write them. Write only after a yes; on a no, write nothing and stop.
 
-Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles` and `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json`. Every runbook must have no new problem, and `... fixtures <id> --json` lists no problem for each mocked one. When the script reports an error, fix the files until it is clean, or restore them with `git checkout -- <path>` after telling the user.
+Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles` and `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json`. Every runbook must have no new problem, and `... fixtures <id> --json` lists no problem for each mocked one. When the script reports an error, fix the files until it is clean, or restore them with `git checkout -- <path>` after telling the user.
 
 Done when the files are written and the checks are clean.
 
@@ -71,7 +73,7 @@ Done when the files are written and the checks are clean.
 
 Skip this step unless the answer in step 3 was Drop and runbooks were collected. Show them grouped by heir, then ask: mark all, mark none, or pick some. Then run, for the chosen ids:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-deleted --role <name>`
+`node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-deleted --role <name>`
 
 Run it without `--write` first, show what it adds to each runbook, and ask whether to write. On a yes, run it again with `--write`.
 

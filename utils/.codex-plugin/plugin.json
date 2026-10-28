@@ -1,0 +1,10 @@
+{
+  "name": "utils",
+  "version": "0.3.0",
+  "description": "Repo housekeeping: delete merged branches, clear the Dependabot PR queue, write PR descriptions.",
+  "author": {
+    "name": "Fred Vanelli"
+  },
+  "repository": "https://github.com/fredsvanelli/skills",
+  "skills": "./skills/"
+}

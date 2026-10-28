@@ -15,7 +15,7 @@ import subprocess
 import sys
 import time
 
-# checks that must be SUCCESS; each project sets them in the "env" of .claude/settings.json
+# Checks that must be SUCCESS, supplied through the process environment.
 REQUIRED_CHECKS = tuple(c.strip() for c in os.environ.get("DEPENDABOT_REQUIRED_CHECKS", "").split(",") if c.strip())
 GROUP_RE = re.compile(r"bump the (?P<group>[\w-]+) group")
 SINGLE_RE = re.compile(r"bump (?P<pkg>\S+) from (?P<from>\S+) to (?P<to>\S+)")
@@ -208,8 +208,9 @@ def main(argv):
         return 2
     cmd, args = argv[1], argv[2:]
     if not REQUIRED_CHECKS and cmd in ("list", "wait", "rebase"):
-        print('DEPENDABOT_REQUIRED_CHECKS is not set. Put the names of the required checks in the '
-              'project\'s .claude/settings.json: {"env": {"DEPENDABOT_REQUIRED_CHECKS": "Lint,Build"}}')
+        print('DEPENDABOT_REQUIRED_CHECKS is not set. Export the project required check names '
+              'in the helper environment, for example DEPENDABOT_REQUIRED_CHECKS="Lint,Build". '
+              'Claude Code may also supply it through .claude/settings.json env.')
         return 2
     if cmd == "list":
         return cmd_list("--json" in args) or 0

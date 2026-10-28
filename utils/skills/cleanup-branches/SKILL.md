@@ -5,6 +5,8 @@ description: "Delete stale git branches whose code was already merged into the p
 
 # Clean up merged branches
 
+Before following this procedure, read [runtime setup](../../references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
+
 Find and delete branches that hold nothing but already-merged code, then report what was
 removed and what is left.
 

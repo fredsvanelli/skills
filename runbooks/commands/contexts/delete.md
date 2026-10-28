@@ -1,10 +1,12 @@
 ---
 description: Remove a context from the role registry and from its runbooks, turning each role's map on its keys into a list
-argument-hint: "<name> [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "<name> [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Delete a context
+
+Before following this procedure, read [runtime setup](../../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -13,24 +15,24 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `<name>` | the context to delete. Without it, the command lists the contexts and asks which one |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:contexts:delete client-access`.
 
-Removes the context from `<paths.runbooks>/roles.json` and its cases from the runbooks. Each role's map on a key of the context becomes a list. Marks the runbooks where a role's actions changed with `review`. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review". Commit policy: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
+Removes the context from `<paths.runbooks>/roles.json` and its cases from the runbooks. Each role's map on a key of the context becomes a list. Marks the runbooks where a role's actions changed with `review`. Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review". Commit policy: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Load the context
 
 1. Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop.
-2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts` and show the table. A registry with no contexts has nothing to delete. Say so and stop.
+2. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts` and show the table. A registry with no contexts has nothing to delete. Say so and stop.
 3. Without `<name>`, ask which context with `AskUserQuestion`. A name the registry does not have gets the same question.
-4. Read `roles.json`. Keep `version`, `actions`, `contexts` and each role's entries on the keys of the context. For each role with a map on one of those keys, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <role>` and keep its effective actions per key and case as the matrix before the change.
+4. Read `roles.json`. Keep `version`, `actions`, `contexts` and each role's entries on the keys of the context. For each role with a map on one of those keys, run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <role>` and keep its effective actions per key and case as the matrix before the change.
 
 Done when you hold the context, the registry and the matrices.
 
@@ -46,7 +48,7 @@ Done when you hold the list for each role and key.
 
 Show the diff of `roles.json`. Keep the file's key order, with `version` first and `contexts` after `actions`.
 
-Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" delete-context <name>` and show what it changes in the runbooks. It is a dry run without `--write`. It removes `cases`, the Preconditions `Cases:` lists, step `Cases:` lines and the case role lines from the runbooks of the context, and never edits `roles.json`. It leaves the `+<case>` folders in place and lists them with `to: null`; step 8 deals with them.
+Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" delete-context <name>` and show what it changes in the runbooks. It is a dry run without `--write`. It removes `cases`, the Preconditions `Cases:` lists, step `Cases:` lines and the case role lines from the runbooks of the context, and never edits `roles.json`. It leaves the `+<case>` folders in place and lists them with `to: null`; step 8 deals with them.
 
 Done when the user has seen the diff and the dry run.
 
@@ -56,12 +58,12 @@ Ask whether to write, once. Write only after a yes; on a no, write nothing and s
 
 On a yes, in this order:
 
-1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" delete-context <name> --write`.
+1. `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" delete-context <name> --write`.
 2. `roles.json`.
 
-Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, restore every written file with `git checkout -- <paths>` after telling the user, and stop.
+Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, restore every written file with `git checkout -- <paths>` after telling the user, and stop.
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` too, and show the user each runbook that gains a problem.
+Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` too, and show the user each runbook that gains a problem.
 
 Done when the runbooks and `roles.json` are written and the script loads the registry.
 
@@ -69,13 +71,13 @@ Done when the runbooks and `roles.json` are written and the script loads the reg
 
 For each role that had a map and each key of the context, compare the effective actions of each case before the write with the list that remains. Where they differ, run:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <role> --key <key>`
+`node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <role> --key <key>`
 
 The role's list is in `roles.json` by now, so the command lists the runbooks of the key. Show them grouped by role, with the key in one line. When no runbook is reached, say so and go to step 6.
 
 Ask with `AskUserQuestion`: mark all, mark none, or pick some. On "pick some", ask which runbooks, multi-select in rounds of four, each with its keys in the label. Then run, for the chosen ids:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <role> --key <key> --change "<one line>"`
+`node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <role> --key <key> --change "<one line>"`
 
 The `--change` text names the case kept and what the other cases lose, such as `vip-team kept: edit removed in regular`. Run it without `--write` first, show what it would add to each runbook, and ask whether to write. On a yes, run it again with `--write`.
 

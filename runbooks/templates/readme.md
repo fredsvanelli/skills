@@ -2,7 +2,7 @@
 
 Runbooks are this project's UAT scripts: one flow per file. A `ui` runbook is verified in the browser; an `api` runbook through its test script, listed in its `scripts`. They are the official record of how the product behaves.
 
-They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` marketplace (`/runbooks:*`).
+They are managed with the `runbooks` plugin for Claude Code or OpenAI Codex from the `fredsvanelli` marketplace. The command table lists both invocation forms.
 
 ## Layout
 
@@ -24,35 +24,42 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 
 ## Models
 
-The `models` key of `runbooks.config.json` names the model each command runs on. `inline` runs the command in the main session, and any other value runs it in a sub-agent on that model. `/runbooks:settings` changes a row, and `--model inline|haiku|sonnet|opus|fable` on any command forces a model for that invocation.
+Models are configured per host: `models` retains the Claude aliases (`haiku`,
+`sonnet`, `opus`, `fable`), and `codex.models` uses `inline`, `inherit` or an explicit
+model ID available in the Codex session. `inline` runs here; Codex `inherit` delegates
+using the current session's model. Missing Codex configuration uses defaults without
+changing Claude rows. `settings models` edits the active host's table, and
+`--model <model>` forces a choice for this invocation and its internal calls.
+Unavailable forced models stop with an explanation. With no subagent tools, default
+Codex delegation runs inline with a notice; the orchestrator offers sequential work.
 
 ## Commands
 
-| Command | Does |
-|---|---|
-| `/runbooks:list` | lists runbooks, or the ones a diff affects (`--affected`) |
-| `/runbooks:map` | writes a placeholder runbook for each flow no runbook cites |
-| `/runbooks:create` | writes a runbook from a spec, diff, ticket, description or placeholder |
-| `/runbooks:update` | updates the steps of a runbook after the behavior it records changed |
-| `/runbooks:run` | runs runbooks: `ui` ones with `--mode guided`, `headless`, `headed`, `chrome` or `prompt`; `api` ones through their test script |
-| `/runbooks:check` | shows the result of a runbook's latest run, or says it was never run |
-| `/runbooks:to-test` | writes or adopts the test script of a runbook |
-| `/runbooks:audit` | checks runbooks still match the code |
-| `/runbooks:coverage` | coverage report |
-| `/runbooks:setup` | (re)configures this folder |
-| `/runbooks:settings` | changes part of the config, such as the test library, the design reference or the commit policy |
-| `/runbooks:ui` | opens a local page with capabilities, runbooks, run history and coverage |
-| `/runbooks:upgrade` | updates the installed plugin to its latest version |
-| `/runbooks:help` | answers a question about the plugin, optionally limited to one area (`--about roles`) |
-| `/runbooks:whats-next` | suggests the three commands that make the most sense to run now, from the state of the runbooks and the latest changes |
-| `/runbooks:orchestrator` | drives agents that take runbooks through the whole flow in parallel until a goal is met |
-| `/runbooks:roles:create` | registers a role with its parents, account and permissions |
-| `/runbooks:roles:update` | changes a role's description, parents or account, or renames it |
-| `/runbooks:roles:delete` | removes a role from the registry, the config and the runbooks that cite it |
-| `/runbooks:roles:list` | lists the roles, or shows one with its effective permissions |
-| `/runbooks:roles:generate` | reads any document about who may do what and proposes the roles, contexts and permissions it describes, merged into `roles.json` |
-| `/runbooks:contexts:list` | lists the contexts, or shows one with its runbooks |
-| `/runbooks:contexts:create` | registers a context with its keys and cases, and marks the runbooks it reaches for review |
-| `/runbooks:contexts:update` | changes a context's keys, cases or description, and marks the runbooks the change reaches for review |
-| `/runbooks:contexts:delete` | removes a context from the registry and its runbooks, and marks the runbooks where a role's actions changed for review |
-| `/runbooks:permissions:manage` | changes what a role may do on each capability/feature key and marks the runbooks the change reaches for review |
+| Claude Code | Codex | Does |
+|---|---|---|
+| `/runbooks:list` | `$runbooks:runbooks-list` | lists runbooks, or the ones a diff affects (`--affected`) |
+| `/runbooks:map` | `$runbooks:runbooks-map` | writes a placeholder runbook for each flow no runbook cites |
+| `/runbooks:create` | `$runbooks:runbooks-create` | writes a runbook from a spec, diff, ticket, description or placeholder |
+| `/runbooks:update` | `$runbooks:runbooks-update` | updates the steps of a runbook after the behavior it records changed |
+| `/runbooks:run` | `$runbooks:runbooks-run` | runs runbooks: `ui` ones with `--mode guided`, `headless`, `headed`, `chrome` or `prompt`; `api` ones through their test script |
+| `/runbooks:check` | `$runbooks:runbooks-check` | shows the result of a runbook's latest run, or says it was never run |
+| `/runbooks:to-test` | `$runbooks:runbooks-to-test` | writes or adopts the test script of a runbook |
+| `/runbooks:audit` | `$runbooks:runbooks-audit` | checks runbooks still match the code |
+| `/runbooks:coverage` | `$runbooks:runbooks-coverage` | coverage report |
+| `/runbooks:setup` | `$runbooks:runbooks-setup` | (re)configures this folder |
+| `/runbooks:settings` | `$runbooks:runbooks-settings` | changes part of the config, such as the test library, the design reference or the commit policy |
+| `/runbooks:ui` | `$runbooks:runbooks-ui` | opens a local page with capabilities, runbooks, run history and coverage |
+| `/runbooks:upgrade` | `$runbooks:runbooks-upgrade` | updates the installed plugin to its latest version |
+| `/runbooks:help` | `$runbooks:runbooks-help` | answers a question about the plugin, optionally limited to one area (`--about roles`) |
+| `/runbooks:whats-next` | `$runbooks:runbooks-whats-next` | suggests the three commands that make the most sense to run now, from the state of the runbooks and the latest changes |
+| `/runbooks:orchestrator` | `$runbooks:runbooks-orchestrator` | drives agents that take runbooks through the whole flow in parallel until a goal is met |
+| `/runbooks:roles:create` | `$runbooks:runbooks-roles-create` | registers a role with its parents, account and permissions |
+| `/runbooks:roles:update` | `$runbooks:runbooks-roles-update` | changes a role's description, parents or account, or renames it |
+| `/runbooks:roles:delete` | `$runbooks:runbooks-roles-delete` | removes a role from the registry, the config and the runbooks that cite it |
+| `/runbooks:roles:list` | `$runbooks:runbooks-roles-list` | lists the roles, or shows one with its effective permissions |
+| `/runbooks:roles:generate` | `$runbooks:runbooks-roles-generate` | reads any document about who may do what and proposes the roles, contexts and permissions it describes, merged into `roles.json` |
+| `/runbooks:contexts:list` | `$runbooks:runbooks-contexts-list` | lists the contexts, or shows one with its runbooks |
+| `/runbooks:contexts:create` | `$runbooks:runbooks-contexts-create` | registers a context with its keys and cases, and marks the runbooks it reaches for review |
+| `/runbooks:contexts:update` | `$runbooks:runbooks-contexts-update` | changes a context's keys, cases or description, and marks the runbooks the change reaches for review |
+| `/runbooks:contexts:delete` | `$runbooks:runbooks-contexts-delete` | removes a context from the registry and its runbooks, and marks the runbooks where a role's actions changed for review |
+| `/runbooks:permissions:manage` | `$runbooks:runbooks-permissions-manage` | changes what a role may do on each capability/feature key and marks the runbooks the change reaches for review |

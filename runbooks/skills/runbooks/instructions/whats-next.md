@@ -1,21 +1,21 @@
 # What's next: instructions
 
-You compare the state of the runbooks with the code and suggest the three commands that make the most sense to run now. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/whats-next.md`.
+You compare the state of the runbooks with the code and suggest the three commands that make the most sense to run now. The parameters are in `${RUNBOOKS_PLUGIN_ROOT}/commands/whats-next.md`.
 
-You cannot ask the user. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
+When executing as a child, you cannot ask the user. When the main session executes this file inline, it asks the user directly and handles calls through the dispatcher. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
 
 Answers one question: given the state of the runbooks and the state of the code, and what the latest changes touched, which command makes the most sense to run now? The answer is three commands, ready to copy, each with the facts that put it there.
 
 Read-only. It runs no runbook, writes no file and commits nothing, and it stops after the three suggestions. The main session asks the user which one to run. Every suggestion comes from a fact this command read: a script output, a file, a line of the diff. A suggestion without one is not made.
 
-Every `runbooks.mjs` call below is `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" <command>`, run from the project root. Keep its stderr: each `warning:` line is a signal of its own.
+Every `runbooks.mjs` call below is `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" <command>`, run from the project root. Keep its stderr: each `warning:` line is a signal of its own.
 
 ## 1. Read the install
 
 1. `docs/runbooks/runbooks.config.json`. When it is missing, the project has no install. The first suggestion is `/runbooks:setup`, the other two are `/runbooks:help --about overview` and `/runbooks:help --about lifecycle`, and go to step 6.
 2. `runbooks.mjs list --json`. Exit code 2 stops the reading, and its message picks the first suggestion:
    - `roles.json not found`: tracking is on and the roles were never registered. Suggest `/runbooks:roles:generate <file>` when the project holds a document about who may do what (search `docs/` for access, permission or role matrices), else `/runbooks:roles:create`.
-   - any other message: the `/runbooks:settings` group whose keys it names (step 2 of `${CLAUDE_PLUGIN_ROOT}/commands/settings.md`), else `/runbooks:setup`.
+   - any other message: the `/runbooks:settings` group whose keys it names (step 2 of `${RUNBOOKS_PLUGIN_ROOT}/commands/settings.md`), else `/runbooks:setup`.
 
    Quote the message as the reason, fill the other two suggestions with the commands that follow the fix (the roles commands of step 5, then `/runbooks:whats-next` again), and go to step 6.
 3. From the config, keep `stack`, `language`, `git.base`, `staleDays`, `roles.enabled`, `accounts`, `tests`, `upstream` and `design`. Note what setup left unfinished:
@@ -29,7 +29,7 @@ Done when you hold the config, the runbook list and its warnings, or the command
 
 ## 2. Read the runbooks
 
-From the `list --json` output (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, Frontmatter and Status), count and name:
+From the `list --json` output (`${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, Frontmatter and Status), count and name:
 
 - `invalid`: runbooks with `problems`, and the `warning:` lines that name a runbook file;
 - `review`: runbooks with a `review` key, with their reasons;
@@ -42,7 +42,7 @@ From the `list --json` output (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references
 
 Tag each with `critical` when its `tags` hold it.
 
-Then the coverage: `runbooks.mjs coverage --json`. Keep the entry and requirement totals, `covered`, `pending`, `planned` and the `uncovered` lists. An uncovered entry is one no runbook cites in any status, placeholders included, so `map` has not reached it. A warning about an `entries` source or a slice outside the project is a `/runbooks:settings sources` signal (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`).
+Then the coverage: `runbooks.mjs coverage --json`. Keep the entry and requirement totals, `covered`, `pending`, `planned` and the `uncovered` lists. An uncovered entry is one no runbook cites in any status, placeholders included, so `map` has not reached it. A warning about an `entries` source or a slice outside the project is a `/runbooks:settings sources` signal (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`).
 
 With `upstream.schema` in the config, also run `runbooks.mjs contract` and keep its findings.
 
@@ -114,7 +114,7 @@ Done when you hold three commands, each with its tier and the facts behind it.
 
 ## 6. Report
 
-Your report follows "The report" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. It lists no file. Write `summary:` in the config `language`, else English. Command names, ids, file names and terms of `${CLAUDE_PLUGIN_ROOT}/CONTEXT.md` stay as they are. It holds:
+Your report follows "The report" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. It lists no file. Write `summary:` in the config `language`, else English. Command names, ids, file names and terms of `${RUNBOOKS_PLUGIN_ROOT}/CONTEXT.md` stay as they are. It holds:
 
 1. **State.** At most six lines: the stack and whether roles are tracked; the runbooks per status; entry and requirement coverage; the base read and how many commits and changed files it holds; the affected runbooks; the counts from step 2 that are not zero.
 2. **Next.** The three commands, numbered in rank order. Each one:

@@ -1,7 +1,7 @@
 <!-- runbooks:start -->
 ## Runbooks
 
-UAT runbooks in `docs/runbooks/` are the official record of how the product behaves. Read `docs/runbooks/README.md` before editing one.
+UAT runbooks in `docs/runbooks/` are the official record of how the product behaves. Read `docs/runbooks/README.md` before editing one. Commands below use Claude notation; in Codex use `$runbooks:runbooks-<command>` (replace further colons with hyphens), or ask the `$runbooks:runbooks` skill to perform that operation.
 
 - Feature work creates or updates the runbook of every flow it changes (`/runbooks:create` for a new flow, `/runbooks:update` for one that has a runbook).
 - Before calling work done, run `/runbooks:list --affected`, then `/runbooks:run --affected`. A failing runbook means the work is not done.

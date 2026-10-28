@@ -1,10 +1,10 @@
 # Generate roles from a document: instructions
 
-You read the source of your brief and merge the roles, contexts and permissions it describes into `roles.json`. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/roles/generate.md`.
+You read the source of your brief and merge the roles, contexts and permissions it describes into `roles.json`. The parameters are in `${RUNBOOKS_PLUGIN_ROOT}/commands/roles/generate.md`.
 
-You cannot ask the user. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
+When executing as a child, you cannot ask the user. When the main session executes this file inline, it asks the user directly and handles calls through the dispatcher. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
 
-Edits `<paths.runbooks>/roles.json` and marks affected runbooks with `review`. The proposal merges into the registry: it adds roles, contexts, cases, project actions and keys, and replaces the own entry of each key it gives. A role, context or key it leaves out stays as it is. It removes a key only when the source says to. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review".
+Edits `<paths.runbooks>/roles.json` and marks affected runbooks with `review`. The proposal merges into the registry: it adds roles, contexts, cases, project actions and keys, and replaces the own entry of each key it gives. A role, context or key it leaves out stays as it is. It removes a key only when the source says to. Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review".
 
 ## 1. Check that tracking is on
 
@@ -31,8 +31,8 @@ Done when you hold the text of every source, with the page, sheet or line where 
 
 ## 3. Load the project
 
-1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles` and `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts`. Read `roles.json`. Keep the roles with their descriptions and parents, the project `actions`, the contexts with their keys and cases, and each role's own entries and `origins`.
-2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep each runbook's `capability`, `feature` and title. These are the keys the matrix can name.
+1. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles` and `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts`. Read `roles.json`. Keep the roles with their descriptions and parents, the project `actions`, the contexts with their keys and cases, and each role's own entries and `origins`.
+2. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep each runbook's `capability`, `feature` and title. These are the keys the matrix can name.
 
 Done when you hold the registry and the keys of the runbooks.
 
@@ -89,7 +89,7 @@ Done when the proposal file holds every rule of the source that is a permission.
 
 ## 5. Show the proposal
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" merge-roles --file <proposal>`. It writes nothing and prints the project actions added, the contexts added or changed, each new role with its matrix, the descriptions that change, one row per key that changes on a registered role (`absent` before means a new key, `absent` after means a removed key) and the maps that leave a case out.
+Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" merge-roles --file <proposal>`. It writes nothing and prints the project actions added, the contexts added or changed, each new role with its matrix, the descriptions that change, one row per key that changes on a registered role (`absent` before means a new key, `absent` after means a removed key) and the maps that leave a case out.
 
 On exit 2, the message names the problem in the proposal or the registry error the merge would raise. Fix the proposal and run the command again. When the script prints `Nothing to change.`, say that `roles.json` already holds what the source describes and stop.
 
@@ -109,7 +109,7 @@ Done when the user chose to write.
 
 Run the same command with `--write --json` and keep its result for the next steps. A key the proposal adds or changes gets the proposal's origin, `guess` or none; an unchanged key keeps its own. The script writes `roles.json` with two-space indentation and keeps the key order, with `version` first and `contexts` after `actions`. The first context moves the file to `"version": 2`.
 
-Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, write back the content of `roles.json` you read in step 3 (delete the file if it did not exist then), and report `status: blocked` with the registry error.
+Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`. When it reports a registry error, write back the content of `roles.json` you read in step 3 (delete the file if it did not exist then), and report `status: blocked` with the registry error.
 
 Done when `roles.json` is written and the script loads it.
 
@@ -117,9 +117,9 @@ Done when `roles.json` is written and the script loads it.
 
 Collect the runbooks each part of the result reaches:
 
-- each entry of `changes`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <role> --key <key> [--case <case>]`, with `--case` for a change in one case. Reason `role-permissions`, with the change in one line (`delete removed`, `approve added`, `key added`, `key removed`, `own: edit added`);
+- each entry of `changes`: `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <role> --key <key> [--case <case>]`, with `--case` for a change in one case. Reason `role-permissions`, with the change in one line (`delete removed`, `approve added`, `key added`, `key removed`, `own: edit added`);
 - each role of `rolesAdded`: the runbooks of `list --json` with `rolesAll` true whose `status` is neither `deprecated` nor `placeholder`, as in `/runbooks:roles:create` (step 5). Reason `role-created`;
-- each context of `contextsAdded`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name>`. Reason `context-created`;
+- each context of `contextsAdded`: `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" contexts --affected <name>`. Reason `context-created`;
 - each context of `contextsChanged`: `contexts --affected <name> --key <key>` per key in `keysAdded`, reason `context-created`; and `contexts --affected <name>` when `casesAdded` is not empty, reason `case-created` per case.
 
 A new project action reaches no runbook until a key uses it. A new role reaches the runbooks that name it only once `/runbooks:update` writes its role lines.
@@ -134,10 +134,10 @@ Ask with `AskUserQuestion`: mark all, mark none, or pick some. On "pick some", a
 
 Build the commands for the chosen runbooks:
 
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <role> --key <key> [--case <case>] --change "<one line>"`
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-created --role <role>`
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason context-created --context <name>`
-- `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason case-created --case <case>`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-permissions --role <role> --key <key> [--case <case>] --change "<one line>"`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-created --role <role>`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason context-created --context <name>`
+- `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason case-created --case <case>`
 
 Run them without `--write` first, show what they would add to each runbook, and ask whether to write. On a yes, run them again with `--write`.
 
@@ -145,7 +145,7 @@ Done when each chosen runbook has its entries, or the user chose none.
 
 ## 9. Report
 
-Your report follows "The report" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. List in `files:` `roles.json` and every runbook you marked. Write `summary:` in the config `language`. It holds:
+Your report follows "The report" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. List in `files:` `roles.json` and every runbook you marked. Write `summary:` in the config `language`. It holds:
 
 - the roles added, with description, parents and matrix;
 - one line per key changed on a registered role: old actions, new actions;

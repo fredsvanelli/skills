@@ -1,10 +1,12 @@
 ---
 description: Run runbooks (ui in the browser or through a per-step script, api through their test script), live or against fixtures, and record a report per runbook
-argument-hint: "<id...> | --capability x | --affected [base] [--mode guided|headless|headed|chrome|prompt|script|test] [--steps S01,S02] [--role a,b] [--case a,b] [--merge] [--record] [--import <file|text>] [--waive S03] [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "<id...> | --capability x | --affected [base] [--mode guided|headless|headed|chrome|prompt|script|test] [--steps S01,S02] [--role a,b] [--case a,b] [--merge] [--record] [--import <file|text>] [--waive S03] [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Run runbooks
+
+Before following this procedure, read [runtime setup](../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -25,28 +27,28 @@ Pick what to run with one of `<id...>`, `--capability` or `--affected`; the othe
 | `--record` | run the selection against the live upstream API with the upstream server in `record` mode, which saves each response as a fixture of the selected runbook and step (`upstream.md`, "Recording"). `create` and `update` call it for `mocked` `ui` runbooks |
 | `--waive S03,S04` | `api` runbooks: steps to record as `waived`; their tests still run and their outcome is ignored. Ask for the reason before the run |
 | `--import <file or text>` | bring back the reply of a `prompt` run, as a file path or pasted text, and write its report (with role tracking on, after the last role's import; step 6 of the instructions file). When the prompt run used `--merge`, type `--merge` again with `--import`. The import hint the run prints repeats it. Without it, the import of a partial run leaves `last_run` unchanged |
-| `--model m` | force the model of every sub-agent this run launches: `inline` (the main session runs it), `haiku`, `sonnet`, `opus` or `fable`. It turns off escalation |
+| `--model m` | force the model of every sub-agent this run launches: `inline` (the main session runs it), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex. It turns off escalation |
 
 Examples: `/runbooks:run billing.issue-invoice --mode headless`, `/runbooks:run --affected --mode guided`, `/runbooks:run billing.issue-invoice --steps S03,S04`, `/runbooks:run billing.issue-invoice --role editor,viewer`, `/runbooks:run clients.edit-client --case vip-team,regular`, `/runbooks:run billing.issue-invoice --import .runbooks/reply.md`, `/runbooks:run billing.issue-invoice --record --mode headless`.
 
-This file only dispatches. The procedure is in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/run.md`. Dispatching follows `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`: read it before step 5. It covers the model, the brief, the report, questions, calls, commits and a model that cannot launch.
+This file only dispatches. The procedure is in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/run.md`. Dispatching follows `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`: read it before step 5. It covers the model, the brief, the report, questions, calls, commits and a model that cannot launch.
 
 ## Dispatch
 
 1. Run `git status --porcelain` now and keep the list for the commit step.
-2. With `--import`, resolve the model with `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model run --import reply [--merge] [--model <x>]`, dispatch the Import step (step 6) of the instructions file by `agents.md` with `--merge` in the brief when the user typed it, and go to step 7.
+2. With `--import`, resolve the model with `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" model --runtime "${RUNBOOKS_RUNTIME}" run --import reply [--merge] [--model <x>]`, dispatch the Import step (step 6) of the instructions file by `agents.md` with `--merge` in the brief when the user typed it, and go to step 7.
 3. Select, by the first match:
    - Ids: those runbooks.
-   - `--capability x`: `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --capability x --json`.
+   - `--capability x`: `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --capability x --json`.
    - `--affected [base]`: `... list --affected [base] --json`.
 
    Leave out `deprecated`, `placeholder` and invalid runbooks and name them in the final summary. A placeholder has no steps; offer `/runbooks:create --from placeholder <id>` for it.
 
-   Split the selection by `surface` (in the `list --json` output). Mode for the `ui` runbooks: `--mode` when given; otherwise ask the user to choose among the available modes, as "Choosing the mode" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/run-modes.md` describes. Read only that section. Mode `test` is available for a `ui` runbook whose script has one test per step; the question says why it is not offered for the others. `--record` needs a browser mode (`guided`, `headless`, `headed` or `chrome`). With `--record` and mode `test`, `script` or `prompt`, say so and ask for a browser mode. When the selection has no `ui` runbook, ask nothing. With `--waive`, ask the reason for it now.
+   Split the selection by `surface` (in the `list --json` output). Mode for the `ui` runbooks: `--mode` when given; otherwise ask the user to choose among the available modes, as "Choosing the mode" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/run-modes.md` describes. Read only that section. Mode `test` is available for a `ui` runbook whose script has one test per step; the question says why it is not offered for the others. `--record` needs a browser mode (`guided`, `headless`, `headed` or `chrome`). With `--record` and mode `test`, `script` or `prompt`, say so and ask for a browser mode. When the selection has no `ui` runbook, ask nothing. With `--waive`, ask the reason for it now.
 4. Group. An `api` runbook gets `--mode test`. A `ui` runbook gets the chosen mode. `--record`, `--steps`, `--role`, `--case`, `--merge`, `--waive` and `--model` carry as typed. Runbooks with the same arguments form one group. Resolve one model per group, passing every flag the user gave as typed (a value that is a list stands for itself, never free text), so a user row such as `run --steps` matches:
 
    ```
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model run --mode <m> [--record] [--steps S01] [--role a] [--case a] [--merge] [--waive S03] [--model <x>] --json
+   node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" model --runtime "${RUNBOOKS_RUNTIME}" run --mode <m> [--record] [--steps S01] [--role a] [--case a] [--merge] [--waive S03] [--model <x>] --json
    ```
 
    The output is `{ model, row, forced }`. Five `api` runbooks are one group. A `--mode headless` selection with `api` and `ui` runbooks is two groups.
@@ -54,7 +56,7 @@ This file only dispatches. The procedure is in `${CLAUDE_PLUGIN_ROOT}/skills/run
 
    The main session owns the upstream server for a `prompt` group and for `--import`, because a server started by a sub-agent may not outlive it. Before it dispatches or follows a `prompt` group, it starts the server by the start rule in step 2 of the instructions file (`upstream-copy` first and a stop on exit 1, then the copy it prints started in the background, wait for the first line, stop on a taken port). It keeps the server running across imports and stops it after the last runbook's import. The brief says the server is already up at its port and that the sub-agent must not start or stop it. In other modes the sub-agent starts and stops the server within its own run.
 6. Escalate, only when `forced` is false. A report with `status: escalate` names a runbook and the reason (`sync` or `script`), and its `handoff:` names the runbooks of the group that did not run.
-   - Resolve `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" model to-test <id>` and launch a sub-agent on that model with the `to-test` instructions file (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`). Tell it to write the missing tests, or to fix the named script mistake, without loosening an assertion.
+   - Resolve `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" model --runtime "${RUNBOOKS_RUNTIME}" to-test <id>` and launch a sub-agent on that model with the `to-test` instructions file (`${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`). Tell it to write the missing tests, or to fix the named script mistake, without loosening an assertion.
    - Then launch a new sub-agent on the group's model to run that runbook and the ones in `handoff:`.
    - When that sub-agent reports `escalate` again for the same runbook, do not hand off a second time. Record the runbook as `blocked` in the results table with both reasons and offer `/runbooks:to-test <id>`. Launch another sub-agent on the group's model for the runbooks in that sub-agent's `handoff:`, then go on with the other groups.
    - Keep the rows of the runbooks each sub-agent finished before it escalated, and merge them with the rows of the later sub-agents.

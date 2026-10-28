@@ -55,7 +55,7 @@ last_run:
 | `upstream` | `ui` only: `live` or `mocked`, how the runbook reaches its upstream API. Written only when it differs from the config `upstream.mode` (`upstream.md`, "Modes"). A mocked runbook needs `upstream.urlEnv` in the config |
 | `covers.entries` | entry ids exactly as `runbooks.mjs entries` prints them |
 | `covers.requirements` | requirement ids exactly as `runbooks.mjs requirements` prints them, or ids from the source when no requirement source is configured |
-| `calls` | `ui` only, and only when the config has `upstream`: the operations of an upstream API outside this repository that the screens reach, as `METHOD /path` with `{param}` segments, spelled as the API's OpenAPI document spells them when `upstream.schema` is set. Next.js segments (`[id]`, `[...path]`) are read as `{id}` and `{path}`. An endpoint that `runbooks.mjs entries` lists goes in `covers.entries` instead. `calls` never counts as coverage and never makes an orphan (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`) |
+| `calls` | `ui` only, and only when the config has `upstream`: the operations of an upstream API outside this repository that the screens reach, as `METHOD /path` with `{param}` segments, spelled as the API's OpenAPI document spells them when `upstream.schema` is set. Next.js segments (`[id]`, `[...path]`) are read as `{id}` and `{path}`. An endpoint that `runbooks.mjs entries` lists goes in `covers.entries` instead. `calls` never counts as coverage and never makes an orphan (`${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0005-upstream-api-in-another-repo-is-a-contract.md`) |
 | `sources` | spec paths, ticket ids, `diff <base>...<sha>`, `file <path>`, `dir <path>` and `route <entry id>` for code read as the source, `map <sha>` for a placeholder, and test files read as evidence only (tests of the code behind an entry, which cannot run the steps), that the runbook came from |
 | `scripts` | the automated tests that run this runbook's steps, written or adopted by `to-test`. Optional for `ui`; required for `api`, whose runbook runs only through it. In a placeholder, the existing tests `map` fitted to the flow, which may cover it only in part: candidates `to-test` offers to adopt |
 | `status` | `placeholder`, `draft`, `active` or `deprecated` (see Status) |
@@ -147,7 +147,7 @@ With role tracking off, role lines are plain text and no keyword is checked.
 
 ### Contexts and cases
 
-With role tracking on, a runbook whose `capability/feature` matches a key of a context (`config.md`, "Contexts") runs once per case, as it runs once per role and per viewport. Each step then states what each role gets in each case. That context is the runbook's context. A runbook that matches no key of a context has no cases, and nothing in this section applies to it. Why a case runs inside a role instead of being a role of its own: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0006-a-case-is-a-run-dimension-inside-a-role.md`.
+With role tracking on, a runbook whose `capability/feature` matches a key of a context (`config.md`, "Contexts") runs once per case, as it runs once per role and per viewport. Each step then states what each role gets in each case. That context is the runbook's context. A runbook that matches no key of a context has no cases, and nothing in this section applies to it. Why a case runs inside a role instead of being a role of its own: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0006-a-case-is-a-run-dimension-inside-a-role.md`.
 
 - `cases` lists the cases the runbook runs, or `all` for every case of its context.
 - Preconditions say how to build the record of each case, under a `Cases:` list with one line per case of `cases`:
@@ -282,7 +282,7 @@ Expected: 200.
 
 ### Preconditions and the upstream mode
 
-The Data line of a `mocked` runbook points to its fixtures (`<upstream.fixtures>/<capability>/<flow>/`), which are its data. Over a GraphQL API, each operation the page sends has its own fixture, named by `request.operationName`, so a precondition such as "the client belongs to no group" is the fixture of the operation that reads the groups (`upstream.md`, "GraphQL operations"). A `live` runbook states how each piece of data is created, and the data it creates carries the run suffix (`RUNBOOKS_RUN_ID`), so Expected quotes only the fixed part and Cleanup deletes what the run made. The rest: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
+The Data line of a `mocked` runbook points to its fixtures (`<upstream.fixtures>/<capability>/<flow>/`), which are its data. Over a GraphQL API, each operation the page sends has its own fixture, named by `request.operationName`, so a precondition such as "the client belongs to no group" is the fixture of the operation that reads the groups (`upstream.md`, "GraphQL operations"). A `live` runbook states how each piece of data is created, and the data it creates carries the run suffix (`RUNBOOKS_RUN_ID`), so Expected quotes only the fixed part and Cleanup deletes what the run made. The rest: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 
 ### Flow
 
@@ -294,7 +294,7 @@ One test per step, its name starting with the step id (`S01 admin creates a draf
 
 With role tracking on, an `api` script has one test per step and role, named `S01 <title> as <role>`. A mocked `ui` script has one test per step, role and viewport, named `S01 <title> as <role> @ <viewport>` (the `@ <viewport>` part only with viewports). `junit` reads the step, the role and the viewport from the name. A live `ui` script has one test per role and viewport, named `<title> as <role> @ <viewport>`, holding one `test.step('S01 <title>')` per step, and mode `test` is not offered for it (`instructions/to-test.md`, item 5). With cases, the case follows the role: `S01 <title> as <role> in <case>` for `api`, `S01 <title> as <role> in <case> @ <viewport>` for mocked `ui`, and `<title> as <role> in <case> @ <viewport>` for live `ui`. A role that runs once has no `in <case>` part. `junit` reads the case from the name too, and gives the reason when a test fits no pass: `no " in <case>" suffix`, `<case> is not one of the runbook's cases`, `<role> runs once; drop " in <case>"`, or `<step> does not run in <case>`. A role's test for a step whose parent ended `denied`, `hidden` or `read-only` for that role is not written, and `junit` reports that step as `not-applicable`. A `ui` role with no entry in the config `accounts` gets no tests, and `junit` reports its steps as `no-account`. `junit` checks only `accounts`. A live run also gives `no-account` to a role whose env var names are missing from `mcp.secretsFile` (`run-modes.md`, "Roles").
 
-Tests in the file without a prefix stay outside the runbook's result. The runbook is the source of truth: when a test's assertion and its step's Expected differ, the script changes, unless the user says the runbook is wrong. Why: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0001-api-runbooks-run-through-their-script.md`.
+Tests in the file without a prefix stay outside the runbook's result. The runbook is the source of truth: when a test's assertion and its step's Expected differ, the script changes, unless the user says the runbook is wrong. Why: `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0001-api-runbooks-run-through-their-script.md`.
 
 ## Dependency tree
 
@@ -325,7 +325,7 @@ Only run reports hold step states. With `viewports`, a step has one state per vi
 
 ## Placeholders
 
-`map` writes one placeholder per flow no runbook cites, with its `surface` and the existing tests that fit the flow in `scripts`, from `${CLAUDE_PLUGIN_ROOT}/templates/placeholder.md`: full frontmatter with `status: placeholder`, a title, `# <title>`, a Goal, and a Steps section with no steps. `create` fills it in place, keeping its path and id. A placeholder is never run, scripted or listed by `--affected`.
+`map` writes one placeholder per flow no runbook cites, with its `surface` and the existing tests that fit the flow in `scripts`, from `${RUNBOOKS_PLUGIN_ROOT}/templates/placeholder.md`: full frontmatter with `status: placeholder`, a title, `# <title>`, a Goal, and a Steps section with no steps. `create` fills it in place, keeping its path and id. A placeholder is never run, scripted or listed by `--affected`.
 
 ## last_run
 

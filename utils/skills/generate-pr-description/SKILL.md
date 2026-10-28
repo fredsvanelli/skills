@@ -11,6 +11,8 @@ allowed-tools:
 
 # Write a PR description
 
+Before following this procedure, read [runtime setup](../../references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
+
 Reads the branch's real diff and writes the PR description **for the reviewer**, not for the
 author. The bar: the reviewer understands what changed, where to look first, and can test it
 by hand without asking anything.

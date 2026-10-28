@@ -1,10 +1,12 @@
 ---
 description: Change a role's description, parents or account, or rename it
-argument-hint: "<name> [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "<name> [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Update a role
+
+Before following this procedure, read [runtime setup](../../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -13,24 +15,24 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `<name>` | the role to change. Required. `anonymous` cannot be renamed, given an account or given parents |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:roles:update manager`, `/runbooks:roles:update editor`.
 
-Changes the role's entry in `<paths.runbooks>/roles.json` and, for an account or a rename, `accounts` in the config. Permissions have their own command, `/runbooks:permissions:manage`. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Roles" and "Review", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
+Changes the role's entry in `<paths.runbooks>/roles.json` and, for an account or a rename, `accounts` in the config. Permissions have their own command, `/runbooks:permissions:manage`. Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Roles" and "Review", and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Load the role
 
 1. Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop.
-2. Without `<name>`, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, show the roles, and ask which one with `AskUserQuestion`. A name the registry does not have gets the same list.
+2. Without `<name>`, run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`, show the roles, and ask which one with `AskUserQuestion`. A name the registry does not have gets the same list.
 3. When the name is `anonymous`, say that the role is built in and cannot be renamed, given an account or given parents, and stop.
-4. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` and keep its effective matrix as the matrix before the change. Read `roles.json`.
+4. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>` and keep its effective matrix as the matrix before the change. Read `roles.json`.
 
 Done when you hold the role, its entry and its matrix.
 
@@ -47,7 +49,7 @@ Done when you hold the new values.
 
 ## 3. Work out what the change reaches
 
-- **Rename.** Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --citing <name>`. It lists the runbooks that cite the role in `roles`, in a `Roles:` line, in a role line, in an `As:` line or in a `review` entry, and the heirs. `roles: all` is left as it is, even though `--citing` lists those runbooks under `roles` (`all` expands to every name). Only explicit `roles` lists, `Roles:` lines, role lines, `As:` lines and `review` entries change. A role line with cases (`- <role> in <case>[, <case>...]: ...`) counts as a role line, and the rename keeps its cases. The map of a role's own entry on a key of a context moves with the entry. Open each runbook and list the lines to rewrite, and the `role:` of every `review` entry that names the old role. Add the `accounts.<name>` key of the config and the `inherits` of every heir in `roles.json`. List the fixture folders `@<name>` under `<upstream.fixtures>/<capability>/<flow>/` and `.../S<nn>/` of the mocked runbooks (`runbooks.mjs fixtures <id> --json`), which move with `git mv` to `@<new name>`. A `roles.<name>` key and a matching `origins` stay with the entry. The `last_run` cells of every runbook name the role too: `runbooks.mjs rename-role-cells <old> <new>` renames it there. It refuses and writes nothing when the names are equal, the new name is not kebab-case, a runbook's cells already name the new one, or a runbook's `last_run` has a problem it cannot read.
+- **Rename.** Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --citing <name>`. It lists the runbooks that cite the role in `roles`, in a `Roles:` line, in a role line, in an `As:` line or in a `review` entry, and the heirs. `roles: all` is left as it is, even though `--citing` lists those runbooks under `roles` (`all` expands to every name). Only explicit `roles` lists, `Roles:` lines, role lines, `As:` lines and `review` entries change. A role line with cases (`- <role> in <case>[, <case>...]: ...`) counts as a role line, and the rename keeps its cases. The map of a role's own entry on a key of a context moves with the entry. Open each runbook and list the lines to rewrite, and the `role:` of every `review` entry that names the old role. Add the `accounts.<name>` key of the config and the `inherits` of every heir in `roles.json`. List the fixture folders `@<name>` under `<upstream.fixtures>/<capability>/<flow>/` and `.../S<nn>/` of the mocked runbooks (`runbooks.mjs fixtures <id> --json`), which move with `git mv` to `@<new name>`. A `roles.<name>` key and a matching `origins` stay with the entry. The `last_run` cells of every runbook name the role too: `runbooks.mjs rename-role-cells <old> <new>` renames it there. It refuses and writes nothing when the names are equal, the new name is not kebab-case, a runbook's cells already name the new one, or a runbook's `last_run` has a problem it cannot read.
 - **Parents.** A change of parents is a permission change. Work out the new effective matrix from the inheritance rule in `config.md`, and check it against `roles <name>` after the write in step 4. Compare the matrix before and after, key by key. Each key whose effective actions changed goes to step 5. Do the same for each heir, because their matrix follows.
 - **Account and description.** They reach no runbook.
 
@@ -55,15 +57,15 @@ Done when you hold the files to write and the keys whose effective actions chang
 
 ## 4. Show the diff and write
 
-Show the diff of every file: `roles.json`, `runbooks.config.json` and, for a rename, each runbook, and the fixture folders to move. Ask whether to write them all in one write. Write only after a yes, and for a rename run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" rename-role-cells <old> <new> --write` with the other writes; on a no, write nothing and stop.
+Show the diff of every file: `roles.json`, `runbooks.config.json` and, for a rename, each runbook, and the fixture folders to move. Ask whether to write them all in one write. Write only after a yes, and for a rename run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" rename-role-cells <old> <new> --write` with the other writes; on a no, write nothing and stop.
 
-Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <new name>` and `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json`. Every runbook that cited the old name must have no new problem, and `... fixtures <id> --json` lists no problem for each mocked one that had a folder moved. When the script reports an error, fix the files until it is clean, or restore them with `git checkout -- <path>` after telling the user.
+Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <new name>` and `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json`. Every runbook that cited the old name must have no new problem, and `... fixtures <id> --json` lists no problem for each mocked one that had a folder moved. When the script reports an error, fix the files until it is clean, or restore them with `git checkout -- <path>` after telling the user.
 
 Done when the files are written and the checks are clean.
 
 ## 5. Review the permission changes
 
-Skip this step when no key changed. Otherwise follow `${CLAUDE_PLUGIN_ROOT}/commands/permissions/manage.md`, steps 4 and 5, for each key whose effective actions changed, with `--change "parents changed: <actions before> to <actions after>"`. For a key that changed for an heir, use the heir's name in `--role`. The dry run comes first, then the question, then `--write`.
+Skip this step when no key changed. Otherwise follow `${RUNBOOKS_PLUGIN_ROOT}/commands/permissions/manage.md`, steps 4 and 5, for each key whose effective actions changed, with `--change "parents changed: <actions before> to <actions after>"`. For a key that changed for an heir, use the heir's name in `--role`. The dry run comes first, then the question, then `--write`.
 
 Done when each chosen runbook has its entry, or the user chose none.
 

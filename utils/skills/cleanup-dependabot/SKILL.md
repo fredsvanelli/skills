@@ -13,6 +13,8 @@ allowed-tools:
 
 # Clean up the Dependabot queue
 
+Before following this procedure, read [runtime setup](../../references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
+
 Empties the Dependabot PR queue **without breaking the project's flow**: everything reaches `main`
 through `develop`, nobody merges red CI, and a major only goes in with someone watching.
 
@@ -30,7 +32,7 @@ returns a report of what went in, what was closed and what was left, with the re
 Any other argument is invalid — say so and stop.
 
 **Where it works:** the repository root, with `gh` authenticated (`gh auth status`) and `python3`.
-The checks that count as green CI come from `DEPENDABOT_REQUIRED_CHECKS` (comma-separated names), set in the `env` of the project's `.claude/settings.json`; without it the helper exits 2. The helper is `${CLAUDE_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py` (no `jq` — there is no
+The checks that count as green CI come from `DEPENDABOT_REQUIRED_CHECKS` (comma-separated names), exported in the helper's shell environment (or set in `.claude/settings.json`'s `env` on Claude); without it the helper exits 2. The helper is `${UTILS_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py` (no `jq` — there is no
 `jq` on this machine). Run `python3 <helper>` with no arguments to see the subcommands.
 
 ## What this skill does and does not do
@@ -54,7 +56,7 @@ From the repo root:
 gh auth status                                  # failed? stop
 git status --porcelain --untracked-files=no     # tracked changes? stop and hand back — no stash
 git fetch origin
-D="${CLAUDE_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py"
+D="${UTILS_PLUGIN_ROOT}/skills/cleanup-dependabot/scripts/dependabot.py"
 ```
 
 An untracked file does not block (just warn); with `--dry-run` the tree does not even need to be clean,
@@ -67,8 +69,8 @@ longer holds — say so and ask before going on.
 ## Step 2 — Inventory
 
 ```bash
-python3 $D list          # table in working order
-python3 $D list --json   # when you need the fields (updates, ci_problems…)
+python3 "$D" list          # table in working order
+python3 "$D" list --json   # when you need the fields (updates, ci_problems…)
 ```
 
 Show the table to the user and, in one line per PR, what you plan to do with it — use the
@@ -96,7 +98,7 @@ For each PR, in this order, **one at a time** — each merge can turn the next o
 ### 3.1 · State
 
 ```bash
-python3 $D wait N        # waits for mergeable ≠ UNKNOWN and the checks to finish; exit 0 = can merge
+python3 "$D" wait N        # waits for mergeable ≠ UNKNOWN and the checks to finish; exit 0 = can merge
 ```
 
 `UNKNOWN` is GitHub still computing; the helper waits. Conclude nothing from
@@ -107,7 +109,7 @@ python3 $D wait N        # waits for mergeable ≠ UNKNOWN and the checks to fin
 `mergeable=CONFLICTING`:
 
 ```bash
-python3 $D rebase N      # comments "@dependabot rebase", waits for the head to change, then wait
+python3 "$D" rebase N      # comments "@dependabot rebase", waits for the head to change, then wait
 ```
 
 If Dependabot does not answer in time (it gives up when the conflict is not only `yarn.lock`,
@@ -158,7 +160,7 @@ Only when `wait` exited 0 (and the major was approved):
 
 ```bash
 gh pr merge N --merge    # --merge, like the rest of the repo; never --admin, never squash
-python3 $D wait N        # confirms MERGED
+python3 "$D" wait N        # confirms MERGED
 git pull --ff-only origin develop
 ```
 
@@ -173,7 +175,7 @@ do not ask for a `rebase` on them; the only question is whether `develop` has th
 for each package in it (a group has several):
 
 ```bash
-python3 $D covered <pkg> <target-version>         # checks yarn.lock (npm) or uses: (actions) on origin/develop
+python3 "$D" covered <pkg> <target-version>         # checks yarn.lock (npm) or uses: (actions) on origin/develop
 ```
 
 | `covered` | Action |
@@ -209,10 +211,10 @@ git checkout -b chore/deps-<pkg-slug>-<version> origin/develop
   yarn promotes it to a direct dependency.
 - **GitHub Action**: edit `uses: <action>@vN` in `.github/workflows/*.yml`.
 
-Check with `python3 $D covered <pkg> <version> HEAD`. Then:
+Check with `python3 "$D" covered <pkg> <version> HEAD`. Then:
 
 ```bash
-yarn lint && <project type-check>   # the command is in CLAUDE.md / package.json
+yarn lint && <project type-check>   # the command is in AGENTS.md / CLAUDE.md / package.json
 git add package.json yarn.lock .github/workflows
 git commit -m "chore(deps): bump <pkg> from <from> to <to> (re-extracted from #N)"
 git push -u origin chore/deps-<pkg-slug>-<version>

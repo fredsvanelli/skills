@@ -1,10 +1,12 @@
 ---
 description: Register a new role with its parents, account and permissions
-argument-hint: "[name] [--model inline|haiku|sonnet|opus|fable]"
+argument-hint: "[name] [--model <model>]"
 disable-model-invocation: true
 ---
 
 # Create a role
+
+Before following this procedure, read [runtime setup](../../skills/runbooks/references/runtime.md). Resolve the plugin root from this file's real location and use the active host's tools and argument handling. Do this also when this entry is invoked directly.
 
 Arguments: `$ARGUMENTS`
 
@@ -13,21 +15,21 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `[name]` | the new role, kebab-case (`^[a-z0-9][a-z0-9-]*$`) and not registered yet. Without it, the command asks |
-| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
 Examples: `/runbooks:roles:create`, `/runbooks:roles:create support-agent`.
 
-Adds the role to `<paths.runbooks>/roles.json` and, for a `ui` stack, its login to `accounts` in the config. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The permission questions are those of `${CLAUDE_PLUGIN_ROOT}/commands/permissions/manage.md` (step 2).
+Adds the role to `<paths.runbooks>/roles.json` and, for a `ui` stack, its login to `accounts` in the config. Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The permission questions are those of `${RUNBOOKS_PLUGIN_ROOT}/commands/permissions/manage.md` (step 2).
 
 Run `git status --porcelain` now and keep the list for the commit step.
 
 ## Model
 
-With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Check that tracking is on
 
-Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop. Read `roles.json` and run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles` to show the registered roles.
+Read `docs/runbooks/runbooks.config.json`. When it is missing, offer `/runbooks:setup` and stop. When `roles.enabled` is not true, say that role tracking is off, offer `/runbooks:settings roles`, and stop. Read `roles.json` and run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles` to show the registered roles.
 
 Done when tracking is on and you hold the registry.
 
@@ -54,19 +56,19 @@ Done when you hold the role's own entries, or the user chose to leave the matrix
 
 Show the diff of `roles.json` and, with an account, of `runbooks.config.json`. Ask whether to write both. Write only after a yes; on a no, write nothing and stop. Keep the key order of the files.
 
-Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>`. When the script reports an error, fix the files until it loads them, or restore them with `git checkout -- <path>` after telling the user.
+Then run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles <name>`. When the script reports an error, fix the files until it loads them, or restore them with `git checkout -- <path>` after telling the user.
 
 Done when both files are written and the script shows the role.
 
 ## 5. Mark the runbooks
 
-Every runbook with `roles: all` now runs the new role, whatever keys the role has. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep the runbooks with `rolesAll` true whose `status` is neither `deprecated` nor `placeholder`. For each key in the role's effective matrix, also run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <name> --key <key>`, to tell which of them the role has a key for. When the list is empty, say so and go to step 6.
+Every runbook with `roles: all` now runs the new role, whatever keys the role has. Run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` and keep the runbooks with `rolesAll` true whose `status` is neither `deprecated` nor `placeholder`. For each key in the role's effective matrix, also run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles --affected --role <name> --key <key>`, to tell which of them the role has a key for. When the list is empty, say so and go to step 6.
 
 Show the list, one line per runbook, with its key when the role has one. Explain that each runbook runs the new role as `allowed`, so the role is held to the common Expected, until its Expected has a line for the role. A runbook under a key the role lacks will most likely need a `denied` or `hidden` line.
 
 Ask with `AskUserQuestion`: mark all with `role-created` (Recommended, the default), pick some, or mark none. On "pick some", ask which runbooks, multi-select in rounds of four. Then run, for the chosen ids:
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-created --role <name>`
+`node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-review <id...> --reason role-created --role <name>`
 
 Run it without `--write` first, show what it adds to each runbook, and ask whether to write. On a yes, run it again with `--write`. Each marked runbook needs Expected lines for the new role, which `/runbooks:update <id>` writes and then clears the review.
 

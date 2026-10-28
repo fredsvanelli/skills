@@ -1,16 +1,16 @@
 # Audit runbooks against the code: instructions
 
-You check that the selected runbooks still match the code, and with `--fix` you edit them. The parameters are in `${CLAUDE_PLUGIN_ROOT}/commands/audit.md`.
+You check that the selected runbooks still match the code, and with `--fix` you edit them. The parameters are in `${RUNBOOKS_PLUGIN_ROOT}/commands/audit.md`.
 
-You cannot ask the user. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
+When executing as a child, you cannot ask the user. When the main session executes this file inline, it asks the user directly and handles calls through the dispatcher. Where this file says to ask (`AskUserQuestion`, "ask the user", a diff approval), stop with `status: question` as `agents.md` says. Where it says to say something and stop, put the message in `summary:` and report `status: done`. Commit nothing: the main session commits after it prints your summary.
 
-Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, and for a `ui` runbook `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
+Read first: `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/format.md`, and for a `ui` runbook `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/upstream.md`.
 
 With role tracking on (`roles.enabled` in the config), also read the Roles sections of `references/format.md` and `references/config.md`. The role checks below apply only then.
 
 ## 1. Select
 
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` filtered to the id, the capability, or every non-deprecated runbook with `--all`. Invalid runbooks get `broken` with their problems.
+`node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" list --json` filtered to the id, the capability, or every non-deprecated runbook with `--all`. Invalid runbooks get `broken` with their problems.
 
 ## 2. Check
 
@@ -56,7 +56,7 @@ For the three rows on calls, the edit is the `calls` list to write, or the fixtu
 
 With role tracking on, two more checks run:
 
-Registry against code, once per audit, over the code the registry's `found` sources and the role signals of `setup` point at (role enums, guards, permission helpers, `accounts`). The role names and permissions come from `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`:
+Registry against code, once per audit, over the code the registry's `found` sources and the role signals of `setup` point at (role enums, guards, permission helpers, `accounts`). The role names and permissions come from `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" roles`:
 
 | Check | Finding |
 |---|---|
@@ -83,10 +83,10 @@ A table (runbook, verdict, findings count), then the findings per runbook. Put i
 
 ## 4. Fix (with `--fix`)
 
-Show the proposed edits as a diff per runbook. Report each diff as a `status: question` and write nothing until the answer arrives. Apply the edits the answer approves. An edited runbook keeps its `status`. When its `last_run` is set and a fix changed a step, a precondition, `viewports` or `design`, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-outdated <id> --write` instead of editing the file by hand: the run verified the old text. A fix that touches only `sources`, `scripts` paths or a script file, or that only converts `old-format` steps, leaves `last_run` as it is, because the checks did not change. When the old text is too vague to convert without changing a check, leave the step as it is and offer `/runbooks:update <id>` for it. With role tracking on, `--fix` never edits `roles.json`, and it does not rewrite a role line against the matrix. A `role-missing` finding offers `/runbooks:roles:create`, a `role-gone` finding offers `/runbooks:roles:delete`, and a `role-contradiction` offers `/runbooks:update <id>` or `/runbooks:permissions:manage`, because the matrix or the runbook can be the wrong side. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbooks:update` for it.
+Show the proposed edits as a diff per runbook. Report each diff as a `status: question` and write nothing until the answer arrives. Apply the edits the answer approves. An edited runbook keeps its `status`. When its `last_run` is set and a fix changed a step, a precondition, `viewports` or `design`, run `node "${RUNBOOKS_PLUGIN_ROOT}/scripts/runbooks.mjs" mark-outdated <id> --write` instead of editing the file by hand: the run verified the old text. A fix that touches only `sources`, `scripts` paths or a script file, or that only converts `old-format` steps, leaves `last_run` as it is, because the checks did not change. When the old text is too vague to convert without changing a check, leave the step as it is and offer `/runbooks:update <id>` for it. With role tracking on, `--fix` never edits `roles.json`, and it does not rewrite a role line against the matrix. A `role-missing` finding offers `/runbooks:roles:create`, a `role-gone` finding offers `/runbooks:roles:delete`, and a `role-contradiction` offers `/runbooks:update <id>` or `/runbooks:permissions:manage`, because the matrix or the runbook can be the wrong side. A script that no longer matches its runbook is fixed in the script, never by changing the runbook to match it. When the runbook looks like the wrong one, ask, and offer `/runbooks:update` for it.
 
 ## 5. Report the fixes (with `--fix`)
 
-Your report follows "The report" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. List in `files:` every runbook and script you edited. Add to `summary:`, after the verdict table: a table with one row per applied fix (runbook, step, finding, the edit in one line), then the findings left unfixed with the reason, and the runbooks whose `last_run` is now marked `outdated`.
+Your report follows "The report" in `${RUNBOOKS_PLUGIN_ROOT}/skills/runbooks/references/agents.md`. List in `files:` every runbook and script you edited. Add to `summary:`, after the verdict table: a table with one row per applied fix (runbook, step, finding, the edit in one line), then the findings left unfixed with the reason, and the runbooks whose `last_run` is now marked `outdated`.
 
 Done when every selected runbook has a verdict and every finding names its evidence; with `--fix`, also when `summary:` holds the fixes.
