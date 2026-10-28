@@ -54,7 +54,7 @@ Commands:
                 Ctrl+C. It serves plugin development: a project starts its own copy with npm run runbooks:upstream
   upstream-copy prints upstream.serverFile when the copied server is there and from this plugin version; else prints
                 why and exits 1
-  package-script [--write [--replace]] adds "runbooks:ui": "node <paths.runbooks>/runbooks-ui.mjs" and, with
+  package-script [--write [--replace]] [--only runbooks:ui|runbooks:upstream] adds "runbooks:ui": "node <paths.runbooks>/runbooks-ui.mjs" and, with
                 upstream.serverFile, "runbooks:upstream": "node <upstream.serverFile>" to the scripts of package.json.
                 One line per script. A dry run unless --write; a script with another value changes only with --replace
   contract      [--strict] checks the calls of every ui runbook against upstream.schema, and the fixtures of
@@ -511,7 +511,8 @@ function commandModels(config, options) {
 }
 
 function commandPackageScript(root, config, options) {
-  const items = packageScripts(root, config, { write: options.write === true, replace: options.replace === true })
+  const only = options.only === undefined ? null : String(options.only)
+  const items = packageScripts(root, config, { write: options.write === true, replace: options.replace === true, only })
   return items.map(({ name, status, value, current }) => {
     if (status === 'no-package') return `no package.json: start ${name === 'runbooks:ui' ? 'the UI' : 'the server'} with ${value}\n`
     if (status === 'differs' || status === 'replaced') return `${status}: "${name}" is "${current}", expected "${value}"\n`

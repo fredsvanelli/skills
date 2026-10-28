@@ -13,10 +13,12 @@ function wanted(config) {
 }
 
 // Compares each script of package.json with its expected value. write adds the missing ones, and replaces the
-// differing ones only with replace. A write keeps the file's indent, its key order, its line endings and its final newline.
-export function packageScripts(root, config, { write = false, replace = false } = {}) {
+// differing ones only with replace; only limits both to one script. A write keeps the file's indent, its key order, its
+// line endings and its final newline.
+export function packageScripts(root, config, { write = false, replace = false, only = null } = {}) {
+  if (only !== null && !['runbooks:ui', 'runbooks:upstream'].includes(only)) throw new Error('--only must be runbooks:ui or runbooks:upstream')
   const packagePath = path.join(root, 'package.json')
-  const scripts = wanted(config)
+  const scripts = wanted(config).filter(({ name }) => only === null || name === only)
   if (!fs.existsSync(packagePath)) return scripts.map(({ name, value }) => ({ name, status: 'no-package', value, current: null }))
   const text = fs.readFileSync(packagePath, 'utf8')
   const pkg = JSON.parse(text)

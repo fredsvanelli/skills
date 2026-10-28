@@ -396,6 +396,20 @@ test('package-script --write keeps a project runbooks:ui script until --replace'
   assert.match(run(['package-script', '--root', dir, '--write', '--replace']).stdout, /^replaced: "runbooks:ui" is "vite"/)
 })
 
+test('package-script --only touches one script and leaves the other as it is', () => {
+  const dir = upstreamProject({ serverFile: 'tests/runbooks-upstream.mjs' })
+  const file = path.join(dir, 'package.json')
+  fs.writeFileSync(file, '{\n  "scripts": { "runbooks:ui": "vite", "runbooks:upstream": "node old.mjs" }\n}\n')
+  assert.equal(
+    run(['package-script', '--root', dir, '--write', '--replace', '--only', 'runbooks:upstream']).stdout,
+    'replaced: "runbooks:upstream" is "node old.mjs", expected "node tests/runbooks-upstream.mjs"\n',
+  )
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).scripts, { 'runbooks:ui': 'vite', 'runbooks:upstream': 'node tests/runbooks-upstream.mjs' })
+  const result = run(['package-script', '--root', dir, '--only', 'runbooks:dev'])
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /--only must be runbooks:ui or runbooks:upstream/)
+})
+
 const npmOnPath = () => spawnSync('npm', ['--version'], { encoding: 'utf8' }).status === 0
 
 // Retries a listen on the port for up to two seconds, so a child that exits a moment after npm does not fail the test.

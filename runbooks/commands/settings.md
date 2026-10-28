@@ -106,7 +106,7 @@ Done when every chosen key has a new value or was kept, and every file the chang
 
 Show the diff of every file on the write list and ask whether to write it. For `package.json`, the diff is the `"runbooks:upstream": "node <new upstream.serverFile>"` line. Write only after a yes; on a no, write nothing and stop.
 
-When `package.json` is on the list, write the config first, because `package-script` reads `upstream.serverFile` from it. Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" package-script --write --replace`; the yes above covers it. It also prints the `runbooks:ui` line, which this change leaves as it was unless the script was missing. When it prints `no package.json`, keep its lines for the summary.
+When `package.json` is on the list, write the config first, because `package-script` reads `upstream.serverFile` from it. Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" package-script --write --replace --only runbooks:upstream`; the yes above covers it. `--only` keeps the `runbooks:ui` script as it is, because the user approved the `runbooks:upstream` line only. When it prints `no package.json`, keep its line for the summary.
 
 Then validate:
 

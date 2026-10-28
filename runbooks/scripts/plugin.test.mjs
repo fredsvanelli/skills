@@ -44,6 +44,16 @@ test('/runbooks:ui checks the copy and starts it through npm run runbooks:ui', (
   assert.match(ui, /npm run runbooks:ui/)
 })
 
+test('setup and settings replace only the script the user approved', () => {
+  const settings = readPlugin('commands/settings.md')
+  const write = settings.slice(settings.indexOf('## 4. Write'), settings.indexOf('## 5.'))
+  assert.match(write, /package-script --write --replace --only runbooks:upstream/)
+  assert.doesNotMatch(write, /package-script --write --replace`/)
+  const setup = readPlugin('commands/setup.md')
+  assert.match(setup, /--write --replace --only <name>/)
+  assert.doesNotMatch(setup, /run `--write --replace` on a yes/)
+})
+
 test('setup writes the UI copy for every stack before package-script', () => {
   const setup = readPlugin('commands/setup.md')
   const copy = setup.indexOf('ui-copy --write')
