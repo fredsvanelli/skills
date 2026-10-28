@@ -30,7 +30,7 @@
 | `viewports.<name>` | `{}` | `{ width, height }` in CSS pixels: a screen size `ui` runbooks cite in their `viewports` (below) |
 | `design` | `null` | the design reference `run` compares `ui` steps with (below); `null` means the project has none. Only in a stack with `ui` |
 | `upstream` | absent | how `ui` runbooks reach their upstream API (below); absent means `live`. Only in a stack with `ui` |
-| `staleDays` | `30` | days after the last full run that make an `active` or `draft` runbook stale in `/runbooks:ui`; a positive integer |
+| `staleDays` | `30` | days after `last_run.oldest` (the oldest run a cell cites), or after `last_run.date` when `oldest` is not set, that make an `active` or `draft` runbook stale in `/runbooks:ui`; a positive integer |
 
 ## Tests
 

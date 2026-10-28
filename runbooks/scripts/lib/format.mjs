@@ -17,7 +17,7 @@ const bullets = (items) => (items.length > 0 ? items.map((item) => `- ${item}`) 
 
 export function lastRunText(lastRun) {
   if (!lastRun || !lastRun.date) return 'never'
-  return [lastRun.date, lastRun.result, lastRun.outdated === true && '(outdated)'].filter(Boolean).join(' ')
+  return [lastRun.date, lastRun.result, lastRun.mixed === true && '(mixed)', lastRun.outdated === true && '(outdated)'].filter(Boolean).join(' ')
 }
 
 export function listMarkdown(runbooks, reasons = null) {
@@ -80,9 +80,27 @@ function reviewLine(entry) {
   return `Review: ${[entry.reason, entry.role, entry.key && `${entry.key}${change}`, entry.date].filter(Boolean).join(', ')}`
 }
 
-export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLatest, review = [] }) {
+// The Mixed runs, Pending, Failed cells and Outdated cells lines of a last_run.
+function cellLines(lastRun, pending) {
+  const lines = []
+  const cells = lastRun?.cells ?? []
+  if (lastRun?.mixed === true) lines.push(`Mixed runs: ${Object.values(lastRun.runs ?? {}).map((entry) => entry.report).join(', ')}`)
+  if (pending.length > 0) lines.push(`Pending: ${pending.map(cellLabel).join(', ')}`)
+  const failed = cells.filter((cell) => cell.state === 'failed')
+  if (failed.length > 0) lines.push(`Failed cells: ${failed.map(cellLabel).join(', ')}`)
+  const outdated = cells.filter((cell) => cell.outdated)
+  if (outdated.length > 0) lines.push(`Outdated cells: ${outdated.map(cellLabel).join(', ')} (the runbook changed after the run of these cells)`)
+  else if (lastRun?.outdated === true) lines.push('Outdated: the runbook changed after its last full run')
+  return lines
+}
+
+export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLatest, review = [], pending = [] }) {
   const name = title ? `${id} (${title})` : id
   const reviewLines = review.map(reviewLine)
+  if (!latest && lastRun && !lastRun.legacy && lastRun.date) {
+    // No report on disk, but last_run still holds the cells.
+    return `${[`Last ${full ? 'full run' : 'run'} of ${name}: ${lastRunText(lastRun)}, no report on disk`, ...cellLines(lastRun, pending), ...reviewLines].join('\n')}\n`
+  }
   if (!latest) {
     const dangling = lastRun?.report ? `\nlast_run cites ${lastRun.report}, which does not exist.` : ''
     return `${[`${name} has never ${full ? 'had a full run' : 'been run'}.${dangling}`, ...reviewLines].join('\n')}\n`
@@ -106,7 +124,7 @@ export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLates
       ? `Last full run (last_run): ${lastRunText(lastRun)}, report ${lastRun.report}`
       : 'Last full run (last_run): never')
   }
-  if (lastRun?.outdated === true) lines.push('Outdated: the runbook changed after its last full run')
+  lines.push(...cellLines(lastRun, pending))
   lines.push(...reviewLines)
   return `${lines.join('\n')}\n`
 }
@@ -115,7 +133,7 @@ export function junitMarkdown({ id, steps, result, extra, others }) {
   const withViewport = steps.some((s) => s.viewport)
   const withRole = steps.some((s) => s.role)
   const withCase = steps.some((s) => s.case)
-  const label = (s) => `${s.step}${s.role ? ` as ${s.role}` : ''}${s.case && s.case !== '*' ? ` in ${s.case}` : ''}${s.viewport ? ` @ ${s.viewport}` : ''}`
+  const label = cellLabel
   const missing = steps.filter((s) => s.tests.length === 0 && s.state !== 'not-applicable' && s.state !== 'no-account').map(label)
   const duplicates = steps.filter((s) => s.tests.length > 1).map(label)
   const lines = [`Result of ${id}: ${result}`, '']
@@ -173,6 +191,39 @@ export function reviewPlanMarkdown({ title, runbooks, skipped = [], written, wri
   if (skipped.length > 0) lines.push('### Skipped', '', ...bullets(skipped.map((s) => `\`${s.id}\`: ${s.reason}`)), '')
   if (written.length > 0) lines.push(`Written: ${written.join(', ')}.`)
   else lines.push(write ? 'Nothing to change.' : 'Dry run: nothing written. Run again with --write to apply.')
+  return `${lines.join('\n')}\n`
+}
+
+// A step, role, case and viewport as one phrase: S01 as admin in vip-team @ mobile. The case * is left out.
+const cellLabel = (c) => `${c.step}${c.role ? ` as ${c.role}` : ''}${c.case && c.case !== '*' ? ` in ${c.case}` : ''}${c.viewport ? ` @ ${c.viewport}` : ''}`
+
+// The Run cell of a changed cell: the date of the run that held it, then the date of the run that holds it now.
+const runChange = (c) => (c.fromDate ? `${c.fromDate} to ${c.toDate}` : c.toDate ?? '')
+
+// last-run: the status change, the cells that changed (a re-run with the same state shows only in the Run column),
+// the cells still pending and the new result.
+export function lastRunPlanMarkdown({ id, report, merge, write, status, lastRun, changed, pending }) {
+  const lines = [`Last run of ${id} from ${report}${merge ? ' (merged)' : ''}`, '']
+  lines.push(status.from === status.to ? `Status: ${status.from} (unchanged)` : `Status: ${status.from} to ${status.to}`, '')
+  if (changed.length === 0) lines.push('No cell changed.', '')
+  else {
+    lines.push(table(['Step', 'Role', 'Case', 'Viewport', 'From', 'To', 'Run'],
+      changed.map((c) => [c.step, c.role ?? '', c.case ?? '', c.viewport ?? '', c.from ?? 'pending', c.to, runChange(c)])), '')
+  }
+  if (pending.length > 0) lines.push(`Pending cells: ${pending.map(cellLabel).join(', ')}`, '')
+  lines.push(`Result: ${lastRun.result}`)
+  if (lastRun.mixed) lines.push(`Mixed runs: ${Object.keys(lastRun.runs).length}`)
+  lines.push(write ? `Written to ${id}.` : 'Dry run: nothing written. Add --write to apply.')
+  return `${lines.join('\n')}\n`
+}
+
+// mark-outdated: the runbooks marked, the ones skipped and the files written.
+export function markOutdatedMarkdown({ runbooks, skipped, written, write }) {
+  const lines = ['Marks the last run outdated.', '']
+  lines.push(runbooks.length === 0 ? 'No runbook to change.' : table(['Runbook', 'Path'], runbooks.map((rb) => [rb.id, rb.path])), '')
+  if (skipped.length > 0) lines.push('### Skipped', '', ...bullets(skipped.map((s) => `\`${s.id}\`: ${s.reason}`)), '')
+  if (written.length > 0) lines.push(`Written: ${written.join(', ')}.`)
+  else lines.push(write ? 'Nothing to change.' : 'Dry run: nothing written. Add --write to apply.')
   return `${lines.join('\n')}\n`
 }
 

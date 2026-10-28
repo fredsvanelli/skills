@@ -19,6 +19,7 @@ const byId = (a, b) => a.id.localeCompare(b.id)
 const byName = (a, b) => (a.name === NO_SLICE) - (b.name === NO_SLICE) || a.name.localeCompare(b.name)
 
 // The time comes from the report name (<YYYY-MM-DD-HHMM>-<id>), since last_run.date has only the day.
+// `oldest` is the date of the oldest run a cell cites; `age` and `stale` count from it.
 function rowOf(rb, reportCount, { today, staleDays }) {
   const date = rb.lastRun?.date ? String(rb.lastRun.date) : null
   const time = String(rb.lastRun?.report ?? '').match(/(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})-[^/]*$/)
@@ -33,10 +34,12 @@ function rowOf(rb, reportCount, { today, staleDays }) {
     tags: rb.tags,
     date,
     time: date && time?.[1] === date ? `${time[2]}:${time[3]}` : null,
+    oldest: rb.lastRun?.oldest ? String(rb.lastRun.oldest) : null,
     age,
     stale,
     result: rb.lastRun?.result ?? null,
     outdated: rb.lastRun?.outdated === true,
+    mixed: rb.lastRun?.mixed === true,
     runs: reportCount,
     review: rb.review.length > 0,
     problems: rb.problems,
@@ -112,10 +115,18 @@ export function runbookView(root, config, id, { today }) {
   const name = reportFileName(rb.lastRun)
   const report = name ? reportByName(root, runbooksDir, name) : null
   const stepStates = {}
-  for (const { step, state, viewport, role, case: kase } of report?.steps ?? []) {
+  // With cells, the states come from them; the report is only the fallback of an old one-line last_run.
+  const hasCells = (rb.lastRun?.cells ?? []).length > 0
+  for (const { step, state, viewport, role, case: kase } of hasCells ? rb.lastRun.cells : report?.steps ?? []) {
     // A report with no Case column gives entries without a case key.
     ;(stepStates[step] ??= []).push({ role: role || null, ...(kase ? { case: kase } : {}), viewport: viewport ?? null, state })
   }
+
+  // Every report a cell cites, so the page can link each one.
+  const reports = Object.values(rb.lastRun?.runs ?? {}).filter((entry) => typeof entry.report === 'string').map((entry) => {
+    const file = path.basename(entry.report)
+    return { name: file, report: entry.report, onDisk: reportByName(root, runbooksDir, file) !== null }
+  })
 
   return {
     ...row,
@@ -135,7 +146,9 @@ export function runbookView(root, config, id, { today }) {
     path: rb.path,
     body: parseBody(body),
     stepStates,
-    reportOnDisk: name === null || report !== null,
+    // True when last_run cites no report, or when any report it cites is on this machine.
+    reportOnDisk: name === null || report !== null || reports.some((entry) => entry.onDisk),
+    reports,
     warnings: rb.warnings,
   }
 }

@@ -6,7 +6,8 @@ import { surfacesOf, upstreamModeOf } from './config.mjs'
 import { fixturesDir } from './fixtures.mjs'
 import { normalizeCall } from './calls.mjs'
 import { loadRoles, contextOfRunbook, API_OUTCOMES, REVIEW_REASONS, REVIEW_FIELDS } from './roles.mjs'
-import { parseSteps, parsePreconditionCases } from './steps.mjs'
+import { readLastRun } from './last-run.mjs'
+import { parseSteps,parsePreconditionCases } from './steps.mjs'
 
 const STATUSES = ['placeholder', 'draft', 'active', 'deprecated']
 
@@ -315,9 +316,9 @@ function readRunbook(file, rel, config, projectRoot, registry) {
   readCalls(runbook, data, surface, config)
   runbook.sources = asList(data.sources)
   runbook.scripts = asList(data.scripts)
-  runbook.lastRun = data.last_run ?? null
-  const outdated = runbook.lastRun?.outdated
-  if (outdated !== undefined && typeof outdated !== 'boolean') runbook.problems.push('last_run.outdated must be true or false')
+  const lastRun = readLastRun(data.last_run ?? null)
+  runbook.lastRun = lastRun.lastRun
+  runbook.problems.push(...lastRun.problems)
   readUpstream(runbook, data, surface, config, projectRoot)
   if (registry !== null) readStepRoles(runbook, parts.body, registry)
   return runbook

@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { setListKeys, setRoleKeys } from './lib/frontmatter-edit.mjs'
+import { readFileSync } from 'node:fs'
+import { setListKeys, setRoleKeys, setLastRun } from './lib/frontmatter-edit.mjs'
 import { splitFrontmatter, parseYaml } from './lib/yaml.mjs'
+import { readLastRun } from './lib/last-run.mjs'
 
 const doc = (yaml, body = '\n# Title\n\nBody text.\n') => `---\n${yaml}\n---\n${body}`
 const data = (text) => parseYaml(splitFrontmatter(text).yaml)
@@ -83,4 +85,65 @@ test('setRoleKeys orders case and context in review entries', () => {
   const text = '---\nid: clients.x\nroles: all\n---\nbody\n'
   const out = setRoleKeys(text, { review: [{ reason: 'role-permissions', role: 'viewer', key: 'clients/edit', case: 'regular', change: 'edit removed', date: '2026-10-22' }] })
   assert.match(out, /\{ reason: role-permissions, role: viewer, key: clients\/edit, case: regular, change: edit removed, date: 2026-10-22 \}/)
+})
+
+const ISSUE_INVOICE = readFileSync(new URL('./__fixtures__/project/docs/runbooks/billing/issue-invoice.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const { lastRun } = readLastRun(parseYaml(`last_run:
+  date: 2026-10-18
+  oldest: 2026-10-16
+  commit: "def5678"
+  result: passed
+  report: _runs/2026-10-18-0910-billing.issue-invoice.md
+  mixed: true
+  runs:
+    r1: { date: 2026-10-16, commit: "abc1234", report: _runs/2026-10-16-1432-billing.issue-invoice.md }
+    r2: { date: 2026-10-18, commit: "def5678", report: _runs/2026-10-18-0910-billing.issue-invoice.md }
+  cells:
+    S01: { admin: passed r1, viewer: passed r1 }
+    S02: passed r2`).last_run)
+const lastRunOf = (text) => readLastRun(data(text).last_run).lastRun
+const withoutLegacy = ({ legacy, ...rest }) => rest
+
+test('setLastRun replaces an old flow map and keeps every other line', () => {
+  const out = setLastRun(ISSUE_INVOICE, { lastRun, status: 'active' })
+  assert.match(out, /\nstatus: active {12}# draft \| active \| deprecated\n/)
+  assert.deepEqual(lastRunOf(out), lastRun)
+  assert.equal(out.split('---\n').slice(2).join('---\n'), ISSUE_INVOICE.split('---\n').slice(2).join('---\n'))
+  assert.equal(out.split('\n').filter((line) => line.startsWith('last_run:')).length, 1)
+})
+
+test('setLastRun replaces a block last_run, last_run: null, a multi-line flow map, and appends when missing', () => {
+  const block = doc('id: a.b\nlast_run:\n  date: 2026-10-01\n  runs: {}\n  cells: {}\n\n# note\nstatus: draft')
+  const outBlock = setLastRun(block, { lastRun })
+  assert.deepEqual(lastRunOf(outBlock), lastRun)
+  assert.match(outBlock, /\n\n# note\nstatus: draft\n---/)
+  assert.equal(outBlock.split('\n').filter((line) => line.startsWith('last_run:')).length, 1)
+
+  const nulled = setLastRun(doc('id: a.b\nlast_run: null\nstatus: draft'), { lastRun })
+  assert.deepEqual(lastRunOf(nulled), lastRun)
+  assert.match(nulled, /^---\nid: a\.b\nlast_run:\n/)
+  assert.match(nulled, /\nstatus: draft\n---/)
+
+  const flow = setLastRun(doc('id: a.b\nlast_run: { date: 2026-10-01,\n  result: passed }\nstatus: draft'), { lastRun })
+  assert.deepEqual(lastRunOf(flow), lastRun)
+  assert.match(flow, /\nstatus: draft\n---/)
+
+  const missing = setLastRun(doc('id: a.b\nstatus: draft'), { lastRun })
+  assert.deepEqual(lastRunOf(missing), lastRun)
+  assert.ok(missing.startsWith('---\nid: a.b\nstatus: draft\nlast_run:\n'))
+})
+
+test('setLastRun keeps CRLF and a BOM', () => {
+  const crlf = '\ufeff' + ISSUE_INVOICE.replace(/\n/g, '\r\n')
+  const out = setLastRun(crlf, { lastRun, status: 'draft' })
+  assert.ok(out.startsWith('\ufeff---\r\n'))
+  assert.equal(out.match(/\n/g).length, out.match(/\r\n/g).length)
+  assert.deepEqual(lastRunOf(out), lastRun)
+  assert.equal(data(out).status, 'draft')
+})
+
+test('setLastRun without status leaves the status line byte for byte', () => {
+  const out = setLastRun(ISSUE_INVOICE, { lastRun })
+  assert.ok(out.includes('\nstatus: active            # draft | active | deprecated\n'))
+  assert.deepEqual(withoutLegacy(lastRunOf(out)), withoutLegacy(lastRun))
 })

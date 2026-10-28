@@ -2,6 +2,7 @@
 // and the body, stays byte for byte as it was. The result is parsed again before it is returned.
 import { isDeepStrictEqual } from 'node:util'
 import { flowDepth, stripComment, splitFrontmatter, parseYaml } from './yaml.mjs'
+import { lastRunLines, readLastRun } from './last-run.mjs'
 
 // Array.prototype.toSpliced needs Node 20; the plugin supports Node 18.
 const spliced = (lines, start, count, ...items) => [...lines.slice(0, start), ...items, ...lines.slice(start + count)]
@@ -167,5 +168,61 @@ export function setRoleKeys(text, edits) {
   }
   const normalize = (data) => ({ ...data, ...(data.review && { review: asEntries(data.review) }) })
   if (!isDeepStrictEqual(normalize(after), normalize(expected))) throw new Error('the edit would change other frontmatter keys; edit it by hand')
+  return out
+}
+
+// The last_run key line and everything under it: a flow map over several lines, or a block map of indented lines.
+function lastRunSpan(lines) {
+  const span = keySpan(lines, 0, lines.length, 0, 'last_run')
+  if (!span) return null
+  let end = span.end
+  if (stripComment(lines[span.start]).trim() === 'last_run:') {
+    for (let j = span.start + 1; j < lines.length; j++) {
+      if (isBlank(lines[j])) continue
+      if (indentOf(lines[j]) === 0) break
+      end = j + 1
+    }
+  }
+  return { start: span.start, end }
+}
+
+// Compares last_run through readLastRun, so a number the parser reads as a string does not count as a change.
+const lastRunShape = (value) => {
+  const { lastRun } = readLastRun(value ?? null)
+  if (lastRun === null) return null
+  const { legacy, ...rest } = lastRun
+  return rest
+}
+
+// Writes the per-cell last_run block, and with `status` replaces only the value on the status line (its comment stays).
+// A missing last_run goes at the end of the frontmatter. Every other key must parse the same afterwards.
+export function setLastRun(text, { lastRun, status }) {
+  const bom = text.startsWith('\ufeff') ? '\ufeff' : ''
+  const eol = text.includes('\r\n') ? '\r\n' : '\n'
+  const all = text.slice(bom.length).split(eol)
+  const close = all.findIndex((line, i) => i > 0 && /^---[ \t]*$/.test(line))
+  if (all[0] !== '---' || close === -1) throw new Error('no frontmatter block')
+  let lines = all.slice(1, close)
+  const block = lastRunLines(lastRun)
+  const span = lastRunSpan(lines)
+  lines = span ? spliced(lines, span.start, span.end - span.start, ...block) : [...lines, ...block]
+  if (status !== undefined) {
+    const at = lines.findIndex((line) => /^status:(\s|$)/.test(line))
+    if (at === -1) lines = [...lines, `status: ${status}`]
+    else lines[at] = lines[at].replace(/^(status:\s*)([^\s#]*)/, (_, head) => `${/\s$/.test(head) ? head : `${head} `}${status}`)
+  }
+  const out = `${bom}${['---', ...lines, ...all.slice(close)].join(eol)}`
+
+  const before = parseYaml(splitFrontmatter(text).yaml)
+  const after = parseYaml(splitFrontmatter(out).yaml)
+  const { last_run: beforeRun, ...beforeRest } = before
+  const { last_run: afterRun, ...afterRest } = after
+  if (status !== undefined) {
+    beforeRest.status = status
+  }
+  const { legacy, ...wanted } = lastRun
+  if (!isDeepStrictEqual(afterRest, beforeRest) || !isDeepStrictEqual(lastRunShape(afterRun), wanted)) {
+    throw new Error('the edit would change other frontmatter keys; edit it by hand')
+  }
   return out
 }

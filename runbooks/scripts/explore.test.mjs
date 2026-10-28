@@ -188,6 +188,60 @@ test('runbookView reads step states per viewport from the last_run report', () =
   assert.deepEqual(view.stepStates.S01, [{ role: null, viewport: 'desktop', state: 'passed' }, { role: null, viewport: 'mobile', state: 'failed' }])
 }))
 
+test('runbookView takes step states from the cells when they exist', () => withProject(({ root, config }) => {
+  const file = path.join(root, 'docs/runbooks/billing/issue-invoice.md')
+  const text = fs.readFileSync(file, 'utf8').replace(/^last_run: .*$/m, `last_run:
+  date: 2026-10-18
+  oldest: 2026-10-18
+  commit: "abc1234"
+  result: failed
+  report: _runs/gone.md
+  runs:
+    r1: { date: 2026-10-18, commit: "abc1234", report: _runs/gone.md }
+  cells:
+    S01: { @desktop: passed r1, @mobile: failed r1 }`)
+  fs.writeFileSync(file, text)
+  const view = runbookView(root, config, 'billing.issue-invoice', TODAY)
+  assert.deepEqual(view.stepStates.S01, [{ role: null, viewport: 'desktop', state: 'passed' }, { role: null, viewport: 'mobile', state: 'failed' }])
+  assert.deepEqual(view.reports, [{ name: 'gone.md', report: '_runs/gone.md', onDisk: false }])
+}))
+
+test('runbookView finds a report on disk when any cell cites one, and the row carries mixed and oldest', () => withProject(({ root, config }) => {
+  const file = path.join(root, 'docs/runbooks/billing/issue-invoice.md')
+  const text = fs.readFileSync(file, 'utf8').replace(/^last_run: .*$/m, `last_run:
+  date: 2026-10-18
+  oldest: 2026-10-01
+  commit: "def5678"
+  result: passed
+  report: _runs/2026-10-18-0910-billing.issue-invoice.md
+  mixed: true
+  runs:
+    r1: { date: 2026-10-01, commit: "abc1234", report: _runs/2026-10-01-0900-billing.issue-invoice.md }
+    r2: { date: 2026-10-18, commit: "def5678", report: _runs/2026-10-18-0910-billing.issue-invoice.md }
+  cells:
+    S01: passed r1
+    S02: passed r2`)
+  fs.writeFileSync(file, text)
+  const view = runbookView(root, config, 'billing.issue-invoice', TODAY)
+  assert.equal(view.reportOnDisk, true)
+  assert.deepEqual(view.reports.map((r) => [r.name, r.onDisk]), [
+    ['2026-10-01-0900-billing.issue-invoice.md', true],
+    ['2026-10-18-0910-billing.issue-invoice.md', false],
+  ])
+  assert.equal(view.mixed, true)
+  assert.equal(view.oldest, '2026-10-01')
+  assert.equal(view.date, '2026-10-18')
+  assert.equal(view.age, 19)
+  const listed = row(runbooksView(root, config, TODAY), 'billing.issue-invoice')
+  assert.equal(listed.mixed, true)
+  assert.equal(listed.oldest, '2026-10-01')
+}))
+
+test('runbookView lists no cited reports for an old last_run', () => withProject(({ root, config }) => {
+  const view = runbookView(root, config, 'billing.issue-invoice', TODAY)
+  assert.deepEqual(view.reports, [])
+}))
+
 test('a missing last_run report gives no step states, even with a newer local report', () => withProject(({ root, config }) => {
   fs.writeFileSync(path.join(root, RUNS, '2026-10-19-1000-deliveries.list-deliveries.md'), REPORT('', TABLE))
   const view = runbookView(root, config, 'deliveries.list-deliveries', TODAY)

@@ -31,6 +31,6 @@ This file only dispatches. The procedure is in `${CLAUDE_PLUGIN_ROOT}/skills/run
 3. With `--fix`, the sub-agent reports each diff as a `status: question` and writes nothing until the answer arrives. Relay it with `AskUserQuestion` (approve, change, skip) and send the answer back.
 4. Print the `summary:` of the report as written: the verdict table and the findings, and with `--fix` the fixes. Without `--fix`, nothing is written and nothing is committed.
 5. **Commit (with `--fix`).** Commit by the `runbooks` policy, staging by path the files the report lists in `files:`. Ask an `ask` question only after the summary from step 4 is on screen; the question names the files and the message and does not repeat the summary.
-6. **Close (with `--fix`).** Give the commit outcome: the short sha, or the paths left uncommitted. Offer `/runbooks:run <id>` for each edited runbook, and say that only a full run clears `outdated`.
+6. **Close (with `--fix`).** Give the commit outcome: the short sha, or the paths left uncommitted. Offer `/runbooks:run <id>` for each edited runbook, and say that a run clears `outdated` on the cells it ran, and `last_run.outdated` goes away when no cell has it.
 
 Done when every selected runbook has a verdict; with `--fix`, also when the user has seen the summary of the fixes before any commit question.

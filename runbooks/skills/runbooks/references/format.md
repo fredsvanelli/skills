@@ -26,7 +26,17 @@ calls: [GET /admin/internal/clients/{id}]
 sources: ["docs/superpowers/specs/2026-09-18-CHE-581-design.md", "CHE-581"]
 scripts: []
 status: draft
-last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2026-10-16-1432-billing.issue-invoice.md }
+last_run:
+  date: 2026-10-16
+  oldest: 2026-10-16
+  commit: "abc1234"
+  result: passed
+  report: _runs/2026-10-16-1432-billing.issue-invoice.md
+  runs:
+    r1: { date: 2026-10-16, commit: "abc1234", report: _runs/2026-10-16-1432-billing.issue-invoice.md }
+  cells:
+    S01: passed r1
+    S02: passed r1
 ```
 
 | Key | Meaning |
@@ -49,7 +59,7 @@ last_run: { date: 2026-10-16, commit: "abc1234", result: passed, report: _runs/2
 | `sources` | spec paths, ticket ids, `diff <base>...<sha>`, `file <path>`, `dir <path>` and `route <entry id>` for code read as the source, `map <sha>` for a placeholder, and test files read as evidence only (tests of the code behind an entry, which cannot run the steps), that the runbook came from |
 | `scripts` | the automated tests that run this runbook's steps, written or adopted by `to-test`. Optional for `ui`; required for `api`, whose runbook runs only through it. In a placeholder, the existing tests `map` fitted to the flow, which may cover it only in part: candidates `to-test` offers to adopt |
 | `status` | `placeholder`, `draft`, `active` or `deprecated` (see Status) |
-| `last_run` | the latest full run: `date`, `commit` (quoted), `result` (`passed`, `failed`, `blocked`), `report` (path relative to `paths.runbooks`), and `outdated: true` when `update` or `audit --fix` changed the runbook after that run. The next full run writes `last_run` without it |
+| `last_run` | the state of every cell and the run that proved it, in the shape of "last_run" below. `date`, `commit` and `report` (path relative to `paths.runbooks`) copy the newest run; `result` is `passed`, `failed`, `blocked` or `incomplete`. `outdated: true` when `update` or `audit --fix` changed the runbook after a run. A run clears `outdated` on the cells it ran, and the key goes away when no cell has it |
 
 The parser reads a YAML subset: `key: value` maps nested by two-space indentation, lists as `[a, b]` or `- item` lines of scalars, inline maps `{ k: v }`, quoted strings, `#` comments after a space. Brackets inside an id stay part of it (`[/deliveries/[id], /x]` is two ids), and a flow list may continue over several lines until its `]`. Quote any value that starts with `[`, `{`, `"` or `'`, or that contains `, ` inside a flow list. Quote commit hashes so digits-only hashes stay strings.
 
@@ -317,11 +327,42 @@ Only run reports hold step states. With `viewports`, a step has one state per vi
 
 `map` writes one placeholder per flow no runbook cites, with its `surface` and the existing tests that fit the flow in `scripts`, from `${CLAUDE_PLUGIN_ROOT}/templates/placeholder.md`: full frontmatter with `status: placeholder`, a title, `# <title>`, a Goal, and a Steps section with no steps. `create` fills it in place, keeping its path and id. A placeholder is never run, scripted or listed by `--affected`.
 
+## last_run
+
+`last_run` holds one state per cell. A cell is a step, with a role when role tracking is on, a case when the runbook has cases, and a viewport when it has `viewports`. A step whose `Roles:`, `Cases:` or `Viewports:` line leaves a pass out has no cell for that pass.
+
+```yaml
+last_run:
+  date: 2026-10-18
+  oldest: 2026-10-16
+  commit: "def5678"
+  result: passed
+  report: _runs/2026-10-18-0910-billing.issue-invoice.md
+  mixed: true
+  outdated: true
+  runs:
+    r1: { date: 2026-10-16, commit: "abc1234", report: _runs/2026-10-16-1432-billing.issue-invoice.md }
+    r2: { date: 2026-10-18, commit: "def5678", report: _runs/2026-10-18-0910-billing.issue-invoice.md }
+  cells:
+    S01: { admin: passed r1 outdated, viewer: passed r1 outdated }
+    S02: { admin: passed r2, viewer: passed r2 }
+```
+
+- `runs` lists each report that still owns a cell, keyed `r1`, `r2` and so on, oldest first. The keys are renumbered on every write.
+- `cells` has one key per step. Its value maps a pass key to `<state> <run key>`, followed by `outdated` when the cell is outdated. The pass key is the role, then `/<case>` when the cell has a case, then `@<viewport>` when it has a viewport: `admin`, `admin/vip-team`, `admin/*@mobile`, `"@mobile"`. A key that starts with `@` is quoted, because YAML does not allow a plain key to start with `@`: `S03: { "@desktop": passed r1, "@mobile": failed r2 }`. A cell with no role, case or viewport is written as the value itself: `S02: passed r2`. A pending cell is absent.
+- `result` is `failed` when any cell failed, else `blocked` when any is `blocked` or `blocked-by-parent`, else `incomplete` when any cell is pending, else `passed`. `not-applicable`, `no-account` and `waived` count as passing.
+- `mixed: true` when `runs` has more than one entry. It goes away when a full run rewrites every cell.
+- `date`, `commit` and `report` copy the newest run. `oldest` is the date of the oldest run, and `stale` ages a runbook from it.
+- `outdated: true` while any cell is outdated.
+- A `no-account` row fills only a pending cell and never replaces a cell that ran.
+- `runbooks.mjs last-run` writes the shape, `mark-outdated` sets `outdated`, and `rename-case` and `rename-role-cells` rename a case or role in the cells. `last-run`, `mark-outdated`, `rename-role-cells`, `rename-case` and `delete-case` exit 2 and write nothing when a `last_run` they would touch has a problem (a state, run key or pass value they cannot read), because the write would drop the cells they skipped. `rename-role-cells` checks every runbook, and the two case commands check every runbook of the case's context. Fix the value by hand first.
+- The old one-line shape (`last_run: { date, commit, result, report }`, with `outdated: true` at most) is still read. `mark-outdated` keeps it in that shape. The first `last-run` write converts it, and the cells it did not hold stay pending.
+
 ## Status
 
 - `map` writes `placeholder`. `create` writes `draft`, also when it fills a placeholder.
-- A full run (no `--steps`, no `--role`, no `--case`) where every step ends `passed` or `waived`, at least one is `passed`, and none is in another state promotes `draft` to `active`. With `viewports`, this counts every state at every viewport. With role tracking on, it counts every role too, and every case with cases, and `not-applicable` and `no-account` also allow the promotion. Compute it with `runbooks.mjs status`.
-- The run `result` is `failed` when any step failed, else `blocked` when any step is `blocked` or `blocked-by-parent`, else `passed`. `not-applicable` and `no-account` count toward none of these.
+- A full run (no `--steps`, no `--role`, no `--case`), or a partial run with `--merge` that leaves no cell pending or outdated, where every step ends `passed` or `waived`, at least one is `passed`, and none is in another state promotes `draft` to `active`. With `viewports`, this counts every state at every viewport. With role tracking on, it counts every role too, and every case with cases, and `not-applicable` and `no-account` also allow the promotion. Compute it with `runbooks.mjs status`.
+- The run `result` is `failed` when any step failed, else `blocked` when any step is `blocked` or `blocked-by-parent`, else `passed`. `not-applicable` and `no-account` count toward none of these. A partial run with `--merge` also moves `status`, but only when no cell is pending or outdated.
 - An `active` runbook that later fails stays `active`; `last_run` shows the failure.
 - `deprecated` runbooks are listed but never count as coverage and never appear in `list --affected`.
 - A runbook with frontmatter problems shows as `invalid` and never counts until fixed.

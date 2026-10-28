@@ -202,6 +202,16 @@ test('the real page has a Case column in the runbook grid and lists contexts', (
   assert.match(html, /Contexts/)
 })
 
+test('the real page shows every cited report, the mixed marker, incomplete and the oldest cell', () => {
+  const html = fs.readFileSync(fileURLToPath(new URL('../templates/ui.html', import.meta.url)), 'utf8')
+  assert.match(html, /rb\.reports \?\? \[\]/)
+  assert.match(html, /entry\.onDisk \? link\(reportHash\(rb\.id, entry\.name\)/)
+  assert.match(html, /if \(rb\.mixed\) result\.append\(badge\('mixed'/)
+  assert.match(html, /if \(rb\.lastRun\.mixed\) parts\.push\(badge\('mixed'/)
+  assert.match(html, /value === 'incomplete'\) return 'pending'/)
+  assert.match(html, /oldest cell \$\{rb\.oldest\}/)
+})
+
 test('/api/roles and /api/runbook serve the cases of a context', async (t) => {
   const { base } = await start(t, { fixture: fileURLToPath(new URL('./__fixtures__/contexts', import.meta.url)) })
   const roles = await (await get(`${base}/api/roles`)).json()

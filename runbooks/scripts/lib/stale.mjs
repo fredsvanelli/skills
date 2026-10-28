@@ -12,10 +12,12 @@ const utcDay = (date) => {
 // Whole days from `date` to `today`, both YYYY-MM-DD. UTC keeps DST from shifting the result.
 export const daysSince = (date, today) => Math.round((utcDay(today) - utcDay(date)) / DAY_MS)
 
-// Only active and draft runbooks go stale. No last run date counts as stale.
+// Only active and draft runbooks go stale. No last run date counts as stale. The age comes from the oldest run
+// that still owns a cell, and an incomplete run (a pending cell) is stale.
 export function staleState(runbook, { today, staleDays }) {
-  const date = runbook.lastRun?.date
+  const date = runbook.lastRun?.oldest ?? runbook.lastRun?.date
   const age = date == null ? null : daysSince(String(date).slice(0, 10), today)
   const tracked = runbook.status === 'active' || runbook.status === 'draft'
-  return { stale: tracked && (age === null || age > staleDays), age }
+  const incomplete = runbook.lastRun?.result === 'incomplete'
+  return { stale: tracked && (age === null || age > staleDays || incomplete), age }
 }
