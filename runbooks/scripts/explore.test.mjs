@@ -188,6 +188,29 @@ test('runbookView reads step states per viewport from the last_run report', () =
   assert.deepEqual(view.stepStates.S01, [{ role: null, viewport: 'desktop', state: 'passed' }, { role: null, viewport: 'mobile', state: 'failed' }])
 }))
 
+test('runbookView takes step states from the cells when they exist', () => withProject(({ root, config }) => {
+  const file = path.join(root, 'docs/runbooks/billing/issue-invoice.md')
+  const text = fs.readFileSync(file, 'utf8').replace(/^last_run: .*$/m, `last_run:
+  date: 2026-10-18
+  oldest: 2026-10-18
+  commit: "abc1234"
+  result: failed
+  report: _runs/gone.md
+  runs:
+    r1: { date: 2026-10-18, commit: "abc1234", report: _runs/gone.md }
+  cells:
+    S01: { @desktop: passed r1, @mobile: failed r1 }`)
+  fs.writeFileSync(file, text)
+  const view = runbookView(root, config, 'billing.issue-invoice', TODAY)
+  assert.deepEqual(view.stepStates.S01, [{ role: null, viewport: 'desktop', state: 'passed' }, { role: null, viewport: 'mobile', state: 'failed' }])
+  assert.deepEqual(view.reports, [{ name: 'gone.md', report: '_runs/gone.md', onDisk: false }])
+}))
+
+test('runbookView lists no cited reports for an old last_run', () => withProject(({ root, config }) => {
+  const view = runbookView(root, config, 'billing.issue-invoice', TODAY)
+  assert.deepEqual(view.reports, [])
+}))
+
 test('a missing last_run report gives no step states, even with a newer local report', () => withProject(({ root, config }) => {
   fs.writeFileSync(path.join(root, RUNS, '2026-10-19-1000-deliveries.list-deliveries.md'), REPORT('', TABLE))
   const view = runbookView(root, config, 'deliveries.list-deliveries', TODAY)

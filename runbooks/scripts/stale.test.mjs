@@ -22,6 +22,14 @@ test('staleState follows the status, the age and the limit', () => {
   assert.deepEqual(staleState(rb(null, null), opts), { stale: false, age: null }) // invalid runbook
 })
 
+test('staleState uses the oldest cell and counts incomplete as stale', () => {
+  const opts = { today: '2026-10-20', staleDays: 30 }
+  assert.deepEqual(staleState({ status: 'active', lastRun: { date: '2026-10-19', oldest: '2026-09-01', result: 'passed' } }, opts), { stale: true, age: 49 })
+  assert.deepEqual(staleState({ status: 'active', lastRun: { date: '2026-10-19', oldest: '2026-10-19', result: 'incomplete' } }, opts), { stale: true, age: 1 })
+  assert.deepEqual(staleState({ status: 'draft', lastRun: { date: '2026-10-19', oldest: null, result: 'incomplete' } }, opts), { stale: true, age: 1 })
+  assert.deepEqual(staleState({ status: 'deprecated', lastRun: { date: '2026-10-19', oldest: '2026-10-19', result: 'incomplete' } }, opts), { stale: false, age: 1 })
+})
+
 test('todayLocal formats the local date', () => {
   assert.equal(todayLocal(new Date(2026, 9, 5, 23, 59)), '2026-10-05')
 })

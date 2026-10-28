@@ -17,7 +17,7 @@ const bullets = (items) => (items.length > 0 ? items.map((item) => `- ${item}`) 
 
 export function lastRunText(lastRun) {
   if (!lastRun || !lastRun.date) return 'never'
-  return [lastRun.date, lastRun.result, lastRun.outdated === true && '(outdated)'].filter(Boolean).join(' ')
+  return [lastRun.date, lastRun.result, lastRun.mixed === true && '(mixed)', lastRun.outdated === true && '(outdated)'].filter(Boolean).join(' ')
 }
 
 export function listMarkdown(runbooks, reasons = null) {
@@ -80,7 +80,7 @@ function reviewLine(entry) {
   return `Review: ${[entry.reason, entry.role, entry.key && `${entry.key}${change}`, entry.date].filter(Boolean).join(', ')}`
 }
 
-export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLatest, review = [] }) {
+export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLatest, review = [], pending = [] }) {
   const name = title ? `${id} (${title})` : id
   const reviewLines = review.map(reviewLine)
   if (!latest) {
@@ -106,7 +106,14 @@ export function checkMarkdown({ id, title, lastRun, full, latest, lastRunIsLates
       ? `Last full run (last_run): ${lastRunText(lastRun)}, report ${lastRun.report}`
       : 'Last full run (last_run): never')
   }
-  if (lastRun?.outdated === true) lines.push('Outdated: the runbook changed after its last full run')
+  const cells = lastRun?.cells ?? []
+  if (lastRun?.mixed === true) lines.push(`Mixed runs: ${Object.values(lastRun.runs ?? {}).map((entry) => entry.report).join(', ')}`)
+  if (pending.length > 0) lines.push(`Pending: ${pending.map(cellLabel).join(', ')}`)
+  const failed = cells.filter((cell) => cell.state === 'failed')
+  if (failed.length > 0) lines.push(`Failed cells: ${failed.map(cellLabel).join(', ')}`)
+  const outdated = cells.filter((cell) => cell.outdated)
+  if (outdated.length > 0) lines.push(`Outdated cells: ${outdated.map(cellLabel).join(', ')} (the runbook changed after the run of these cells)`)
+  else if (lastRun?.outdated === true) lines.push('Outdated: the runbook changed after its last full run')
   lines.push(...reviewLines)
   return `${lines.join('\n')}\n`
 }
@@ -115,7 +122,7 @@ export function junitMarkdown({ id, steps, result, extra, others }) {
   const withViewport = steps.some((s) => s.viewport)
   const withRole = steps.some((s) => s.role)
   const withCase = steps.some((s) => s.case)
-  const label = (s) => `${s.step}${s.role ? ` as ${s.role}` : ''}${s.case && s.case !== '*' ? ` in ${s.case}` : ''}${s.viewport ? ` @ ${s.viewport}` : ''}`
+  const label = cellLabel
   const missing = steps.filter((s) => s.tests.length === 0 && s.state !== 'not-applicable' && s.state !== 'no-account').map(label)
   const duplicates = steps.filter((s) => s.tests.length > 1).map(label)
   const lines = [`Result of ${id}: ${result}`, '']
@@ -177,6 +184,7 @@ export function reviewPlanMarkdown({ title, runbooks, skipped = [], written, wri
 }
 
 // A cell as junitMarkdown labels it: the step, then "as <role>", "in <case>" and "@ <viewport>" when it has them.
+// A step, role, case and viewport as one phrase: S01 as admin in vip-team @ mobile. The case * is left out.
 const cellLabel = (c) => `${c.step}${c.role ? ` as ${c.role}` : ''}${c.case && c.case !== '*' ? ` in ${c.case}` : ''}${c.viewport ? ` @ ${c.viewport}` : ''}`
 
 // last-run: the status change, the cells that changed, the cells still pending and the new result.

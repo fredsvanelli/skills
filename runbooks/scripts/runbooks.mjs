@@ -159,6 +159,15 @@ function commandCheck(root, config, options, positionals) {
   const runbook = loadRunbooks(root, config).find((rb) => rb.id === id)
   if (!runbook) throw new Error(`no runbook with id "${id}"`)
   const latest = latestReport(root, config.paths.runbooks, id, { full })
+  const lastRun = runbook.lastRun
+  let pending = []
+  if (lastRun && !lastRun.legacy) {
+    const parts = splitFrontmatter(fs.readFileSync(path.resolve(root, runbook.path), 'utf8'))
+    const steps = parseSteps(parts ? parts.body : '')
+    const registry = rolesEnabled(config) ? loadRoles(root, config) : null
+    pending = pendingCells(lastRun.cells, expectedCells(runbook, steps, { registry, config }))
+  }
+  const cited = (report) => latest !== null && typeof report === 'string' && `${config.paths.runbooks}/${report}` === latest.path
   const result = {
     id,
     title: runbook.title,
@@ -167,7 +176,8 @@ function commandCheck(root, config, options, positionals) {
     full,
     latest,
     review: runbook.review,
-    lastRunIsLatest: latest !== null && `${config.paths.runbooks}/${runbook.lastRun?.report}` === latest.path,
+    lastRunIsLatest: cited(lastRun?.report) || Object.values(lastRun?.runs ?? {}).some((entry) => cited(entry.report)),
+    pending,
   }
   return options.json ? json(result) : checkMarkdown(result)
 }

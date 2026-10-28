@@ -32,6 +32,13 @@ function roleRow(root, config, registry, runbooks, reports, name) {
   const own = live(runbooks).filter((rb) => rb.roles.includes(name))
   const results = { passed: 0, failed: 0, blocked: 0, 'no-account': 0, never: 0 }
   for (const rb of own) {
+    const cells = rb.lastRun?.cells ?? []
+    if (cells.length > 0) {
+      const result = roleResult(cells, name)
+      if (result) results[result] += 1
+      else results.never += 1
+      continue
+    }
     const report = reports.get(rb.id)
     if (!report) results.never += 1
     else {

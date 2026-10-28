@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { run } from './runbooks.mjs'
+import { checkMarkdown } from './lib/format.mjs'
 
 const ROLES = fileURLToPath(new URL('./__fixtures__/roles', import.meta.url))
 
@@ -172,4 +173,69 @@ test('check prints one line per pending review entry', () => {
   const { code, stdout } = run(['check', 'billing.cancel-invoice', '--root', ROLES])
   assert.equal(code, 0)
   assert.match(stdout, /^Review: role-permissions, manager, billing\/invoices \(delete removed\), 2026-10-14$/m)
+})
+
+const STEPS_BODY = `
+# Pay
+
+### S01. Open
+### S02. Pay
+### S03. Confirm
+`
+
+function cellProject(lastRun, reports) {
+  const dir = project({ lastRun: 'null', reports })
+  const file = path.join(dir, 'docs/runbooks/billing/pay.md')
+  const text = fs.readFileSync(file, 'utf8').replace('last_run: null\n', `${lastRun}\n`)
+  fs.writeFileSync(file, text + STEPS_BODY)
+  return dir
+}
+
+const CELLS_RUN = `last_run:
+  date: 2026-10-02
+  oldest: 2026-10-01
+  commit: "abc1234"
+  result: failed
+  report: _runs/${PARTIAL.run}.md
+  mixed: true
+  outdated: true
+  runs:
+    r1: { date: 2026-10-01, commit: "abc1234", report: _runs/${FULL.run}.md }
+    r2: { date: 2026-10-02, commit: "abc1234", report: _runs/${PARTIAL.run}.md }
+  cells:
+    S01: failed r1
+    S02: passed r2 outdated`
+
+test('check names the mixed runs and the pending, failed and outdated cells', () => {
+  const dir = cellProject(CELLS_RUN, [FULL, PARTIAL])
+  const { stdout } = run(['check', 'billing.pay', '--root', dir])
+  assert.match(stdout, /^Mixed runs: .*_runs\/2026-10-01-0900-billing\.pay\.md.*_runs\/2026-10-02-1000-billing\.pay\.md$/m)
+  assert.match(stdout, /^Pending: S03$/m)
+  assert.match(stdout, /^Failed cells: S01$/m)
+  assert.match(stdout, /^Outdated cells: S02 \(the runbook changed after the run of these cells\)$/m)
+  const json = JSON.parse(run(['check', 'billing.pay', '--root', dir, '--json']).stdout)
+  assert.deepEqual(json.pending, [{ step: 'S03', role: null, case: null, viewport: null }])
+})
+
+test('check labels cells with role, case and viewport', () => {
+  const lastRun = { mixed: true, runs: { r1: { report: 'a.md' }, r2: { report: 'b.md' } }, outdated: true }
+  const out = checkMarkdown({
+    id: 'x', lastRun, latest: { date: 'd', counts: {}, path: 'p' }, lastRunIsLatest: true,
+    pending: [{ step: 'S01', role: 'admin', case: '*', viewport: null }, { step: 'S01', role: 'admin', case: 'vip-team', viewport: 'mobile' }],
+  })
+  assert.match(out, /^Pending: S01 as admin, S01 as admin in vip-team @ mobile$/m)
+})
+
+test('check counts a report cited by a cell as the one last_run records', () => {
+  const dir = cellProject(CELLS_RUN, [FULL, PARTIAL])
+  const older = JSON.parse(run(['check', 'billing.pay', '--root', dir, '--json']).stdout)
+  assert.equal(older.lastRunIsLatest, true)
+  // The newest report is a third one that no cell cites.
+  const later = { run: '2026-10-05-1000-billing.pay', result: 'passed', partial: true, rows: [['S03', 'passed', 'ok']] }
+  fs.writeFileSync(path.join(dir, `docs/runbooks/_runs/${later.run}.md`), REPORT(later))
+  assert.equal(JSON.parse(run(['check', 'billing.pay', '--root', dir, '--json']).stdout).lastRunIsLatest, false)
+  fs.rmSync(path.join(dir, `docs/runbooks/_runs/${later.run}.md`))
+  fs.rmSync(path.join(dir, `docs/runbooks/_runs/${PARTIAL.run}.md`))
+  // Only the older report is on disk and a cell cites it.
+  assert.equal(JSON.parse(run(['check', 'billing.pay', '--root', dir, '--json']).stdout).lastRunIsLatest, true)
 })

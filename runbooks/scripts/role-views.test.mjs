@@ -122,3 +122,17 @@ test('roleRows counts the keys that depend on a case, only when the registry has
   assert.equal(rows.find((r) => r.name === 'anonymous').caseKeys, 0)
   assert.equal('caseKeys' in roleRows(ROLES, config, registry, runbooks)[0], false)
 })
+
+test('role rows read the role result from the cells', () => {
+  const cellRunbook = (cells) => ({
+    id: 'x.y', status: 'active', roles: ['a', 'b', 'c'], review: [],
+    lastRun: { date: '2026-10-18', legacy: false, runs: {}, cells },
+  })
+  const cell = (step, role, state) => ({ step, role, case: null, viewport: null, state, run: 'r1', outdated: false })
+  const reg = parseRoles({ version: 1, roles: { a: { description: 'a' }, b: { description: 'b' }, c: { description: 'c' } } })
+  const rows = roleRows(ROLES, config, reg, [cellRunbook([cell('S01', 'a', 'passed'), cell('S01', 'b', 'failed')])])
+  const results = Object.fromEntries(rows.map((r) => [r.name, r.results]))
+  assert.equal(results.a.passed, 1)
+  assert.equal(results.b.failed, 1)
+  assert.equal(results.c.never, 1)
+})

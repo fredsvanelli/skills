@@ -112,10 +112,18 @@ export function runbookView(root, config, id, { today }) {
   const name = reportFileName(rb.lastRun)
   const report = name ? reportByName(root, runbooksDir, name) : null
   const stepStates = {}
-  for (const { step, state, viewport, role, case: kase } of report?.steps ?? []) {
+  // With cells, the states come from them; the report is only the fallback of an old one-line last_run.
+  const hasCells = (rb.lastRun?.cells ?? []).length > 0
+  for (const { step, state, viewport, role, case: kase } of hasCells ? rb.lastRun.cells : report?.steps ?? []) {
     // A report with no Case column gives entries without a case key.
     ;(stepStates[step] ??= []).push({ role: role || null, ...(kase ? { case: kase } : {}), viewport: viewport ?? null, state })
   }
+
+  // Every report a cell cites, so the page can link each one.
+  const reports = Object.values(rb.lastRun?.runs ?? {}).filter((entry) => typeof entry.report === 'string').map((entry) => {
+    const file = path.basename(entry.report)
+    return { name: file, report: entry.report, onDisk: reportByName(root, runbooksDir, file) !== null }
+  })
 
   return {
     ...row,
@@ -136,6 +144,7 @@ export function runbookView(root, config, id, { today }) {
     body: parseBody(body),
     stepStates,
     reportOnDisk: name === null || report !== null,
+    reports,
     warnings: rb.warnings,
   }
 }
