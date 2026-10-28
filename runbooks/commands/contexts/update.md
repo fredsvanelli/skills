@@ -1,6 +1,6 @@
 ---
 description: Change a context's keys, cases or description, then mark the runbooks the change reaches for review
-argument-hint: "[name]"
+argument-hint: "[name] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -13,12 +13,17 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `[name]` | the context to change. Without it, the command lists the contexts and asks which one |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:contexts:update`, `/runbooks:contexts:update client-access`.
 
 Edits `<paths.runbooks>/roles.json` and, for a renamed or deleted case, the runbooks and their `+<case>` fixture folders. Marks affected runbooks with `review`. A context is a question about the record that changes what a role may do on some keys, and a case is one answer to it. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Review". Commit policy: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Load the context
 

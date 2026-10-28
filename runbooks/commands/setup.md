@@ -1,6 +1,6 @@
 ---
 description: Prepare this project for runbooks (stack, test libraries, design reference, folders, config, agents block, MCP servers)
-argument-hint: ""
+argument-hint: "[--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -10,13 +10,21 @@ Arguments: `$ARGUMENTS`
 
 ## Parameters
 
-None. Run `/runbooks:setup` on its own; running it again reconfigures the project and shows the diff of every file before writing. To change one part of the config, such as the design reference or the commit policy, `/runbooks:settings` asks only about that part.
+| Parameter | Use |
+|---|---|
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+
+Run `/runbooks:setup` on its own; running it again reconfigures the project and shows the diff of every file before writing. To change one part of the config, such as the design reference or the commit policy, `/runbooks:settings` asks only about that part.
 
 Prepares the project so the other `/runbooks:*` commands work. Running it again is safe: show the diff of every file you would change and write only after the user approves.
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md` and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list: a file that is already dirty changes how its commit works (`commits.md`).
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Detect
 

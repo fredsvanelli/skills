@@ -1,6 +1,6 @@
 ---
 description: Update the installed runbooks plugin to the latest version from its marketplace
-argument-hint: ""
+argument-hint: "[--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -10,9 +10,17 @@ Arguments: `$ARGUMENTS`
 
 ## Parameters
 
-None. Run `/runbooks:upgrade` from the project that uses the plugin; it updates the installs that apply there.
+| Parameter | Use |
+|---|---|
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+
+Run `/runbooks:upgrade` from the project that uses the plugin; it updates the installs that apply there.
 
 This command changes the plugin install only. It writes no project file and commits nothing.
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Find the install
 

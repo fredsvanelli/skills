@@ -1,6 +1,6 @@
 ---
 description: List the project's roles, or show one role with its effective permissions
-argument-hint: "[name] [--json]"
+argument-hint: "[name] [--json] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -14,10 +14,15 @@ Arguments: `$ARGUMENTS`
 |---|---|
 | `[name]` | show one role instead of the whole list: its effective permissions with the origin of each action, and its runbooks |
 | `--json` | print the rows as JSON, for scripts |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:roles:list`, `/runbooks:roles:list manager`, `/runbooks:roles:list --json`.
 
 Read-only. It writes nothing and commits nothing. The registry and the matrix: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles".
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Check that tracking is on
 

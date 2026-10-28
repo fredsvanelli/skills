@@ -1,6 +1,6 @@
 ---
 description: Change what setup configured (stack, test libraries, design reference, app, accounts, viewports, sources, git and commit policy, MCP servers)
-argument-hint: "[group ...]"
+argument-hint: "[group ...] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -13,6 +13,7 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `[group ...]` | optional: the groups to change, by the names in the table of step 2 (`design`, `commits`, `roles`). Without it, the command shows the current settings and asks what to change |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:settings`, `/runbooks:settings design`, `/runbooks:settings stack tests`.
 
@@ -21,6 +22,10 @@ Changes one part of a project that `/runbooks:setup` already prepared, without g
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md` and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The questions and the detection for each group are the ones in `${CLAUDE_PLUGIN_ROOT}/commands/setup.md`; this command asks only those of the chosen groups.
 
 Run `git status --porcelain` now and keep the list: a file that is already dirty changes how its commit works (`commits.md`). When `tests.ui.root` points to a UI tests repository, keep `git -C <tests.ui.root> status --porcelain` too.
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Read the current settings
 

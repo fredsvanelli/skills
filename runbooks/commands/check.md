@@ -1,6 +1,6 @@
 ---
 description: Show the result of a runbook's latest run, or say it was never run
-argument-hint: "<id> [--full]"
+argument-hint: "<id> [--full] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -14,12 +14,17 @@ Arguments: `$ARGUMENTS`
 |---|---|
 | `<id>` | required: the runbook whose latest run to show (`billing.issue-invoice`) |
 | `--full` | skip partial runs (`--steps`) and show the newest full run, the one `last_run` records |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:check billing.issue-invoice`, `/runbooks:check billing.issue-invoice --full`.
 
 This command only reads. It opens no browser, writes no file and commits nothing.
 
 By default the latest run is the newest report of the id, partial runs (`--steps`) included.
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" check $ARGUMENTS --json`.
    - Exit code 2 means the script could not run. Show its message: an unknown id gets the ids from `... list` that look closest; a missing config gets an offer of `/runbooks:setup`.

@@ -1,6 +1,6 @@
 ---
 description: Drive agents that take runbooks through the whole flow (map, create, run, to-test) in parallel until a goal is met
-argument-hint: "[--goal \"<text>\"] [--max-agents <n>]"
+argument-hint: "[--goal \"<text>\"] [--max-agents <n>] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -14,6 +14,7 @@ Arguments: `$ARGUMENTS`
 |---|---|
 | `--goal "<text>"` | what the runbooks should look like when the command ends, in your own words: a capability (`Implement all clients runbooks`), one runbook (`Implement users.create runbook until it's active`), a state (`Make every draft runbook active`), a change (`Update the billing runbooks after the diff from develop`). Without it, the command asks |
 | `--max-agents <n>` | how many agents work at the same time. Default 4. An integer of 1 or more |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:orchestrator`, `/runbooks:orchestrator --goal "Implement all clients runbooks"`, `/runbooks:orchestrator --goal "Implement users.create runbook until it's active" --max-agents 2`.
 

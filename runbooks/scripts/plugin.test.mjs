@@ -132,6 +132,16 @@ for (const name of DISPATCHING) {
   })
 }
 
+for (const rel of findFiles(PLUGIN_ROOT, 'commands/**/*.md')) {
+  const name = rel.replace(/^commands\//, '').replace(/\.md$/, '').replace('/', ':')
+  test(`${name} accepts --model`, () => {
+    const command = fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')
+    assert.match(parseYaml(splitFrontmatter(command).yaml)['argument-hint'], /--model/)
+    assert.match(command, /^\| `--model/m)
+    if (!DISPATCHING.includes(name) && name !== 'orchestrator') assert.match(command, /^## Model$/m)
+  })
+}
+
 test('run escalates through its instructions file', () => {
   const instructions = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/instructions/run.md'), 'utf8')
   assert.match(instructions, /status: escalate/)
