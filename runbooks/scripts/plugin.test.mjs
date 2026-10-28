@@ -154,3 +154,11 @@ test('every default model row that is not inline names a dispatching command', a
     assert.ok(DISPATCHING.includes(row.split(' ')[0]), `${row} is not a dispatching command`)
   }
 })
+
+test('orchestrator stages take the model of their command row', () => {
+  const command = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/orchestrator.md'), 'utf8')
+  assert.doesNotMatch(command, /Choose the model/)
+  assert.match(command, /runbooks\.mjs" model/)
+  assert.match(command, /references\/agents\.md/)
+  assert.doesNotMatch(command, /commands\/(map|create|update|to-test|run)\.md/)
+})
