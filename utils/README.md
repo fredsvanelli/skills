@@ -1,5 +1,7 @@
 # utils
 
+See [Changelog](CHANGELOG.md) for releases and upgrade notes.
+
 | Claude Code | Codex | Does |
 |---|---|---|
 | `/utils:cleanup-branches` | `$utils:cleanup-branches` | deletes branches already merged into production or develop, locally or with `--origin`, then fast-forwards the rest |

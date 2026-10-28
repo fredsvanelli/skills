@@ -1,5 +1,7 @@
 # runbooks
 
+See [Changelog](CHANGELOG.md) for releases and upgrade notes.
+
 UAT runbooks kept in `docs/runbooks/` as the project's verified knowledge base. The agent writes them, runs them (`ui` runbooks in the browser, `api` runbooks through a test script it writes or adopts), audits them against the code and measures coverage. Frontend, backend and fullstack projects are supported.
 
 | Claude Code | Codex | Does |
