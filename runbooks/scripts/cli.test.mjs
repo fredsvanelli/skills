@@ -190,7 +190,7 @@ test('upstreamOptions resolves the config and the flags', () => {
     redactHeaders: ['x-key'],
     redactBodyKeys: ['otp'],
     port: 4321,
-    mode: 'mocked',
+    mode: 'live',
     runbook: null,
     role: null,
     case: null,

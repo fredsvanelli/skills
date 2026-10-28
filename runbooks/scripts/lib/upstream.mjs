@@ -2,41 +2,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { isOutside } from './config.mjs'
-import { ROLE_NAME } from './roles.mjs'
-
-const MODES = ['mocked', 'live', 'record']
+import { upstreamServerOptions } from '../upstream-server.mjs'
 
 // Turns the config's upstream block and the CLI flags into the options of createUpstreamServer, plus the port.
 export function upstreamOptions(root, config, options) {
-  const { upstream } = config
-  if (!upstream) throw new Error('the config has no upstream block. Run /runbooks:setup')
-  let port = upstream.port
-  if (options.port !== undefined) {
-    port = Number(options.port)
-    if (typeof options.port !== 'string' || !/^\d+$/.test(options.port) || port > 65535) {
-      throw new Error('--port must be an integer from 0 to 65535')
-    }
-  }
-  const mode = options.mode ?? upstream.mode
-  if (!MODES.includes(mode)) throw new Error(`--mode must be one of ${MODES.join(', ')}`)
-  if (options.role !== undefined && !(typeof options.role === 'string' && ROLE_NAME.test(options.role))) {
-    throw new Error('--role must be a role name like editor')
-  }
-  if (options.case !== undefined && !(typeof options.case === 'string' && ROLE_NAME.test(options.case))) {
-    throw new Error('--case must be a case name like vip-team')
-  }
-  return {
-    fixturesRoot: path.resolve(root, upstream.fixtures),
-    target: upstream.baseUrl,
-    redactHeaders: upstream.redactHeaders,
-    redactBodyKeys: upstream.redactBodyKeys,
-    port,
-    mode,
-    runbook: typeof options.runbook === 'string' ? options.runbook : null,
-    role: options.role ?? null,
-    case: options.case ?? null,
-    step: typeof options.step === 'string' ? options.step : null,
-  }
+  if (!config.upstream) throw new Error('the config has no upstream block. Run /runbooks:setup')
+  return upstreamServerOptions(root, config.upstream, options)
 }
 
 // Compares the copied server's VERSION with the plugin's. Reads the file as text and never imports it.

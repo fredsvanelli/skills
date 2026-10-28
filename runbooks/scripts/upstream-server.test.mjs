@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import http from 'node:http'
 import net from 'node:net'
-import { createUpstreamServer, redactPayload, matchFixture, payloadMatches, payloadFields, VERSION } from './upstream-server.mjs'
+import { createUpstreamServer, redactPayload, matchFixture, payloadMatches, payloadFields, upstreamDefaults, upstreamServerOptions, VERSION } from './upstream-server.mjs'
 
 const fixture = (method, p, response, query) =>
   JSON.stringify({ request: { method, path: p, ...(query ? { query } : {}) }, response, source: 'hand-written' })
@@ -43,6 +43,25 @@ const FILES = {
 test('VERSION matches the plugin manifest', () => {
   const manifest = JSON.parse(fs.readFileSync(new URL('../.claude-plugin/plugin.json', import.meta.url), 'utf8'))
   assert.equal(VERSION, manifest.version)
+})
+
+test('upstreamServerOptions starts live with a baseUrl and mocked without, whatever upstream.mode says', () => {
+  const root = '/project'
+  const live = upstreamServerOptions(root, { ...upstreamDefaults(), mode: 'mocked', baseUrl: 'https://api.example.com' }, {})
+  assert.deepEqual([live.mode, live.target], ['live', 'https://api.example.com'])
+  const mocked = upstreamServerOptions(root, { ...upstreamDefaults(), mode: 'live' }, {})
+  assert.deepEqual([mocked.mode, mocked.target], ['mocked', ''])
+  assert.equal(upstreamServerOptions(root, { ...upstreamDefaults(), baseUrl: 'https://x' }, { mode: 'record' }).mode, 'record')
+})
+
+test('upstreamServerOptions lets flags override the config', () => {
+  const upstream = { ...upstreamDefaults(), port: 4321, redactHeaders: ['x-key'], redactBodyKeys: ['otp'] }
+  const options = upstreamServerOptions('/project', upstream, { port: '5010', target: 'https://other', redact: 'a, b', 'redact-body': 'pin' })
+  assert.deepEqual(
+    [options.port, options.target, options.redactHeaders, options.redactBodyKeys, options.fixturesRoot],
+    [5010, 'https://other', ['a', 'b'], ['pin'], path.resolve('/project', 'docs/runbooks/_fixtures')],
+  )
+  assert.throws(() => upstreamServerOptions('/project', upstream, { port: true }), /--port/)
 })
 
 test('matchFixture ranks the step folder first, then more query keys, then file name', () => {
