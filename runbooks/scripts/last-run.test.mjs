@@ -336,6 +336,16 @@ test('renameCells moves a case and leaves * and other cases', () => {
   assert.equal(renameCells(legacy, { field: 'case', from: 'a', to: 'b' }), legacy)
 })
 
+test('renameCells refuses a target that already has a cell in the same step', () => {
+  const { lastRun } = readLastRun(parseYaml(`last_run:
+  runs:
+    r1: { date: 2026-10-16, commit: "abc1234", report: _runs/x.md }
+  cells:
+    S01: { admin: passed r1, owner: passed r1 }
+`).last_run)
+  assert.throws(() => renameCells(lastRun, { field: 'role', from: 'admin', to: 'owner' }), /S01 already has a cell "owner"/)
+})
+
 test('reportCells reads empty columns as null and leaves the run unset', () => {
   assert.deepEqual(reportCells(report(FULL, false, [['S01', 'passed', 'admin', '', 'mobile'], ['S02', 'failed']])), [
     { step: 'S01', role: 'admin', case: null, viewport: 'mobile', state: 'passed', run: null, outdated: false },

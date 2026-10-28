@@ -294,5 +294,12 @@ export function markOutdated(lastRun) {
 // The case `*` (a role that runs once) is never renamed, since it is not a case name.
 export function renameCells(lastRun, { field, from, to }) {
   if (lastRun.legacy || from === '*') return lastRun
-  return { ...lastRun, cells: lastRun.cells.map((cell) => (cell[field] === from ? { ...cell, [field]: to } : cell)) }
+  const cells = lastRun.cells.map((cell) => (cell[field] === from ? { ...cell, [field]: to } : cell))
+  const seen = new Set()
+  for (const cell of cells) {
+    const key = `${cell.step} ${passKey(cell)}`
+    if (seen.has(key)) throw new Error(`${cell.step} already has a cell "${passKey(cell)}"`)
+    seen.add(key)
+  }
+  return { ...lastRun, cells }
 }

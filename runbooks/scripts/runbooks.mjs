@@ -434,9 +434,15 @@ function commandRenameRoleCells(root, config, options, positionals) {
   const write = options.write !== undefined
   if (names.length !== 2) throw new Error('rename-role-cells needs <from> and <to>')
   const [from, to] = names
+  if (from === to) throw new Error('rename-role-cells needs two different names')
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(to)) throw new Error(`role "${to}" must be kebab-case`)
   const result = { runbooks: [], written: [] }
   const edits = []
-  for (const rb of loadRunbooks(root, config)) {
+  const loaded = loadRunbooks(root, config)
+  for (const rb of loaded) {
+    if (rb.lastRun?.cells.some((cell) => cell.role === to)) throw new Error(`${rb.path}: last_run already has cells for role "${to}". Nothing was written`)
+  }
+  for (const rb of loaded) {
     if (!rb.lastRun || !rb.lastRun.cells.some((cell) => cell.role === from)) continue
     const file = path.resolve(root, rb.path)
     try {
