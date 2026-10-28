@@ -10,16 +10,34 @@ export function upstreamOptions(root, config, options) {
   return upstreamServerOptions(root, config.upstream, options)
 }
 
-// Compares the copied server's VERSION with the plugin's. Reads the file as text and never imports it.
-export function copiedServerWarning(root, config, version) {
-  const file = config.upstream?.serverFile
-  if (!file) return null
-  const full = path.resolve(root, file)
-  // A copy in a UI tests repository that is not cloned here is not missing; see docs/adr/0007.
+// A UI tests repository outside this project that is not cloned next to it; see docs/adr/0007.
+function uncloned(root, config) {
   const testsRoot = config.tests?.ui?.root
-  if (testsRoot && isOutside(root, testsRoot) && !fs.existsSync(path.resolve(root, testsRoot))) return null
+  return testsRoot && isOutside(root, testsRoot) && !fs.existsSync(path.resolve(root, testsRoot)) ? testsRoot : null
+}
+
+// Compares the copied server's VERSION with the plugin's. Reads the file as text and never imports it.
+function fileProblem(root, file, version) {
+  const full = path.resolve(root, file)
   if (!fs.existsSync(full)) return `upstream.serverFile ${file} is missing: run /runbooks:setup to copy it`
   const found = /export const VERSION = '([^']*)'/.exec(fs.readFileSync(full, 'utf8'))?.[1] ?? 'unknown'
   if (found === version) return null
   return `upstream.serverFile ${file} is from runbooks ${found}, the plugin is ${version}: run /runbooks:setup to refresh it`
+}
+
+// The warning list and coverage print. A copy in a UI tests repository that is not cloned here is not missing.
+export function copiedServerWarning(root, config, version) {
+  const file = config.upstream?.serverFile
+  if (!file || uncloned(root, config)) return null
+  return fileProblem(root, file, version)
+}
+
+// Why run cannot start the copied server, or null when it can: run needs the copy, so nothing here is lenient.
+export function copiedServerProblem(root, config, version) {
+  if (!config.upstream) return 'the config has no upstream block. Run /runbooks:setup'
+  const file = config.upstream.serverFile
+  if (!file) return 'upstream.serverFile is not set: run /runbooks:setup to copy the server'
+  const testsRoot = uncloned(root, config)
+  if (testsRoot) return `upstream.serverFile ${file} is in ${testsRoot}, which is not cloned: clone it there or run /runbooks:setup`
+  return fileProblem(root, file, version)
 }

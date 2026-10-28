@@ -14,7 +14,7 @@ import { latestReport } from './lib/reports.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
 import { fixturesDir, loadFixtures, sourceCounts, checkFixtures } from './lib/fixtures.mjs'
-import { upstreamOptions, copiedServerWarning } from './lib/upstream.mjs'
+import { upstreamOptions, copiedServerWarning, copiedServerProblem } from './lib/upstream.mjs'
 import { VERSION, serveUpstream } from './upstream-server.mjs'
 import { serveUi } from './ui-server.mjs'
 import { listMarkdown, itemsMarkdown, coverageMarkdown, checkMarkdown, junitMarkdown, fixturesMarkdown, moveToCallsMarkdown, contractMarkdown, reviewPlanMarkdown, caseEditMarkdown, rolesMarkdown, roleMarkdown, contextsMarkdown, affectedContextMarkdown, passesMarkdown, affectedRolesMarkdown, citingMarkdown, mergeRolesMarkdown, modelsMarkdown } from './lib/format.mjs'
@@ -46,7 +46,10 @@ Commands:
   fixtures      <id> loads the fixtures of a mocked ui runbook, counts them by source and, with
                 upstream.schema set, checks each JSON response against the OpenAPI schema
   upstream      [--port n] [--mode mocked|live|record] [--runbook id] [--role name] [--case name] [--step Sxx]
-                starts the upstream server from the config in the foreground and prints its address; stop it with Ctrl+C
+                starts the plugin's upstream server from the config in the foreground and prints its address; stop it with
+                Ctrl+C. It serves plugin development: a project starts its own copy with npm run runbooks:upstream
+  upstream-copy prints upstream.serverFile when the copied server is there and from this plugin version; else prints
+                why and exits 1
   contract      [--strict] checks the calls of every ui runbook against upstream.schema, and the fixtures of
                 every mocked one against its calls and the schema (docs/adr/0005); --strict exits 1 on a finding
   move-to-calls [--source n] [--write] moves the endpoint ids of an upstream API in another repository
@@ -377,7 +380,7 @@ function commandModels(config, options) {
   return options.json ? json(config.models) : modelsMarkdown({ rows: config.models, defaults: DEFAULT_MODELS })
 }
 
-const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles']
+const PROJECT_COMMANDS = ['model', 'models', 'list', 'entries', 'requirements', 'coverage', 'check', 'junit', 'fixtures', 'move-to-calls', 'contract', 'upstream-copy', 'mark-review', 'enable-roles', 'roles', 'contexts', 'passes', 'rename-case', 'delete-case', 'delete-context', 'merge-roles']
 
 export function run(argv) {
   const stderr = []
@@ -403,6 +406,11 @@ export function run(argv) {
       stdout = options.json ? json(result) : `${result.model}\n`
     } else if (command === 'models') stdout = commandModels(config, options)
     else if (command === 'contract') ({ code, stdout } = commandContract(root, config, options))
+    else if (command === 'upstream-copy') {
+      const problem = copiedServerProblem(root, config, VERSION)
+      code = problem ? 1 : 0
+      stdout = `${problem ?? config.upstream.serverFile}\n`
+    }
     else if (command === 'list') stdout = commandList(root, config, options, warnings)
     else if (command === 'coverage') stdout = commandCoverage(root, config, options, warnings)
     else if (command === 'check') stdout = commandCheck(root, config, options, positionals)
