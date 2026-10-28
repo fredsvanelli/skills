@@ -39,6 +39,8 @@ When the upstream API lives in another repository, each repository has its own r
 
 The UI tests may live in a repository of their own, such as `project-001-e2e` next to `project-001`. Setup asks where they live and writes the relative path to `tests.ui.root`. The runbooks, the fixtures and the coverage stay in the app's repository, and the scripts and the upstream server copy go to the UI tests repository, committed there. See [ADR 0007](docs/adr/0007-ui-tests-may-live-in-another-repo.md).
 
+A `models` table in the config names the model each command runs on, per command and per parameter, such as `run --mode test` on `haiku` and `create` on `opus`. A row set to `inline` runs the command in the main session. Any other row makes the main session launch a sub-agent on that model, relay its questions and print its result. `setup` writes the default table, `settings` changes any row, and every command accepts `--model inline|haiku|sonnet|opus|fable` to force one model for one invocation. See Models in [config](skills/runbooks/references/config.md) and [ADR 0010](docs/adr/0010-each-command-runs-on-the-model-its-row-names.md).
+
 ## Install
 
     claude plugin marketplace add fredsvanelli/skills

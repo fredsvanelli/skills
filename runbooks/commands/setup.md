@@ -1,6 +1,6 @@
 ---
 description: Prepare this project for runbooks (stack, test libraries, design reference, folders, config, agents block, MCP servers)
-argument-hint: ""
+argument-hint: "[--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -10,13 +10,21 @@ Arguments: `$ARGUMENTS`
 
 ## Parameters
 
-None. Run `/runbooks:setup` on its own; running it again reconfigures the project and shows the diff of every file before writing. To change one part of the config, such as the design reference or the commit policy, `/runbooks:settings` asks only about that part.
+| Parameter | Use |
+|---|---|
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
+
+Run `/runbooks:setup` on its own; running it again reconfigures the project and shows the diff of every file before writing. To change one part of the config, such as the design reference or the commit policy, `/runbooks:settings` asks only about that part.
 
 Prepares the project so the other `/runbooks:*` commands work. Running it again is safe: show the diff of every file you would change and write only after the user approves.
 
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md` and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list: a file that is already dirty changes how its commit works (`commits.md`).
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Detect
 
@@ -103,7 +111,7 @@ Then ask the keys of the block, in the next round:
 - `upstream.baseUrl`, the upstream API's URL, recommending the value detection found.
 - `upstream.start`, the commands that start the API, shown when `upstream.baseUrl` does not answer. For an API in another repository, write a hint that names that repository and its command (`in cheap-courier-api: yarn dev`), never a `cd` into a folder next to this one.
 - `upstream.schema`, when the API lives in another repository or is a third party: the path where this repository keeps the OpenAPI 3 JSON document the API publishes, recommending `docs/runbooks/_contract/openapi.json`. Bringing a new version of that file into this repository is the project's CI, not the plugin's (`references/upstream.md`, Another repository). When the API publishes none, say that nothing here notices an API change before a `live` run, and leave `schema` null. When the API is a folder of this repository, ask it only when detection found a local OpenAPI 3 JSON file.
-- `upstream.redactHeaders`, only when detection left it open. The user may skip it.
+- `upstream.redactHeaders` and `upstream.redactBodyKeys`, only when detection left them open. The user may skip them.
 
 Keys not asked keep their defaults from `config.md`, Upstream.
 
@@ -126,8 +134,10 @@ A `backend` stack skips every browser question.
 | `.gitignore` | add `.runbooks/` when missing |
 | agents block | `${CLAUDE_PLUGIN_ROOT}/templates/agents-block.md`, with `${CLAUDE_PLUGIN_ROOT}/templates/api-practices.md` filled in when the stack has `api` |
 | `docs/runbooks/roles.json` (only when the config did not already have `roles.enabled` true; with tracking already on, only the additions of the Roles bullet) | the roles the user confirmed in step 2, with `description`, `found`, `permissions` and `origins`, `"version": 1` (`config.md`, Roles) |
+| `models` in the config (only when the config has no `models` key) | the output of `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" models --defaults --json`, which needs no config. Write it without a question and do not mention it to the user, in the questions or in the summary |
 | `.mcp.json` (when approved and the stack has `ui`) | `${CLAUDE_PLUGIN_ROOT}/templates/mcp-servers.json`, plus the design server from step 2 (`${CLAUDE_PLUGIN_ROOT}/templates/design-servers.json` for Figma) |
 
+- Models on a re-run: when the config already has `models`, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" models --diff --json`. It prints `{ missing, differing }`. Add every row of `missing` with its default, without asking. When `differing` is empty, say nothing about models. Otherwise print `differing` as a table (key, value in the config, current default) and ask with `AskUserQuestion`, multi-select, in rounds of four rows, which rows take the default. The rows the user does not pick keep their value.
 - Rename from `runbook`: when step 1 found `docs/runbooks/runbook.config.json`, move it with `git mv` to `runbooks.config.json`. In the config, `paths.evidence` `.runbook/evidence` becomes `.runbooks/evidence`, and `mcp.headless`/`mcp.headed` `runbook-playwright`/`runbook-playwright-headed` become `runbooks-playwright`/`runbooks-playwright-headed`. Rename those two servers in `.mcp.json` too, replace `.runbook/` with `.runbooks/` in the root `.gitignore`, replace the `<!-- runbook:start -->` and `<!-- runbook:end -->` markers with the new ones, and replace `runbook@<marketplace>` with `runbooks@<marketplace>` in `enabledPlugins`. Move a local `.runbook/` folder to `.runbooks/`.
 - Config: write `stack` and one `tests.<surface>` block per surface that has a framework, with `tests.ui.root` for a UI tests repository. Drop `paths.e2e`; its value moves to `tests.ui.dir` when there is no `tests.ui` yet. Keep the existing `viewports`: `create` writes them. Write `design` from step 2, or keep the existing one when the user kept it.
 - Upstream: when step 2 asked the mode, write the `upstream` block with the answers and leave the other keys out so they keep their defaults (`config.md`, Upstream). Keep the existing block's keys that the user kept. Drop `upstream.root`, which no command reads any more. In a `backend` stack the block is a config error, so write none.
@@ -136,7 +146,7 @@ A `backend` stack skips every browser question.
 - Upstream server: copy only when `tests.ui` exists and some runbook can be mocked, that is when the default `upstream.mode` is `mocked` or the user says some runbooks will be mocked. Ask that only when the default is `live`. A live-only project gets no copy and `upstream.serverFile` stays null. Then copy `${CLAUDE_PLUGIN_ROOT}/scripts/upstream-server.mjs` to `<tests.ui.dir>/runbooks-upstream.mjs` and write that path to `upstream.serverFile`, so CI runs mocked scripts without the plugin. With `tests.ui.root`, the copy goes to `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`, and `upstream.serverFile` holds that path relative to this project (`../project-001-e2e/tests/runbooks-upstream.mjs`). When the file exists, show its diff first; running `setup` again is how the copy is refreshed. Do not edit the framework config. Show how the framework starts the copy, with the app's `upstream.urlEnv` set to `http://127.0.0.1:<upstream.port>`. With `tests.ui.root` in a UI tests repository, the framework runs there, so the paths in its command are relative to that folder: the copy is `<tests.ui.dir>/runbooks-upstream.mjs`, and the fixtures stay in this repository, at `<path from tests.ui.root to this project>/<upstream.fixtures>` (`../project-001/docs/runbooks/_fixtures`):
   - Playwright: a `webServer` entry whose `command` is `node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <upstream.fixtures> --port <upstream.port>`, whose `url` is `http://127.0.0.1:<upstream.port>/__runbooks/state`, and with `reuseExistingServer: !process.env.CI`, because `/runbooks:run` and `/runbooks:to-test` may already have started the server on that port.
   - Cypress: a child process started in `setupNodeEvents` with the same command.
-  - When `upstream.baseUrl` is set, add `--mode live --target <upstream.baseUrl>` to the command, so tests that never select reach the live API through the server. Add `--redact <upstream.redactHeaders>` when the list is not empty. The server prints `runbooks-upstream listening on http://127.0.0.1:<port>`.
+  - When `upstream.baseUrl` is set, add `--mode live --target <upstream.baseUrl>` to the command, so tests that never select reach the live API through the server. Add `--redact <upstream.redactHeaders>` when the list is not empty, and `--redact-body <upstream.redactBodyKeys>` when that list is not empty. The server prints `runbooks-upstream listening on http://127.0.0.1:<port>`.
   - The server holds one state for every client, so every test suite whose app points at it runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. Mocked scripts post `{ runbook, mode: 'mocked', step }` in `beforeEach` and `{ runbook: null, mode: 'live' }` in `afterAll`; live `ui` scripts post nothing (`references/upstream.md`, "Scripts").
 - Agents block: when one of `AGENTS.md` and `CLAUDE.md` is a symlink to the other, write once to the real file. Otherwise prefer `AGENTS.md` when it exists, else `CLAUDE.md`. Replace the text between `<!-- runbooks:start -->` and `<!-- runbooks:end -->` when the markers exist; otherwise append the block at the end of the file.
 - API scripts checklist: when the stack has `api`, replace the `<!-- api-scripts: ... -->` line of the block with `api-practices.md`, every placeholder filled with what this project does, citing the helper and its path, from the tests read in step 1. Keep its Roles bullet only when role tracking is on. When the project has no `api` tests yet, fill it with the usual practice of the chosen `tech` and `framework` and say so in the summary. Without `api`, delete the line. Cover how scripts are written only; the project's own conventions for backend code are not this block's business.

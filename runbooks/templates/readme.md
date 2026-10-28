@@ -21,6 +21,10 @@ They are managed with the `runbook` Claude Code plugin from the `fredsvanelli` m
 4. `audit` checks runbooks against the code; `coverage` measures coverage.
 5. `deprecated` runbooks stay for history and never count.
 
+## Models
+
+The `models` key of `runbooks.config.json` names the model each command runs on. `inline` runs the command in the main session, and any other value runs it in a sub-agent on that model. `/runbooks:settings` changes a row, and `--model inline|haiku|sonnet|opus|fable` on any command forces a model for that invocation.
+
 ## Commands
 
 | Command | Does |

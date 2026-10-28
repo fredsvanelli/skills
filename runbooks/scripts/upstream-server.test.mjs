@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import http from 'node:http'
 import net from 'node:net'
-import { createUpstreamServer, matchFixture, VERSION } from './upstream-server.mjs'
+import { createUpstreamServer, redactPayload, matchFixture, payloadMatches, payloadFields, VERSION } from './upstream-server.mjs'
 
 const fixture = (method, p, response, query) =>
   JSON.stringify({ request: { method, path: p, ...(query ? { query } : {}) }, response, source: 'hand-written' })
@@ -97,9 +97,9 @@ test('an unknown request gets a 501 and appears in unmatched', async (t) => {
   await s.select({ runbook: 'billing.list', step: 'S01' })
   const r = await fetch(`${s.base}/nope`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"a":1}' })
   assert.equal(r.status, 501)
-  assert.deepEqual(await r.json(), { error: 'no fixture', method: 'POST', path: '/nope', runbook: 'billing.list', step: 'S01' })
+  assert.deepEqual(await r.json(), { error: 'no fixture', method: 'POST', path: '/nope', body: { a: 1 }, runbook: 'billing.list', step: 'S01' })
   const state = await s.state()
-  assert.deepEqual(state.unmatched, [{ method: 'POST', path: '/nope', step: 'S01' }])
+  assert.deepEqual(state.unmatched, [{ method: 'POST', path: '/nope', body: { a: 1 }, step: 'S01' }])
   assert.deepEqual(state.requests[0].body, { a: 1 })
   assert.equal(state.requests[0].status, 501)
   await s.select({ step: 'S02' })
@@ -736,6 +736,111 @@ const GQL_FILES = {
 
 const gql = (base, body) => fetch(`${base}/graphql`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 
+const searchFixture = (variables, items) => JSON.stringify({
+  request: { method: 'POST', path: '/graphql', operationName: 'SearchClients', variables },
+  response: { status: 200, body: { data: { searchClients: items } } },
+  source: 'hand-written: test',
+})
+
+const TAB_FILES = {
+  'clients/tabs/clients.json': searchFixture({ type: 'clients' }, ['client']),
+  'clients/tabs/contacts.json': searchFixture({ type: 'contacts' }, ['contact']),
+  'clients/tabs/search.json': searchFixture({ search: 'Fred' }, ['fred']),
+}
+
+test('three tabs sending SearchClients with different variables each get their own fixture', async (t) => {
+  const s = await start(t, TAB_FILES)
+  await s.select({ runbook: 'clients.tabs', step: 'S01' })
+  const items = async (body) => (await (await gql(s.base, body)).json())
+  assert.deepEqual(await items({ operationName: 'SearchClients', variables: { type: 'clients' } }), { data: { searchClients: ['client'] } })
+  assert.deepEqual(await items({ operationName: 'SearchClients', variables: { type: 'contacts' } }), { data: { searchClients: ['contact'] } })
+  await s.select({ step: 'S02' })
+  assert.deepEqual(await items({ operationName: 'SearchClients', variables: { type: null, search: 'Fred' } }), { data: { searchClients: ['fred'] } })
+  assert.equal((await gql(s.base, { operationName: 'SearchClients' })).status, 501)
+  assert.equal((await gql(s.base, { operationName: 'SearchClients', variables: null })).status, 501)
+})
+
+test('a batch answers two SearchClients items from their variables', async (t) => {
+  const s = await start(t, TAB_FILES)
+  await s.select({ runbook: 'clients.tabs' })
+  const r = await gql(s.base, [
+    { operationName: 'SearchClients', variables: { type: 'contacts' } },
+    { operationName: 'SearchClients', variables: { type: 'clients' } },
+  ])
+  assert.deepEqual(await r.json(), [{ data: { searchClients: ['contact'] } }, { data: { searchClients: ['client'] } }])
+})
+
+test('a REST body fixture answers only a JSON body that carries its values', async (t) => {
+  const s = await start(t, {
+    'billing/list/any.json': fixture('POST', '/search', { status: 200, body: { any: true } }),
+    'billing/list/contacts.json': JSON.stringify({ request: { method: 'POST', path: '/search', body: { type: 'contacts' } }, response: { status: 200, body: { contacts: true } } }),
+  })
+  await s.select({ runbook: 'billing.list' })
+  const post = (body, type = 'application/json') => fetch(`${s.base}/search`, { method: 'POST', headers: { 'content-type': type }, body })
+  assert.deepEqual(await (await post('{"type":"contacts","q":"a"}')).json(), { contacts: true })
+  assert.deepEqual(await (await post('{"type":"clients"}')).json(), { any: true })
+  assert.deepEqual(await (await post('{"type":"contacts"}', 'text/plain')).json(), { any: true })
+})
+
+test('the server skips fixtures with invalid variables or body', async (t) => {
+  const bad = (request) => JSON.stringify({ request: { method: 'POST', path: '/graphql', ...request }, response: { status: 200, body: { bad: true } } })
+  const s = await start(t, {
+    'clients/tabs/array.json': bad({ operationName: 'SearchClients', variables: ['clients'] }),
+    'clients/tabs/orphan.json': bad({ variables: { type: 'clients' } }),
+    'clients/tabs/mixed.json': bad({ operationName: 'SearchClients', body: { type: 'clients' } }),
+  })
+  await s.select({ runbook: 'clients.tabs' })
+  assert.equal((await gql(s.base, { operationName: 'SearchClients', variables: { type: 'clients' } })).status, 501)
+})
+
+test('payloadMatches matches objects by subset and everything else exactly', () => {
+  assert.equal(payloadMatches({ type: 'clients' }, { type: 'clients', page: 1 }), true)
+  assert.equal(payloadMatches({ filter: { type: 'x' } }, { filter: { type: 'x', q: 'a' } }), true)
+  assert.equal(payloadMatches({ ids: [1, 2] }, { ids: [1, 2, 3] }), false)
+  assert.equal(payloadMatches({ ids: [1, 2] }, { ids: [1, 2] }), true)
+  assert.equal(payloadMatches({ type: null }, {}), false)
+  assert.equal(payloadMatches({ type: null }, { type: null }), true)
+  assert.equal(payloadMatches({}, { anything: 1 }), true)
+  assert.equal(payloadMatches({ filter: { type: 'x' } }, { filter: null }), false)
+  assert.equal(payloadMatches({ filter: { type: 'x' } }, { filter: ['x'] }), false)
+  assert.equal(payloadMatches({ filter: { type: 'x' } }, { filter: 'x' }), false)
+})
+
+test('payloadFields counts leaves, an array as one', () => {
+  assert.equal(payloadFields({}), 0)
+  assert.equal(payloadFields({ filter: { type: 'clients' }, ids: [1, 2] }), 2)
+  assert.equal(payloadFields([{ a: 1 }]), 1)
+})
+
+test('matchFixture picks the fixture whose variables match, more fields first, folder layer before fields', () => {
+  const f = (file, step, variables) =>
+    ({ file, step, request: { method: 'POST', path: '/graphql', operationName: 'SearchClients', ...(variables ? { variables } : {}) }, response: { status: 200 } })
+  const any = f('any.json', null)
+  const clients = f('clients.json', null, { type: 'clients' })
+  const contacts = f('contacts.json', null, { type: 'contacts' })
+  const search = f('search.json', null, { search: 'Fred' })
+  const both = f('both.json', null, { type: 'clients', page: 1 })
+  const req = (variables) => ({ method: 'POST', path: '/graphql', query: {}, operationName: 'SearchClients', variables })
+  const all = [any, clients, contacts, search]
+  assert.equal(matchFixture(all, req({ type: 'clients' }), null), clients)
+  assert.equal(matchFixture(all, req({ type: 'contacts' }), null), contacts)
+  assert.equal(matchFixture(all, req({ type: null, search: 'Fred' }), null), search)
+  assert.equal(matchFixture(all, req({ type: 'other' }), null), any)
+  assert.equal(matchFixture([clients, both], req({ type: 'clients', page: 1 }), null), both)
+  assert.equal(matchFixture([clients], req({}), null), null)
+  assert.equal(matchFixture([clients, f('S02/any.json', 'S02')], req({ type: 'clients' }), 'S02').file, 'S02/any.json')
+})
+
+test('matchFixture matches a REST body only against a JSON body', () => {
+  const f = (file, body) => ({ file, step: null, request: { method: 'POST', path: '/search', ...(body !== undefined ? { body } : {}) }, response: { status: 200 } })
+  const plain = f('plain.json')
+  const contacts = f('contacts.json', { type: 'contacts' })
+  const req = (body) => ({ method: 'POST', path: '/search', query: {}, body })
+  assert.equal(matchFixture([plain, contacts], req({ type: 'contacts', q: 'a' }), null), contacts)
+  assert.equal(matchFixture([plain, contacts], req({ type: 'clients' }), null), plain)
+  assert.equal(matchFixture([contacts], req(undefined), null), null)
+})
+
 test('a fixture with operationName answers only that operation and the 501 names an unknown one', async (t) => {
   const s = await start(t, GQL_FILES)
   await s.select({ runbook: 'clients.edit' })
@@ -898,8 +1003,153 @@ test('record keeps an array body without operations as one request, and logs an 
   const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
   await s.select({ runbook: 'billing.list', mode: 'record' })
   await fetch(`${s.base}/bulk`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '[{"a":1}]' })
-  assert.deepEqual(readJson(s.fixturesRoot, 'post--bulk.json').request, { method: 'POST', path: '/bulk' })
+  const bulk = listed(s.fixturesRoot).filter((name) => name.startsWith('post--bulk-'))
+  assert.equal(bulk.length, 1)
+  assert.match(bulk[0], /^post--bulk-[0-9a-f]{8}\.json$/)
+  assert.deepEqual(readJson(s.fixturesRoot, bulk[0]).request, { method: 'POST', path: '/bulk', body: [{ a: 1 }] })
   await gql(s.base, [{ operationName: 'Client' }, { operationName: 'Client' }])
   assert.deepEqual(readJson(s.fixturesRoot, 'post--graphql-Client.json').response.body, { n: 2 })
   assert.ok(s.logs.includes('overwrote post--graphql-Client.json with a different response'))
+})
+
+test('redactPayload drops secret keys at any depth, case ignored', () => {
+  const names = [...['password', 'token', 'secret'], 'otp']
+  assert.deepEqual(
+    redactPayload({ email: 'a', Password: 'x', input: { accessToken: 't', otp: '1', keep: 1 }, users: [{ password: 'y', name: 'b' }] }, names),
+    { email: 'a', input: { keep: 1 }, users: [{ name: 'b' }] })
+  assert.equal(redactPayload('plain', names), 'plain')
+})
+
+test('a 501 shows the payload of the unmatched request without secrets', async (t) => {
+  const s = await start(t, TAB_FILES, { redactBodyKeys: ['OTP'] })
+  await s.select({ runbook: 'clients.tabs' })
+  const r = await gql(s.base, { operationName: 'SearchClients', variables: { type: 'other', token: 't', otp: '1' } })
+  assert.deepEqual(await r.json(), { error: 'no fixture', method: 'POST', path: '/graphql', operationName: 'SearchClients', variables: { type: 'other' }, runbook: 'clients.tabs', step: null })
+  const batch = await gql(s.base, [{ operationName: 'SearchClients', variables: { type: 'clients' } }, { operationName: 'SearchClients', variables: { type: 'x' } }, { operationName: 'Other' }])
+  const body = await batch.json()
+  assert.deepEqual(body.operationNames, ['SearchClients', 'Other'])
+  assert.deepEqual(body.variables, [{ type: 'x' }, null])
+  const state = await s.state()
+  assert.deepEqual(state.unmatched[0], { method: 'POST', path: '/graphql', operationName: 'SearchClients', variables: { type: 'other' }, step: null })
+  assert.deepEqual(state.unmatched[2], { method: 'POST', path: '/graphql', operationName: 'Other', step: null })
+})
+
+test('record saves each SearchClients variables in its own file, and a second pass writes nothing', async (t) => {
+  const tab = (item) => ({ data: { searchClients: [item.variables?.type ?? 'none'] } })
+  const fake = await graphqlApi(t, (sent) => [200, Array.isArray(sent) ? sent.map(tab) : tab(sent)])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', step: 'S01' })
+  for (let pass = 0; pass < 2; pass++) {
+    await gql(s.base, [
+      { operationName: 'SearchClients', variables: { type: 'clients', page: 1 } },
+      { operationName: 'SearchClients', variables: { page: 1, type: 'contacts' } },
+    ])
+  }
+  await gql(s.base, { operationName: 'SearchClients', variables: { page: 1, type: 'clients' } })
+  const names = listed(s.fixturesRoot)
+  assert.equal(names.length, 2)
+  for (const name of names) assert.match(name, /^post--graphql-SearchClients-[0-9a-f]{8}\.json$/)
+  const saved = names.map((name) => readJson(s.fixturesRoot, name).request.variables.type).sort()
+  assert.deepEqual(saved, ['clients', 'contacts'])
+  assert.ok(!s.logs.some((line) => line.startsWith('overwrote')))
+})
+
+test('record puts a payload fixture in the runbook folder over an old fixture without variables', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { data: { searchClients: ['client'] } }])
+  const s = await start(t, { ...RECORD_FILES, 'billing/list/post--graphql-SearchClients.json': searchFixture(undefined, ['client']) },
+    { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', step: 'S02' })
+  await gql(s.base, { operationName: 'SearchClients', variables: { type: 'clients' } })
+  const names = listed(s.fixturesRoot)
+  assert.equal(names.length, 2)
+  assert.ok(names.every((name) => !name.startsWith('S02')))
+})
+
+test('record drops secrets from saved bodies and variables', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { ok: true }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}`, redactBodyKeys: ['otp'] })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await fetch(`${s.base}/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"email":"a@b.c","password":"x","otp":"1"}' })
+  await gql(s.base, { operationName: 'Login', variables: { input: { email: 'a@b.c', accessToken: 't' } } })
+  await gql(s.base, { operationName: 'Refresh', variables: { refreshToken: 't' } })
+  const requests = listed(s.fixturesRoot).map((name) => readJson(s.fixturesRoot, name).request)
+  assert.deepEqual(requests.find((r) => r.path === '/login').body, { email: 'a@b.c' })
+  assert.deepEqual(requests.find((r) => r.operationName === 'Login').variables, { input: { email: 'a@b.c' } })
+  assert.equal('variables' in requests.find((r) => r.operationName === 'Refresh'), false)
+})
+
+test('record saves REST bodies that carry a query field, one file each', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { ok: true }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  for (const query of ['foo', 'bar']) {
+    await fetch(`${s.base}/search`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) })
+  }
+  const bodies = listed(s.fixturesRoot).filter((name) => name.startsWith('post--search-')).map((name) => readJson(s.fixturesRoot, name).request.body)
+  assert.deepEqual(bodies.sort((a, b) => a.query.localeCompare(b.query)), [{ query: 'bar' }, { query: 'foo' }])
+})
+
+test('record saves an anonymous GraphQL operation without a body', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { data: {} }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  await gql(s.base, { query: '{ x }' })
+  await gql(s.base, { query: '  query Foo { x }' })
+  const requests = listed(s.fixturesRoot).filter((name) => name.startsWith('post--graphql')).map((name) => readJson(s.fixturesRoot, name).request)
+  assert.ok(requests.length >= 1)
+  assert.ok(requests.every((request) => !('body' in request)))
+})
+
+test('record puts payload fixtures in the current step folder over an old payload-less fixture there', async (t) => {
+  const tab = (sent) => ({ data: { searchClients: [sent.variables?.type ?? 'none'] } })
+  const fake = await graphqlApi(t, (sent) => [200, tab(sent)])
+  const s = await start(t, {
+    ...RECORD_FILES,
+    'billing/list/post--graphql-SearchClients.json': searchFixture(undefined, ['old-runbook']),
+    'billing/list/S01/post--graphql-SearchClients.json': searchFixture(undefined, ['old-step']),
+  }, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record', step: 'S01' })
+  await gql(s.base, { operationName: 'SearchClients', variables: { type: 'clients' } })
+  await gql(s.base, { operationName: 'SearchClients', variables: { type: 'contacts' } })
+  const names = listed(s.fixturesRoot)
+  assert.equal(names.filter((name) => /^S01\/post--graphql-SearchClients-[0-9a-f]{8}\.json$/.test(name)).length, 2)
+  assert.equal(names.length, 4)
+  await s.select({ mode: 'mocked' })
+  assert.deepEqual(await (await gql(s.base, { operationName: 'SearchClients', variables: { type: 'clients' } })).json(), { data: { searchClients: ['clients'] } })
+  assert.deepEqual(await (await gql(s.base, { operationName: 'SearchClients', variables: { type: 'contacts' } })).json(), { data: { searchClients: ['contacts'] } })
+})
+
+test('record drops a key that holds an array with a redacted item, and a redacted array body', async (t) => {
+  const fake = await graphqlApi(t, () => [200, { saved: true }])
+  const s = await start(t, RECORD_FILES, { target: `http://127.0.0.1:${fake.port}` })
+  await s.select({ runbook: 'billing.list', mode: 'record' })
+  const post = (p, body) => fetch(`${s.base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  await post('/items', { items: [{ id: 1, token: 't' }], q: 'x' })
+  await post('/bulk', [{ password: 'x' }])
+  const requests = listed(s.fixturesRoot).map((name) => readJson(s.fixturesRoot, name).request)
+  assert.deepEqual(requests.find((r) => r.path === '/items').body, { q: 'x' })
+  assert.equal('body' in requests.find((r) => r.path === '/bulk'), false)
+  await s.select({ mode: 'mocked' })
+  const again = await post('/items', { items: [{ id: 1, token: 't' }], q: 'x' })
+  assert.equal(again.status, 200)
+  assert.deepEqual(await again.json(), { saved: true })
+})
+
+test('the server skips a fixture whose request.body is a scalar or null', async (t) => {
+  const bad = (body) => JSON.stringify({ request: { method: 'POST', path: '/search', body }, response: { status: 200, body: { bad: true } } })
+  const s = await start(t, { 'billing/list/a.json': bad('text'), 'billing/list/b.json': bad(null), 'billing/list/c.json': bad(3) })
+  await s.select({ runbook: 'billing.list' })
+  const r = await fetch(`${s.base}/search`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'null' })
+  assert.equal(r.status, 501)
+})
+
+test('the request log drops secret keys from request bodies', async (t) => {
+  const s = await start(t, { 'billing/list/a.json': fixture('POST', '/login', { status: 200, body: {} }) })
+  await s.select({ runbook: 'billing.list' })
+  await fetch(`${s.base}/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"email":"a","password":"x"}' })
+  assert.deepEqual((await s.state()).requests[0].body, { email: 'a' })
+})
+
+test('payloadMatches ignores inherited keys', () => {
+  assert.equal(payloadMatches(JSON.parse('{"__proto__":{}}'), {}), false)
 })

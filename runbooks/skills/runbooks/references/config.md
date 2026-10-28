@@ -259,6 +259,7 @@ The Figma servers `setup` offers live in `${CLAUDE_PLUGIN_ROOT}/templates/design
 | `fixtures` | `<paths.runbooks>/_fixtures` | the folder of the fixtures |
 | `schema` | `null` | a local OpenAPI 3 JSON file (`.json`). `run` and `fixtures` check each fixture against it. YAML files and URLs are not read. For an API in another repository, the document it publishes, kept here at `docs/runbooks/_contract/openapi.json` by default (`upstream.md`, Another repository). `contract` checks calls and fixtures against it, and `list --affected` reads its changes (`upstream.md`, Contract) |
 | `redactHeaders` | `[]` | header names the recorder drops, besides `set-cookie`, `authorization` and `cookie`. Case does not matter |
+| `redactBodyKeys` | `[]` | key names the recorder drops from recorded request bodies and GraphQL variables, besides `password`, `token` and `secret`. A key whose name contains one of them is dropped, at any depth. Case does not matter |
 | `tokenEnv` | `""` | env var holding a service token, for an upstream API without password login |
 | `serverFile` | `null` | where `setup` copied the upstream server in the project (`<tests.ui.dir>/runbooks-upstream.mjs`) |
 
@@ -280,6 +281,54 @@ Errors the loader raises:
 - `upstream.port must be an integer from 1 to 65535`
 - `upstream.schema must be a JSON file (a local OpenAPI 3 .json path)`
 - `upstream.redactHeaders must be a list of header names`
+- `upstream.redactBodyKeys must be a list of key names`
+
+## Models
+
+The optional `models` block sets which model runs each command. It maps a row key to one of `inline`, `haiku`, `sonnet`, `opus` or `fable`. `inline` runs the command in the main session, with no sub-agent. Any other value launches the command's sub-agents on that model. The five values run from least to most capable in that order. A config without `models` uses the default table below, and a project's rows replace the default rows with the same key.
+
+A key is a command name followed by options and `<placeholder>` positionals, as in `run --mode test` or `help <question>`. A row matches an invocation when the command is the same, every option in the key is given (an option with a value must have that value), and a placeholder has a positional argument to match. When several rows match, the row with the most options and placeholders wins. On a tie, the more capable model wins. An invocation that no row matches runs `inline`. `--model <value>` on the command line overrides every row.
+
+| Row | Model |
+|---|---|
+| `check` | `inline` |
+| `list` | `inline` |
+| `ui` | `inline` |
+| `upgrade` | `inline` |
+| `roles:list` | `inline` |
+| `contexts:list` | `inline` |
+| `help` | `inline` |
+| `setup` | `inline` |
+| `settings` | `inline` |
+| `roles:create` | `inline` |
+| `roles:update` | `inline` |
+| `roles:delete` | `inline` |
+| `contexts:create` | `inline` |
+| `contexts:update` | `inline` |
+| `contexts:delete` | `inline` |
+| `permissions:manage` | `inline` |
+| `orchestrator` | `inline` |
+| `run --mode guided` | `inline` |
+| `coverage` | `haiku` |
+| `run --mode test` | `haiku` |
+| `run --mode prompt` | `haiku` |
+| `run --import` | `haiku` |
+| `run` | `sonnet` |
+| `help <question>` | `sonnet` |
+| `whats-next` | `sonnet` |
+| `map` | `sonnet` |
+| `audit` | `sonnet` |
+| `roles:generate` | `sonnet` |
+| `audit --fix` | `opus` |
+| `create` | `opus` |
+| `update` | `opus` |
+| `to-test` | `opus` |
+
+A value outside the five is a config error: `models["<key>"] must be one of inline, haiku, sonnet, opus, fable`. `models` itself must be an object or `null`, or the loader raises `models must be an object of "<command> [parameters]": model`.
+
+A key that is not a command with options and placeholders, an empty key, or a key whose command does not exist is not an error. The loader warns `models["<key>"]: <reason>; the row is ignored` and leaves the row out.
+
+`setup` writes the table into a project that has no `models` key. `/runbooks:settings models` changes it.
 
 ## Sources
 

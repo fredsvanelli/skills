@@ -68,6 +68,8 @@ One fixture is one `.json` file:
 | `request.method`, `request.path` | required. The path is the full path the app sends, including any prefix such as `/v1` |
 | `request.query` | optional. A request matches when it carries every key named here with an equal value. Extra keys in the request (`_t=123`) and a different key order do not matter |
 | `request.operationName` | optional, a non-empty string. The GraphQL operation the fixture answers ("GraphQL operations" below). A fixture without it answers any body |
+| `request.variables` | optional, a JSON object, only with `request.operationName`. The values the GraphQL request's `variables` must carry. A request may carry more |
+| `request.body` | optional, an object or array, only without `request.operationName`. The value the request's JSON body must carry ("Matching in `mocked` mode", rule 4) |
 | `response.status` | required |
 | `response.headers` | optional |
 | `response.body` | optional. An object or array is sent as JSON. A string is sent as is, with `text/plain` unless `content-type` says otherwise. A `204`, or a missing body, sends no body |
@@ -96,6 +98,18 @@ A GraphQL app sends every operation as `POST /graphql`, so method and path canno
 
 The server reads `operationName` from a JSON request body, one whose `content-type` contains `json`. A fixture with `operationName` answers only a request whose body names that operation. A request with no JSON body, or with a body that names no operation, gets only fixtures without `operationName`. A GraphQL query sent with `GET` carries `operationName` in its query string, so its fixture uses `request.query` instead.
 
+One operation can go out several times with different variables, such as a page whose tabs all send `SearchClients`. A fixture names the variables it answers in `request.variables`, and a fixture without `variables` answers any variables:
+
+```json
+{
+  "request": { "method": "POST", "path": "/graphql", "operationName": "SearchClients", "variables": { "type": "clients" } },
+  "response": { "status": 200, "body": { "data": { "searchClients": [] } } },
+  "source": "hand-written: clients tab"
+}
+```
+
+In a batch, each item is matched with its own `operationName` and `variables`. Why a partial object is not a query language: `${CLAUDE_PLUGIN_ROOT}/docs/adr/0009-fixtures-match-on-a-partial-payload.md`.
+
 A body that is a JSON array is a batch. It is answered item by item when at least one item has a fixture with `operationName`, and only those fixtures answer items:
 
 - An item without a fixture makes the whole batch a 501. Its body lists the missing operations in `operationNames`, in batch order, with `null` for an item that names none, and each one goes in `unmatched`.
@@ -122,7 +136,7 @@ _fixtures/billing/list-invoices/
 - `<capability>/<flow>/@<role>/` holds a role's responses for the whole runbook: its session (`GET /me` and the like) and its 403s.
 - `<capability>/<flow>/S02/@<role>/` holds them for one step.
 
-Lookup goes from the most specific folder to the least: step and role, then step, then role, then runbook. A fixture in a role folder answers only while that role is selected. Among the candidates, the order above decides before the rule on query keys. The role names are registered roles, `anonymous` included.
+Lookup goes from the most specific folder to the least: step and role, then step, then role, then runbook. A fixture in a role folder answers only while that role is selected. Among the candidates, the order above decides before the rule on fields. The role names are registered roles, `anonymous` included.
 
 `runbooks.mjs fixtures` accepts `@<role>` folders. It reports a folder whose name is not a role name, one whose role the registry does not have, and any role folder when role tracking is off.
 
@@ -160,7 +174,7 @@ Lookup goes from the most specific folder to the least: step, role and case; ste
 node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" fixtures <id> [--json]
 ```
 
-The command loads the fixtures of a `ui` runbook, counts them by `source`, and lists problems: a file that is not valid JSON, a missing `request.method`, `request.path` or `response.status`, a `request.operationName` that is not a non-empty string, and a folder that is not a step folder. With `upstream.schema` set, it also checks each JSON response body against the operation in the OpenAPI 3 JSON file. A fixture with no matching operation or status is a problem too. A fixture with `request.operationName` answers a GraphQL operation, which an OpenAPI document does not describe, so it skips this check. Problems are findings, so the command exits 0 with them. It exits 2 only when the id or the config is unusable (an unknown id, a runbook that is not `ui`, a missing schema file).
+The command loads the fixtures of a `ui` runbook, counts them by `source`, and lists problems: a file that is not valid JSON, a missing `request.method`, `request.path` or `response.status`, a `request.operationName` that is not a non-empty string, a `request.variables` that is not an object or has no `request.operationName`, a `request.body` beside a `request.operationName`, a `request.body` that is not an object or array, and a folder that is not a step folder. With `upstream.schema` set, it also checks each JSON response body against the operation in the OpenAPI 3 JSON file. A fixture with no matching operation or status is a problem too. A fixture with `request.operationName` answers a GraphQL operation, which an OpenAPI document does not describe, so it skips this check. Problems are findings, so the command exits 0 with them. It exits 2 only when the id or the config is unusable (an unknown id, a runbook that is not `ui`, a missing schema file).
 
 When `upstream.schema` is set, `run` runs this check before the first step. A runbook with a problem is `blocked`, not `failed`, and `run` offers `/runbooks:to-test <id>` or `/runbooks:update <id>` to re-record. The loader also warns, without invalidating the runbook, when a mocked runbook has no script or no fixtures.
 
@@ -178,7 +192,7 @@ The server answers in one of three modes, which a select call changes without a 
 
 | Mode | Behavior |
 |---|---|
-| `mocked` | Serves the selected runbook's fixtures. A request that matches none gets a 501 that names the method, path, runbook and step, and the GraphQL operation when the body names one. The server logs it in `unmatched`. The step that needed it becomes `blocked`, and `run` offers `/runbooks:update <id>` to record it. It answers CORS preflights, and its own `access-control-allow-origin` (the request's origin, else `*`) and `access-control-allow-credentials` replace the same headers in a fixture |
+| `mocked` | Serves the selected runbook's fixtures. A request that matches none gets a 501 that names the method, path, runbook and step, and the GraphQL operation when the body names one, plus the request's `variables` or `body` with the redacted keys dropped. The server logs it in `unmatched`. The step that needed it becomes `blocked`, and `run` offers `/runbooks:update <id>` to record it. It answers CORS preflights, and its own `access-control-allow-origin` (the request's origin, else `*`) and `access-control-allow-credentials` replace the same headers in a fixture |
 | `live` | Proxies every request to `upstream.baseUrl`, SSE as a stream and WebSocket through Node's `upgrade` event. The target's path prefix is not added: the app sends it already |
 | `record` | Proxies like `live` and saves each response as a fixture (see "Recording") |
 
@@ -189,14 +203,15 @@ Matching in `mocked` mode:
 1. The method and the path (without query) must be equal.
 2. Every query key the fixture names must be equal in the request.
 3. A fixture with `request.operationName` must name the operation of the request body ("GraphQL operations").
-4. Among the candidates, a fixture in the current step's folder wins over one in the runbook folder (with role and case folders, the order of "Case layer"), then the fixture naming the operation, then the fixture naming more query keys, then the lower file name. So a fixture without `operationName` in `S02/` still wins over one with it in the runbook folder while `S02` is current.
+4. A fixture with `request.variables` needs the request's `variables` to carry it, and a fixture with `request.body` needs a JSON request body that carries it. An object in the fixture matches an object in the request when every key of the fixture is in the request and its value matches, at any depth. An array or a scalar, `null` included, matches only an equal value. A request that leaves out a key the fixture sets to `null` does not match. A request with no JSON body matches no fixture with `body`.
+5. Among the candidates, a fixture in the current step's folder wins over one in the runbook folder (with role and case folders, the order of "Case layer"), then the fixture naming the operation, then the fixture naming more fields (query keys plus payload leaves, where a leaf is a scalar, `null` or an array), then the lower file name. So a fixture without `operationName` in `S02/` still wins over one with it in the runbook folder while `S02` is current.
 
 ### The copy in the project
 
 When `tests.ui` exists, `setup` copies the server to `<tests.ui.dir>/runbooks-upstream.mjs` and writes the path in `upstream.serverFile`, so CI runs mocked scripts without the plugin. When `tests.ui.root` points to a UI tests repository, the copy goes there, to `<tests.ui.root>/<tests.ui.dir>/runbooks-upstream.mjs`, and the fixtures stay in this one: that repository's CI checks out this one to pass `--fixtures` (`${CLAUDE_PLUGIN_ROOT}/docs/adr/0007-ui-tests-may-live-in-another-repo.md`). `list` and `coverage` do not warn about the copy while that repository is not cloned. The copy carries the plugin version in its header comment and in `export const VERSION`. `list` and `coverage` warn when the copy is missing or from another version, `/runbooks:setup` refreshes the copy, and `/runbooks:upgrade` offers to run it. The copy takes its options from flags, which all take a value:
 
 ```
-node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--runbook id] [--role name] [--case name] [--step Sxx]
+node <tests.ui.dir>/runbooks-upstream.mjs --fixtures <dir> [--port n] [--mode mocked|live|record] [--target <url>] [--redact a,b] [--redact-body a,b] [--runbook id] [--role name] [--case name] [--step Sxx]
 ```
 
 `--fixtures` is required. `--port` defaults to `4010` and `--mode` to `mocked`.
@@ -223,7 +238,7 @@ Three rules keep web pages away from these routes:
 
 An invalid body, or a `runbook`, `role`, `case` or `step` that is not a valid name, gets a 400 and changes nothing. Any other control route gets a 404.
 
-`requests` lists every request the app made since the last select, in all three modes, as `{ method, path, query, body, step, status }`. An agent checks the request a mocked screen sent by reading it there. `unmatched` lists the mocked requests that had no fixture, as `{ method, path, step }`, with `operationName` when the body names a GraphQL operation. A batch adds one entry per item without a fixture, and `operationName` is `null` for an item that names none. A step that checks a GraphQL request finds it in `requests` by the `operationName` in its `body`, or in an item of the `body` of a batch.
+`requests` lists every request the app made since the last select, in all three modes, as `{ method, path, query, body, step, status }`. A request body there drops the same keys as the 501 does. An agent checks the request a mocked screen sent by reading it there. `unmatched` lists the mocked requests that had no fixture, as `{ method, path, step }`, with `operationName` when the body names a GraphQL operation. The 501 body and the entry also carry the request's payload with the redacted keys dropped: `variables` for a named operation that sends them, `body` for another JSON object or array body. The agent sees which fixture to write. A batch adds one entry per item without a fixture, and `operationName` is `null` for an item that names none. The 501 body of a batch adds `variables` only when some missing item has variables, as an array in the order of `operationNames` with `null` for an item without. A step that checks a GraphQL request finds it in `requests` by the `operationName` in its `body`, or in an item of the `body` of a batch.
 
 The agent selects the runbook, the role, the case and the step before each step, and scripts do it in `beforeEach`. The scripts get `RUNBOOKS_UPSTREAM_URL`, the server origin, to make these calls.
 
@@ -237,7 +252,13 @@ Rules for what is saved:
 - Each file is named from the method, the path and a hash of the query, and holds `request`, `response` and `source` (`recorded <date> from <upstream.baseUrl origin>`).
 - When the request body names a GraphQL operation, `request.operationName` holds it and the file name carries it, as `post--graphql-GroupsByPartyId.json`, so two operations never share a file. Only a fixture naming the same operation counts as the one the server would serve, so an operation with none goes in the runbook's folder even while a step is current.
 - A batch that answers below 300 with an array of one result per item is saved item by item: each item that names an operation gets its own fixture with its result and the batch's headers. An item that names none is logged and not saved. A batch that answers 300 or more, or with anything but such an array, is logged and nothing of it is saved, because the server cannot tell which operation failed. Write that fixture by hand. An array body that names no operation is saved as one request, as before.
-- When the same operation comes twice with different results and no step is current, the second result overwrites the first, and the server logs `overwrote <file> with a different response`. Telling them apart needs a match on GraphQL variables, which fixtures do not have.
+- A named operation with non-empty `variables` is saved with them in `request.variables`. A JSON object or array body that names no operation is saved with `request.body`. The server first drops the keys that `password`, `token`, `secret` and `upstream.redactBodyKeys` name (`config.md`, "Upstream"), so no secret reaches a fixture. A payload that is empty after redaction, or an empty object body, is not saved.
+- A body whose `query` is a string starting with `{`, `query`, `mutation`, `subscription` or `fragment` is an anonymous GraphQL operation and is saved without `body`. A REST body such as `{"query":"foo"}` is saved with its body.
+- A saved payload adds a hash of it to the file name after the query hash, as `post--graphql-SearchClients-1a2b3c4d.json`. The hash covers the payload after redaction, with keys sorted, so key order and a dropped secret do not change the name.
+- A payload array is saved whole or not at all. Arrays match only when equal, so a redacted array would never match its own request. When redaction removes a key inside an array, the server drops the object key that holds the array, and for a top-level array body it saves no `body`. The fixture then matches more requests. Two calls of one operation with different variables write two files.
+- Only a fixture that has `variables` or `body` counts as the one the server would serve for a request with a payload. When only an older fixture without a payload exists, the payload fixture goes in the runbook's folder, even if the old fixture returns the same response. The exception is an older fixture without a payload that answers in the current step, from that step's folder: the payload fixture then goes in the same step folder, because the older one would win on the step layer. Delete the older fixture once the payload fixtures replace it.
+- When two calls send the same payload and get different results with no step current, the second result overwrites the first, and the server logs `overwrote <file> with a different response`.
+- A value that changes on every run, such as a timestamp or a client-generated id, makes the fixture stop matching, and the next mocked run gets a 501 for it. Remove volatile payload keys from the recorded files by hand, as for a cache-buster in the query.
 - `set-cookie`, `authorization`, `cookie` and every header in `upstream.redactHeaders` are dropped, whatever the case. Transport headers (`content-length`, `content-encoding`, `transfer-encoding`, `connection`, `keep-alive`) are dropped too, and so are `vary` and every `access-control-*` header, because the server sends its own CORS headers in `mocked` mode.
 - When a fixture the server would serve for the selected role and case is equal to the response, the server writes nothing. That fixture can be in any folder of the lookup order. The server saves a response that differs in the current step's folder.
 - A `text/event-stream` response streams to the app and is not recorded.
@@ -293,4 +314,4 @@ Without `upstream.schema`, only the fixtures are checked against the calls, and 
 
 `list --affected` reads the same file. When `upstream.schema` is among the changed files, it compares the version at the merge base with the working tree, operation by operation, with `$ref`s resolved and the path item's parameters merged in. Prose (`description`, `summary`, `title`, examples, tags) and `x-` keys change nothing. A runbook whose `calls` name an operation that was added, changed or removed is affected, with the reason `upstream schema: <METHOD /path> changed` (or `added`, `removed`). A schema that did not exist at the base gives no reason, because there is nothing to compare.
 
-In CI, the plugin is not installed. A job that runs the contract checks out the plugin's repository, pinned to the commit of the version the project uses, and runs `node <checkout>/runbooks/scripts/runbooks.mjs contract --strict` from the project root. It runs in the pull request that brings in a new version of the schema, and in every pull request that changes fixtures or calls. The plugin does not write that job: CI is the project's (`${CLAUDE_PLUGIN_ROOT}/commands/to-test.md`, step 8).
+In CI, the plugin is not installed. A job that runs the contract checks out the plugin's repository, pinned to the commit of the version the project uses, and runs `node <checkout>/runbooks/scripts/runbooks.mjs contract --strict` from the project root. It runs in the pull request that brings in a new version of the schema, and in every pull request that changes fixtures or calls. The plugin does not write that job: CI is the project's (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/instructions/to-test.md`, item 8).

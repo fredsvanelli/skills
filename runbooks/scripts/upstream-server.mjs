@@ -1,4 +1,4 @@
-// runbooks upstream server, runbooks 1.11.0. Copied by /runbooks:setup; do not edit.
+// runbooks upstream server, runbooks 1.13.0. Copied by /runbooks:setup; do not edit.
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
@@ -9,7 +9,7 @@ import crypto from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
-export const VERSION = '1.11.0'
+export const VERSION = '1.13.0'
 
 const MODES = ['mocked', 'live', 'record']
 const STEP_DIR = /^S\d+$/
@@ -21,11 +21,70 @@ const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '[::1]']
 // Headers starting with access-control- are never recorded either: the server answers CORS itself.
 const NEVER_RECORDED = ['set-cookie', 'authorization', 'cookie', 'content-length', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'vary']
 
+// Body keys whose values never reach a 501 body or the unmatched list. --redact-body adds more.
+const BODY_REDACTED = ['password', 'token', 'secret']
+
 const validOperation = (name) => typeof name === 'string' && name !== ''
 
 // The GraphQL operation a request body names: a JSON object with a non-empty string operationName. Else null.
 function operationOf(body) {
   return body !== null && typeof body === 'object' && !Array.isArray(body) && validOperation(body.operationName) ? body.operationName : null
+}
+
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+// The variables of a GraphQL request body or batch item: its variables when a plain object, else {}.
+const variablesOf = (item) => (isPlainObject(item) && isPlainObject(item.variables) ? item.variables : {})
+
+// JSON.stringify with object keys sorted at every depth, so equal payloads give equal text.
+export function stableJson(value) {
+  const sort = (item) => {
+    if (Array.isArray(item)) return item.map(sort)
+    if (isPlainObject(item)) return Object.fromEntries(Object.keys(item).sort().map((key) => [key, sort(item[key])]))
+    return item
+  }
+  return JSON.stringify(sort(value))
+}
+
+// A copy of a payload without the object keys whose lowercased name contains one of names (already lowercased),
+// at any depth, inside arrays too. Anything that is not an object or array comes back as is.
+export function redactPayload(value, names) {
+  if (Array.isArray(value)) return value.map((item) => redactPayload(item, names))
+  if (!isPlainObject(value)) return value
+  const out = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (!names.some((name) => key.toLowerCase().includes(name))) out[key] = redactPayload(item, names)
+  }
+  return out
+}
+
+// Like redactPayload, for saving a fixture. Arrays match only when deeply equal, so a redacted array would never
+// match its own request: a key that holds an array with something redacted inside is dropped whole. A top-level
+// array with something redacted inside comes back undefined.
+export function redactForRecording(value, names) {
+  const redacted = redactPayload(value, names)
+  if (Array.isArray(value)) return isDeepStrictEqual(redacted, value) ? redacted : undefined
+  if (!isPlainObject(value)) return redacted
+  const out = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (names.some((name) => key.toLowerCase().includes(name))) continue
+    const kept = redactForRecording(item, names)
+    if (kept !== undefined) out[key] = kept
+  }
+  return out
+}
+
+// True when every field of expected is in actual. Objects match recursively by subset. Arrays and scalars,
+// null included, match only when deeply equal.
+export function payloadMatches(expected, actual) {
+  if (!isPlainObject(expected)) return isDeepStrictEqual(expected, actual)
+  if (!isPlainObject(actual)) return false
+  return Object.entries(expected).every(([key, value]) => Object.hasOwn(actual, key) && payloadMatches(value, actual[key]))
+}
+
+// How many fields a payload names: a plain object counts its values' fields, anything else counts 1.
+export function payloadFields(value) {
+  return isPlainObject(value) ? Object.values(value).reduce((sum, item) => sum + payloadFields(item), 0) : 1
 }
 
 // A GraphQL batch is a JSON array body with at least one named operation. Any other array, such as the body of
@@ -34,7 +93,8 @@ const isBatch = (body) => Array.isArray(body) && body.some((item) => operationOf
 
 // Reads the .json files of a runbook folder (step null) and of its S<nn> subfolders, those of the @<role>
 // folders at both levels (role set), and those of the +<case> folders inside each of them (case set).
-// Invalid files are skipped, a request.operationName that is not a non-empty string included.
+// Invalid files are skipped, a request.operationName that is not a non-empty string included, a request.variables
+// that is not an object or has no operationName, and a request.body next to an operationName or that is not an object or array.
 function readFixtures(dir) {
   const fixtures = []
   const readDir = (folder, step, role = null, kase = null) => {
@@ -50,6 +110,9 @@ function readFixtures(dir) {
         const data = JSON.parse(fs.readFileSync(path.join(dir, folder, name), 'utf8'))
         if (!data?.request?.method || !data?.request?.path || data?.response?.status === undefined) continue
         if ('operationName' in data.request && !validOperation(data.request.operationName)) continue
+        if ('variables' in data.request && (!isPlainObject(data.request.variables) || !('operationName' in data.request))) continue
+        if ('body' in data.request && 'operationName' in data.request) continue
+        if ('body' in data.request && (typeof data.request.body !== 'object' || data.request.body === null)) continue
         fixtures.push({ file: folder ? `${folder}/${name}` : name, step, role, case: kase, request: data.request, response: data.response })
       } catch {
         continue
@@ -115,8 +178,10 @@ function queryOf(fixture) {
 // with an operationName is a candidate only for a request with that operationName; one without answers any body.
 // A fixture with a role is a candidate only for that role, and one with a case only for that case. The score is
 // step * 4 + role * 2 + case, so the order is step, role and case; step and role; step and case; step; role
-// and case; role; case; runbook level. Then a fixture naming the operation, then more query keys, then the file name.
-export function matchFixture(fixtures, { method, path: requestPath, query = {}, operationName = null }, step, role = null, kase = null) {
+// and case; role; case; runbook level. A fixture with variables is a candidate only when the request variables
+// carry them, and one with a body only when the request has a JSON body that carries it (see payloadMatches).
+// Then a fixture naming the operation, then more fields (query keys plus payload leaves), then the file name.
+export function matchFixture(fixtures, { method, path: requestPath, query = {}, operationName = null, variables = {}, body = undefined }, step, role = null, kase = null) {
   const candidates = []
   for (const fixture of fixtures) {
     if (String(fixture.request.method).toUpperCase() !== String(method).toUpperCase()) continue
@@ -128,13 +193,16 @@ export function matchFixture(fixtures, { method, path: requestPath, query = {}, 
     if (operation && fixture.request.operationName !== operationName) continue
     const named = queryOf(fixture)
     if (!Object.entries(named).every(([key, value]) => query[key] === value)) continue
-    candidates.push({ fixture, operation, keys: Object.keys(named).length })
+    const { variables: wantVariables, body: wantBody } = fixture.request
+    if (wantVariables !== undefined && !payloadMatches(wantVariables, variables)) continue
+    if (wantBody !== undefined && (body === undefined || !payloadMatches(wantBody, body))) continue
+    candidates.push({ fixture, operation, fields: Object.keys(named).length + payloadFields(wantVariables ?? wantBody ?? {}) })
   }
   const score = ({ step: s, role: r, case: c }) => (s !== null) * 4 + (r != null) * 2 + (c != null)
   candidates.sort((a, b) =>
     score(b.fixture) - score(a.fixture) ||
     b.operation - a.operation ||
-    b.keys - a.keys ||
+    b.fields - a.fields ||
     (a.fixture.file < b.fixture.file ? -1 : a.fixture.file > b.fixture.file ? 1 : 0))
   return candidates[0]?.fixture ?? null
 }
@@ -170,10 +238,11 @@ function parseBody(raw, contentType) {
   return raw
 }
 
-export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders = [], log = () => {}, mode = 'mocked', runbook = null, role = null, case: kase = null, step = null }) {
+export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders = [], redactBodyKeys = [], log = () => {}, mode = 'mocked', runbook = null, role = null, case: kase = null, step = null }) {
   const state = { runbook, mode, role, case: kase, step }
   let requests = []
   let unmatched = []
+  const bodyRedacted = [...BODY_REDACTED, ...redactBodyKeys.map((name) => String(name).toLowerCase())]
 
   // Control routes get no CORS headers, so a page on another origin cannot read them or send them JSON.
   const cors = (req) => {
@@ -271,9 +340,15 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const answer = Array.isArray(sent) ? batch(req, res, request, sent, fixtures) : null
     if (answer) return answer
     const operationName = operationOf(sent)
-    const fixture = matchFixture(fixtures, { ...request, operationName }, state.step, state.role, state.case)
+    const variables = operationName === null ? {} : variablesOf(sent)
+    const json = sent !== null && typeof sent === 'object' ? sent : undefined
+    const fixture = matchFixture(fixtures, { ...request, operationName, variables, body: json }, state.step, state.role, state.case)
     if (!fixture) {
       const operation = operationName === null ? {} : { operationName }
+      // The payload of the request: the variables of a named operation, else a JSON object or array body.
+      if (operationName !== null) {
+        if (isPlainObject(sent.variables)) operation.variables = redactPayload(sent.variables, bodyRedacted)
+      } else if (json !== undefined) operation.body = redactPayload(json, bodyRedacted)
       unmatched.push({ method: request.method, path: request.path, ...operation, step: state.step })
       return {
         status: 501,
@@ -291,15 +366,22 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
   function batch(req, res, request, sent, fixtures) {
     const named = fixtures.filter((fixture) => fixture.request.operationName !== undefined)
     const names = sent.map(operationOf)
-    const found = names.map((operationName) =>
-      operationName === null ? null : matchFixture(named, { ...request, operationName }, state.step, state.role, state.case))
+    const found = names.map((operationName, i) =>
+      operationName === null ? null : matchFixture(named, { ...request, operationName, variables: variablesOf(sent[i]) }, state.step, state.role, state.case))
     if (!found.some(Boolean)) return null
     const missing = names.filter((_, i) => !found[i])
     if (missing.length > 0) {
-      for (const operationName of missing) unmatched.push({ method: request.method, path: request.path, operationName, step: state.step })
+      const payloads = []
+      names.forEach((operationName, i) => {
+        if (found[i]) return
+        payloads.push(operationName !== null && isPlainObject(sent[i].variables) ? redactPayload(sent[i].variables, bodyRedacted) : null)
+        const variables = payloads.at(-1)
+        unmatched.push({ method: request.method, path: request.path, operationName, ...(variables ? { variables } : {}), step: state.step })
+      })
+      const shown = payloads.some(Boolean) ? { variables: payloads } : {}
       return {
         status: 501,
-        send: () => sendJson(req, res, 501, { error: 'no fixture', method: request.method, path: request.path, operationNames: missing, runbook: state.runbook, step: state.step }),
+        send: () => sendJson(req, res, 501, { error: 'no fixture', method: request.method, path: request.path, operationNames: missing, ...shown, runbook: state.runbook, step: state.step }),
       }
     }
     const failed = found.find((fixture) => fixture.response.status >= 300)
@@ -344,11 +426,34 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     }
   }
 
-  const fixtureFile = ({ method, path: requestPath, query, operationName }) => {
+  // The payload to save with a request, redacted: the variables of a named operation, else a JSON array body or
+  // a plain object body. A body whose query is a string starting with {, query, mutation, subscription or fragment
+  // is an anonymous GraphQL operation and is not saved. Empty ones are left out.
+  const payloadOf = (sent) => {
+    const operationName = operationOf(sent)
+    if (operationName !== null) {
+      const variables = redactForRecording(variablesOf(sent), bodyRedacted)
+      return Object.keys(variables).length ? { variables } : {}
+    }
+    if (Array.isArray(sent)) {
+      const body = redactForRecording(sent, bodyRedacted)
+      return body === undefined ? {} : { body }
+    }
+    if (isPlainObject(sent) && !(typeof sent.query === 'string' && /^\s*(\{|query\b|mutation\b|subscription\b|fragment\b)/.test(sent.query))) {
+      const body = redactForRecording(sent, bodyRedacted)
+      return Object.keys(body).length ? { body } : {}
+    }
+    return {}
+  }
+
+  // The file name of a fixture: method, path, operation, then a hash of the query and a hash of the payload.
+  const fixtureFile = ({ method, path: requestPath, query, operationName, variables, body }) => {
     const base = `${method.toLowerCase()}-${requestPath.toLowerCase().replace(/[^a-z0-9]/g, '-')}`
     const operation = operationName ? `-${operationName.replace(/[^A-Za-z0-9_]/g, '-')}` : ''
     const hash = Object.keys(query).length ? `-${crypto.createHash('sha1').update(new URLSearchParams(query).toString()).digest('hex').slice(0, 8)}` : ''
-    return `${base}${operation}${hash}.json`
+    const payload = variables !== undefined || body !== undefined ? { ...(variables !== undefined ? { variables } : {}), ...(body !== undefined ? { body } : {}) } : null
+    const payloadHash = payload ? `-${crypto.createHash('sha1').update(stableJson(payload)).digest('hex').slice(0, 8)}` : ''
+    return `${base}${operation}${hash}${payloadHash}.json`
   }
 
   // Saves the response as fixtures of the selected runbook, given the request body the app sent. A GraphQL batch
@@ -366,7 +471,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const kept = Object.keys(headers).length ? { headers } : {}
     const body = parseBody(raw, upRes.headers['content-type'])
     if (!isBatch(sent)) {
-      return saveOne(dir, { ...request, operationName: operationOf(sent) }, { status, ...kept, ...(body === null ? {} : { body }) })
+      return saveOne(dir, { ...request, operationName: operationOf(sent), ...payloadOf(sent) }, { status, ...kept, ...(body === null ? {} : { body }) })
     }
     const label = `${request.method} ${request.path} (${sent.map((item) => operationOf(item) ?? 'unnamed').join(', ')})`
     if (status >= 300) return log(`not recording ${label}: the batch answered ${status}; write the failing operation's fixture by hand`)
@@ -374,19 +479,27 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     sent.forEach((item, i) => {
       const operationName = operationOf(item)
       if (operationName === null) return log(`not recording item ${i + 1} of ${label}: it has no operationName`)
-      saveOne(dir, { ...request, operationName }, { status, ...kept, body: body[i] })
+      saveOne(dir, { ...request, operationName, ...payloadOf(item) }, { status, ...kept, body: body[i] })
     })
   }
 
   // Writes one fixture, unless the fixture the server would serve for the request is equal. For a request with an
   // operationName, only a fixture naming that operation counts. A differing response goes in the current step's
   // folder. With a role selected, the file goes in that role's folder inside the folder it would otherwise use, and
-  // with a case selected, in the +<case> folder inside that.
+  // with a case selected, in the +<case> folder inside that. A request with variables or a body counts only
+  // against fixtures that have variables or a body.
   function saveOne(dir, request, response) {
     const fixtures = readFixtures(dir)
-    const pool = request.operationName ? fixtures.filter((fixture) => fixture.request.operationName !== undefined) : fixtures
-    const existing = matchFixture(pool, request, state.step, state.role, state.case)
+    const hasPayload = request.variables !== undefined || request.body !== undefined
+    let pool = request.operationName ? fixtures.filter((fixture) => fixture.request.operationName !== undefined) : fixtures
+    if (hasPayload) pool = pool.filter((fixture) => fixture.request.variables !== undefined || fixture.request.body !== undefined)
+    const existing = matchFixture(pool, { ...request, variables: request.variables ?? {} }, state.step, state.role, state.case)
+    // An old fixture without a payload that answers in the current step would keep winning on the step layer.
+    // The new file then goes in that step folder, to share the layer and win on fields.
+    const answering = hasPayload && state.step ? matchFixture(request.operationName ? fixtures.filter((fixture) => fixture.request.operationName !== undefined) : fixtures, { ...request, variables: request.variables ?? {} }, state.step, state.role, state.case) : null
+    const shadowed = answering && answering.step === state.step && answering.request.variables === undefined && answering.request.body === undefined
     let folder = dir
+    if (!existing && shadowed) folder = path.join(dir, state.step)
     if (existing) {
       const stored = existing.response
       if (stored.status === response.status && isDeepStrictEqual(stored.body ?? null, response.body ?? null)) return
@@ -399,6 +512,8 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
         method: request.method,
         path: request.path,
         ...(request.operationName ? { operationName: request.operationName } : {}),
+        ...(request.variables !== undefined ? { variables: request.variables } : {}),
+        ...(request.body !== undefined ? { body: request.body } : {}),
         ...(Object.keys(request.query).length ? { query: request.query } : {}),
       },
       response,
@@ -418,7 +533,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const chunks = []
     const finish = (status) => {
       entry.status = status
-      entry.body = parseBody(Buffer.concat(chunks).toString('utf8'), req.headers['content-type'])
+      entry.body = redactPayload(parseBody(Buffer.concat(chunks).toString('utf8'), req.headers['content-type']), bodyRedacted)
       requests.push(entry)
       log(`${request.method} ${request.path} -> ${status}`)
     }
@@ -485,7 +600,7 @@ export function createUpstreamServer({ fixturesRoot, target = '', redactHeaders 
     const request = { method: req.method.toUpperCase(), path: url.pathname, query }
     const body = parseBody(raw, req.headers['content-type'])
     const answer = mocked(req, res, request, body)
-    requests.push({ ...request, body, step: state.step, status: answer.status })
+    requests.push({ ...request, body: redactPayload(body, bodyRedacted), step: state.step, status: answer.status })
     log(`${request.method} ${request.path} -> ${answer.status}`)
     answer.send()
   }
@@ -585,6 +700,7 @@ function cliOptions(argv) {
     fixturesRoot: path.resolve(flags.fixtures),
     target: flags.target ?? '',
     redactHeaders: flags.redact ? flags.redact.split(',').map((name) => name.trim()).filter(Boolean) : [],
+    redactBodyKeys: flags['redact-body'] ? flags['redact-body'].split(',').map((name) => name.trim()).filter(Boolean) : [],
     port,
     mode,
     runbook: flags.runbook ?? null,

@@ -1,6 +1,6 @@
 ---
 description: Remove a role from the registry, the config and the runbooks that cite it
-argument-hint: "<name>"
+argument-hint: "<name> [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -13,12 +13,17 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `<name>` | the role to delete. Required. `anonymous` cannot be deleted |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:roles:delete support-agent`.
 
 Removes the role from `<paths.runbooks>/roles.json`, `accounts.<name>` from the config and every line that names the role from the runbooks. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md`, "Roles" and "Review", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`.
 
 Run `git status --porcelain` now and keep the list for the commit step.
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Load the role
 

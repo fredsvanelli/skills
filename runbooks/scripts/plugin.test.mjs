@@ -35,7 +35,7 @@ test('the scenarios skill is invoked by the model only', () => {
   assert.equal(data.name, 'scenarios')
   assert.equal(typeof data.description, 'string')
   assert.equal(data['user-invocable'], false)
-  assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/create.md'), 'utf8'), /`runbooks:scenarios`/)
+  assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/instructions/create.md'), 'utf8'), /`runbooks:scenarios`/)
 })
 
 test('every command has a description and is user-invoked', () => {
@@ -102,4 +102,83 @@ test('the upstream reference has the sections the commands link to', () => {
   const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/references/upstream.md'), 'utf8')
   const headings = [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1])
   assert.deepEqual(headings, ['Modes', 'Fixtures', 'Server', 'Control routes', 'Recording', 'Scripts', 'Contract'])
+})
+
+test('the dispatch reference has the sections the commands link to', () => {
+  const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/references/agents.md'), 'utf8')
+  const headings = [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1])
+  assert.deepEqual(headings, [
+    'Choosing the model',
+    'Dispatch steps',
+    'The brief',
+    'The report',
+    'Questions',
+    'Calls to other commands',
+    'Commits',
+    'When the model cannot launch'
+  ])
+})
+
+const DISPATCHING = ['run', 'coverage', 'help', 'whats-next', 'map', 'audit', 'roles:generate', 'create', 'update', 'to-test']
+
+for (const name of DISPATCHING) {
+  test(`${name} is a dispatch file with an instructions file`, () => {
+    const file = name.replace(':', '/')
+    const command = fs.readFileSync(path.join(PLUGIN_ROOT, `commands/${file}.md`), 'utf8')
+    assert.match(command, /^## Dispatch$/m)
+    assert.match(parseYaml(splitFrontmatter(command).yaml)['argument-hint'], /--model/)
+    const instructions = fs.readFileSync(path.join(PLUGIN_ROOT, `skills/runbooks/instructions/${file}.md`), 'utf8')
+    assert.equal(splitFrontmatter(instructions), null)
+  })
+}
+
+for (const rel of findFiles(PLUGIN_ROOT, 'commands/**/*.md')) {
+  const name = rel.replace(/^commands\//, '').replace(/\.md$/, '').replace('/', ':')
+  test(`${name} accepts --model`, () => {
+    const command = fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')
+    assert.match(parseYaml(splitFrontmatter(command).yaml)['argument-hint'], /--model/)
+    assert.match(command, /^\| `--model/m)
+    if (!DISPATCHING.includes(name) && name !== 'orchestrator') assert.match(command, /^## Model$/m)
+  })
+}
+
+test('run escalates through its instructions file', () => {
+  const instructions = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills/runbooks/instructions/run.md'), 'utf8')
+  assert.match(instructions, /status: escalate/)
+})
+
+test('every default model row that is not inline names a dispatching command', async () => {
+  const { DEFAULT_MODELS } = await import('./lib/models.mjs')
+  for (const [row, model] of Object.entries(DEFAULT_MODELS)) {
+    if (model === 'inline') continue
+    assert.ok(DISPATCHING.includes(row.split(' ')[0]), `${row} is not a dispatching command`)
+  }
+})
+
+test('orchestrator stages take the model of their command row', () => {
+  const command = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/orchestrator.md'), 'utf8')
+  assert.doesNotMatch(command, /Choose the model/)
+  assert.match(command, /runbooks\.mjs" model/)
+  assert.match(command, /references\/agents\.md/)
+  assert.doesNotMatch(command, /commands\/(map|create|update|to-test|run)\.md/)
+})
+
+test('setup writes the model table and settings has a models group', () => {
+  const setup = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/setup.md'), 'utf8')
+  const settings = fs.readFileSync(path.join(PLUGIN_ROOT, 'commands/settings.md'), 'utf8')
+  assert.match(setup, /models --defaults --json/)
+  assert.match(setup, /models --diff --json/)
+  assert.match(settings, /^\| `models` \|/m)
+})
+
+test('every dispatch command names an instructions file that exists', () => {
+  const missing = []
+  for (const rel of findFiles(PLUGIN_ROOT, 'commands/**/*.md')) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, rel), 'utf8')
+    if (!/^## Dispatch\b/m.test(text)) continue
+    const named = [...text.matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/(skills\/runbooks\/instructions\/[\w./-]+\.md)/g)]
+    if (named.length === 0) missing.push(`${rel} names no instructions file`)
+    for (const match of named) if (!fs.existsSync(path.join(PLUGIN_ROOT, match[1]))) missing.push(`${rel} -> ${match[1]}`)
+  }
+  assert.deepEqual(missing, [])
 })

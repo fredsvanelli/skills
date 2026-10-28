@@ -47,6 +47,24 @@ export function loadFixtures(root, dir, { roles = null, cases = null } = {}) {
         problems.push(`${file}: request.operationName must be a non-empty string`)
         continue
       }
+      // request.variables holds the GraphQL payload, so it needs an operation and may not sit beside a REST body.
+      const { variables, body } = data.request
+      if ('variables' in data.request && !(typeof variables === 'object' && variables !== null && !Array.isArray(variables))) {
+        problems.push(`${file}: request.variables must be an object`)
+        continue
+      }
+      if ('variables' in data.request && !('operationName' in data.request)) {
+        problems.push(`${file}: request.variables needs request.operationName`)
+        continue
+      }
+      if ('body' in data.request && 'operationName' in data.request) {
+        problems.push(`${file}: request.body cannot go with request.operationName; name the GraphQL payload in request.variables`)
+        continue
+      }
+      if ('body' in data.request && !(typeof body === 'object' && body !== null)) {
+        problems.push(`${file}: request.body must be an object or array`)
+        continue
+      }
       fixtures.push({ file, step, role, case: kase, request: data.request, response: data.response, source: data.source })
     }
   }

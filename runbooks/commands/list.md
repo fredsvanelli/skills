@@ -1,6 +1,6 @@
 ---
 description: List runbooks, filtered, or the ones a diff affects
-argument-hint: "[--capability x] [--feature y] [--tag t] [--status s] [--path glob] [--role r] [--review] [--affected [base]]"
+argument-hint: "[--capability x] [--feature y] [--tag t] [--status s] [--path glob] [--role r] [--review] [--affected [base]] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -22,8 +22,15 @@ Filters combine: a runbook is listed when it matches all of them. Without any, e
 | `--role r` | role tracking on only: runbooks whose `roles` include the role (`all` counts for every registered role) |
 | `--review` | role tracking on only: runbooks with a `review` entry |
 | `--affected [base]` | runbooks reached by the changes since `base`: committed, uncommitted and untracked files. `base` defaults to `git.base`. Leaves out `deprecated` runbooks and placeholders |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:list`, `/runbooks:list --capability billing --status draft`, `/runbooks:list --tag critical`, `/runbooks:list --role editor`, `/runbooks:list --review`, `/runbooks:list --affected develop`.
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
+
+## Steps
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" list $ARGUMENTS`.
 2. Show the table as printed. For each `warning:` line on stderr, add the runbook path and what to fix; the warning text names the problem.

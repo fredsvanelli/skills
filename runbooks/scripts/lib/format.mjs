@@ -304,3 +304,14 @@ export function passesMarkdown({ id, context, passes }) {
   return `${head}${table(['Role', 'Case', 'Data case', 'Viewport', 'Account'],
     passes.map((p) => [p.role, p.case ?? '-', p.dataCase ?? '-', p.viewport ?? '-', p.noAccount ? 'none' : 'yes']))}\n`
 }
+
+export function modelsMarkdown({ rows, defaults, diff }) {
+  if (diff) {
+    const lines = [`Missing rows: ${diff.missing.length}`, '']
+    if (diff.differing.length === 0) lines.push('No row differs from the default.')
+    else lines.push(table(['Key', 'Config', 'Default'], diff.differing.map((d) => [d.key, d.value, d.default])))
+    return `${lines.join('\n')}\n`
+  }
+  if (!defaults) return `${table(['Key', 'Model'], Object.entries(rows))}\n`
+  return `${table(['Key', 'Model', 'Default'], Object.entries(rows).map(([key, model]) => [key, model, defaults[key] ?? '']))}\n`
+}

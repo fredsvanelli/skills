@@ -1,6 +1,6 @@
 ---
 description: Open a local read-only page with capabilities, runbooks, run history and coverage
-argument-hint: "[--port n]"
+argument-hint: "[--port n] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -13,8 +13,15 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `--port n` | the port the page listens on. Without it, the script picks its default port |
+| `--model m` | accepted for consistency with the other commands: `inline`, `haiku`, `sonnet`, `opus` or `fable`. `ui` always runs in the main session, so it changes nothing |
 
 Examples: `/runbooks:ui`, `/runbooks:ui --port 4800`.
+
+## Model
+
+`ui` always runs in the main session, because its server must keep running after the command ends. `--model` is accepted and changes nothing.
+
+## Steps
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" ui $ARGUMENTS` with the Bash tool in the background, so it outlives the turn.
 2. Wait for its first line, `runbooks-ui listening on http://127.0.0.1:<port>`, and give the user that URL as a link. Exit code 2 means the server did not start; show its message. For a taken port, offer `--port`. For a missing config, offer `/runbooks:setup`.

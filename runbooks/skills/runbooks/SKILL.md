@@ -9,7 +9,7 @@ A runbook is a versioned UAT script for one flow: preconditions, ordered steps, 
 
 ## Commands
 
-Each command file holds the full procedure. When the user asks for one of these in their own words, read the file and follow it as if they had typed the command.
+Each command file holds the procedure or, for the commands that run in a sub-agent, the dispatch steps that lead to it. When the user asks for one of these in their own words, read the file and follow it as if they had typed the command.
 
 | Request | Command | File |
 |---|---|---|
@@ -39,6 +39,8 @@ Each command file holds the full procedure. When the user asks for one of these 
 | change a context's keys, cases or description, and mark the affected runbooks for review | `/runbooks:contexts:update` | `${CLAUDE_PLUGIN_ROOT}/commands/contexts/update.md` |
 | delete a context, turning each role's map on its keys into a list, and mark the affected runbooks for review | `/runbooks:contexts:delete` | `${CLAUDE_PLUGIN_ROOT}/commands/contexts/delete.md` |
 | change what a role may do on each capability/feature key and mark the affected runbooks for review | `/runbooks:permissions:manage` | `${CLAUDE_PLUGIN_ROOT}/commands/permissions/manage.md` |
+
+The `models` table in the config sets the model each command runs on, per command and parameter. An `inline` row runs the command in the main session, and any other row runs it in a sub-agent on that model, with questions relayed to the user. `--model inline|haiku|sonnet|opus|fable` forces a model for one invocation (`references/agents.md`, `references/config.md`).
 
 Before calling feature work done, run `list --affected` and then `run` on what it returns.
 

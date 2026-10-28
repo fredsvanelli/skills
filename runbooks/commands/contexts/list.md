@@ -1,6 +1,6 @@
 ---
 description: List the contexts of the role registry, or show one context with its runbooks
-argument-hint: "[name] [--json]"
+argument-hint: "[name] [--json] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -14,10 +14,15 @@ Arguments: `$ARGUMENTS`
 |---|---|
 | `[name]` | show one context instead of the whole list: its row and the runbooks on its keys |
 | `--json` | print the rows as JSON, for scripts |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:contexts:list`, `/runbooks:contexts:list client-access`, `/runbooks:contexts:list --json`.
 
 Read-only. It writes nothing and commits nothing. To change a context, use `/runbooks:contexts:create`, `/runbooks:contexts:update` or `/runbooks:contexts:delete`. Contexts and cases: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles".
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Check that tracking is on
 

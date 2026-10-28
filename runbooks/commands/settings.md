@@ -1,6 +1,6 @@
 ---
 description: Change what setup configured (stack, test libraries, design reference, app, accounts, viewports, sources, git and commit policy, MCP servers)
-argument-hint: "[group ...]"
+argument-hint: "[group ...] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -12,7 +12,8 @@ Arguments: `$ARGUMENTS`
 
 | Parameter | Use |
 |---|---|
-| `[group ...]` | optional: the groups to change, by the names in the table of step 2 (`design`, `commits`, `roles`). Without it, the command shows the current settings and asks what to change |
+| `[group ...]` | optional: the groups to change, by the names in the table of step 2 (`design`, `commits`, `roles`, `models`). Without it, the command shows the current settings and asks what to change |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:settings`, `/runbooks:settings design`, `/runbooks:settings stack tests`.
 
@@ -21,6 +22,10 @@ Changes one part of a project that `/runbooks:setup` already prepared, without g
 Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md` and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The questions and the detection for each group are the ones in `${CLAUDE_PLUGIN_ROOT}/commands/setup.md`; this command asks only those of the chosen groups.
 
 Run `git status --porcelain` now and keep the list: a file that is already dirty changes how its commit works (`commits.md`). When `tests.ui.root` points to a UI tests repository, keep `git -C <tests.ui.root> status --porcelain` too.
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Read the current settings
 
@@ -49,9 +54,10 @@ Otherwise print the current value of every group in a table, in the config `lang
 | `tickets` | `tickets.fetch` |
 | `git` | `git.base`, `git.protected`, `git.messageFormat` |
 | `commits` | `commits.runbooks`, `commits.setup` |
-| `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `tokenEnv`, `serverFile`, and the obsolete `root`, which this group removes. Only with `ui` |
+| `upstream` | every `upstream.*` key: `mode`, `baseUrl`, `start`, `urlEnv`, `port`, `fixtures`, `schema`, `redactHeaders`, `redactBodyKeys`, `tokenEnv`, `serverFile`, and the obsolete `root`, which this group removes. Only with `ui` |
 | `roles` | `roles.enabled`. Turns role tracking on with the flow of `setup.md`; it does not turn it off. When tracking is already on, choosing the group shows the current value and changes nothing |
 | `stale` | `staleDays` |
+| `models` | `models`: the model per command and parameter. `--model` overrides it for one invocation |
 | `mcp` | `mcp.headless`, `mcp.headed`, `mcp.secretsFile`, `paths.evidence`, and the two Playwright servers in `.mcp.json`. Only with `ui` |
 
 `paths.runbooks` is not in any group: the config lives at `docs/runbooks/runbooks.config.json` whatever it says, and moving the runbooks means moving their reports and ignore rules too. When the user asks for it, say so and stop.
@@ -63,6 +69,8 @@ Done when you hold the groups to change.
 Ask with `AskUserQuestion`, in rounds of four, each question with the current value as the recommended option ("Keep `<value>`"). Ask the questions `setup.md` step 2 asks for those keys, with its detection from step 1 where a question needs it (installed test libraries, design links, breakpoints). A key the user wants to clear takes its default from `config.md`.
 
 Setup does not ask `staleDays`, because the default fits a new project, so the `stale` group has its own question: one `AskUserQuestion` with the current value as "Keep `<value>`" and the options `14`, `30` and `60`. The user types any other positive integer under "Other". A value that is not a positive integer is asked again, because the loader rejects it.
+
+The `models` group has its own questions. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/runbooks.mjs" models` and print its table (key, model, default). Ask with `AskUserQuestion`, multi-select, in rounds of four rows, which rows to change. Then ask each chosen row for its new value. The question takes four options: offer "Keep `<value>`" as the recommended option, "Reset to default `<default>`" when the value differs from the default, and the most likely other values. Say that the remaining values (`inline`, `haiku`, `sonnet`, `opus`, `fable`) can be typed under "Other". The loader rejects any other value, so ask again when the user types one. Write only the rows that changed. The group needs no entry in the table below, because no other file depends on it.
 
 Some changes reach past their own key. Work out each one from the table below, ask what it needs, and add its files to the write list:
 

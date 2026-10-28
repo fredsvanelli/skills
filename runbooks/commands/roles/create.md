@@ -1,6 +1,6 @@
 ---
 description: Register a new role with its parents, account and permissions
-argument-hint: "[name]"
+argument-hint: "[name] [--model inline|haiku|sonnet|opus|fable]"
 disable-model-invocation: true
 ---
 
@@ -13,12 +13,17 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `[name]` | the new role, kebab-case (`^[a-z0-9][a-z0-9-]*$`) and not registered yet. Without it, the command asks |
+| `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:roles:create`, `/runbooks:roles:create support-agent`.
 
 Adds the role to `<paths.runbooks>/roles.json` and, for a `ui` stack, its login to `accounts` in the config. Read first: `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/config.md`, "Roles", and `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/commits.md`. The permission questions are those of `${CLAUDE_PLUGIN_ROOT}/commands/permissions/manage.md` (step 2).
 
 Run `git status --porcelain` now and keep the list for the commit step.
+
+## Model
+
+With `--model` set to a value other than `inline`, follow "Dispatch steps" in `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/agents.md` with this file as the instructions file, and the sub-agent skips this section. Otherwise follow the file below as usual.
 
 ## 1. Check that tracking is on
 
