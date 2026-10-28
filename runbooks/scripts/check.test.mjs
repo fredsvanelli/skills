@@ -239,3 +239,14 @@ test('check counts a report cited by a cell as the one last_run records', () => 
   // Only the older report is on disk and a cell cites it.
   assert.equal(JSON.parse(run(['check', 'billing.pay', '--root', dir, '--json']).stdout).lastRunIsLatest, true)
 })
+
+test('check answers from the cells when no report is on disk', () => {
+  const dir = cellProject(CELLS_RUN, [])
+  const { stdout } = run(['check', 'billing.pay', '--root', dir])
+  assert.doesNotMatch(stdout, /never/)
+  assert.match(stdout, /^Last run of billing\.pay \(Pay an invoice\): 2026-10-02 failed \(mixed\) \(outdated\), no report on disk$/m)
+  assert.match(stdout, /^Mixed runs: /m)
+  assert.match(stdout, /^Pending: S03$/m)
+  assert.match(stdout, /^Failed cells: S01$/m)
+  assert.match(stdout, /^Outdated cells: S02/m)
+})
