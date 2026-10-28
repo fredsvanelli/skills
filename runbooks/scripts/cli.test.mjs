@@ -883,3 +883,20 @@ test('rename-role-cells refuses same, non-kebab and existing target names and wr
   assert.match(clash.stderr, /docs\/runbooks\/billing\/issue-invoice\.md: last_run already has cells for role "partner"\. Nothing was written/)
   assert.equal(fs.readFileSync(file, 'utf8'), before)
 })
+
+test('rename-role-cells refuses a runbook whose last_run has problems and writes nothing', (t) => {
+  const { dir, file } = lastRunProject()
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const configFile = path.join(dir, 'docs/runbooks/runbooks.config.json')
+  const raw = JSON.parse(fs.readFileSync(configFile, 'utf8'))
+  raw.roles = { enabled: true }
+  fs.writeFileSync(configFile, JSON.stringify(raw, null, 2))
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/roles.json'), JSON.stringify({ version: 1, roles: { admin: {}, partner: {} } }))
+  const block = `last_run:\n  runs:\n    r1: { date: 2026-10-10, commit: "abc1234", report: _runs/${FULL_REPORT} }\n  cells:\n    S01: { admin: passed r1 }\n    S02: { admin: nope r1 }`
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^last_run:.*$/m, block))
+  const before = fs.readFileSync(file, 'utf8')
+  const out = run(['rename-role-cells', 'admin', 'owner', '--root', dir, '--write'])
+  assert.equal(out.code, 2)
+  assert.match(out.stderr, /billing\.issue-invoice: last_run\.cells\.S02: state "nope" is not a step state\. Fix last_run by hand first\. Nothing was written/)
+  assert.equal(fs.readFileSync(file, 'utf8'), before)
+})

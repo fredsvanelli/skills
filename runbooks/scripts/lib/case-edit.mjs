@@ -6,7 +6,7 @@ import path from 'node:path'
 import { loadRunbooks } from './runbooks.mjs'
 import { fixturesDir } from './fixtures.mjs'
 import { setRoleKeys, setLastRun } from './frontmatter-edit.mjs'
-import { readLastRun, renameCells } from './last-run.mjs'
+import { readLastRun, renameCells, requireReadableLastRun } from './last-run.mjs'
 import { splitFrontmatter, parseYaml } from './yaml.mjs'
 import { OUTCOMES } from './roles.mjs'
 
@@ -233,6 +233,7 @@ export function planRenameCase(root, config, registry, from, to, { write = false
   if (ownerOf(registry, to) !== null) throw new Error(`"${to}" is already a case`)
   if (!/^[a-z0-9][a-z0-9-]*$/.test(to)) throw new Error(`case "${to}" must be kebab-case`)
   const runbooks = loadRunbooks(root, config).filter((rb) => rb.context === owner)
+  runbooks.forEach(requireReadableLastRun)
   const rename = (list) => list.map((name) => (name === from ? to : name))
   const edit = (text) => {
     const rewritten = rewriteCases(text, rename, { emptyStepLine: 'skip' })
@@ -248,6 +249,7 @@ export function planDeleteCase(root, config, registry, name, { write = false } =
   const owner = ownerOf(registry, name)
   if (owner === null) throw new Error(`no case "${name}"`)
   const runbooks = loadRunbooks(root, config).filter((rb) => rb.context === owner)
+  runbooks.forEach(requireReadableLastRun)
   const drop = (list) => list.filter((item) => item !== name)
   return plan(root, config, runbooks, (text) => rewriteCases(text, drop, { emptyStepLine: 'skip' }), {
     write,

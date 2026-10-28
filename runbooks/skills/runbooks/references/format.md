@@ -355,7 +355,7 @@ last_run:
 - `date`, `commit` and `report` copy the newest run. `oldest` is the date of the oldest run, and `stale` ages a runbook from it.
 - `outdated: true` while any cell is outdated.
 - A `no-account` row fills only a pending cell and never replaces a cell that ran.
-- `runbooks.mjs last-run` writes the shape, `mark-outdated` sets `outdated`, and `rename-case` and `rename-role-cells` rename a case or role in the cells. `last-run` and `mark-outdated` exit 2 and write nothing when `last_run` has a problem (a state, run key or pass value they cannot read), because the write would drop the cells they skipped. Fix the value by hand first.
+- `runbooks.mjs last-run` writes the shape, `mark-outdated` sets `outdated`, and `rename-case` and `rename-role-cells` rename a case or role in the cells. `last-run`, `mark-outdated`, `rename-role-cells`, `rename-case` and `delete-case` exit 2 and write nothing when a `last_run` they would touch has a problem (a state, run key or pass value they cannot read), because the write would drop the cells they skipped. `rename-role-cells` checks every runbook, and the two case commands check every runbook of the case's context. Fix the value by hand first.
 - The old one-line shape (`last_run: { date, commit, result, report }`, with `outdated: true` at most) is still read. `mark-outdated` keeps it in that shape. The first `last-run` write converts it, and the cells it did not hold stay pending.
 
 ## Status

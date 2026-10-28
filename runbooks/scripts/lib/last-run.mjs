@@ -328,3 +328,9 @@ export function renameCells(lastRun, { field, from, to }) {
   }
   return { ...lastRun, cells }
 }
+
+// Throws when the loader found a problem in the runbook's last_run: an edit would drop the cells it could not read.
+export function requireReadableLastRun(runbook) {
+  const problem = runbook.problems.find((item) => item.startsWith('last_run'))
+  if (problem) throw new Error(`${runbook.id}: ${problem}. Fix last_run by hand first. Nothing was written`)
+}

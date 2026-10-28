@@ -11,7 +11,7 @@ import { nextStatus } from './lib/status.mjs'
 import { changedFiles, affectedRunbooks, schemaChanges } from './lib/affected.mjs'
 import { matchesGlob } from './lib/glob.mjs'
 import { latestReport, reportByName } from './lib/reports.mjs'
-import { expectedCells, mergeLastRun, markOutdated, renameCells, pendingCells } from './lib/last-run.mjs'
+import { expectedCells, mergeLastRun, markOutdated, renameCells, pendingCells, requireReadableLastRun } from './lib/last-run.mjs'
 import { setLastRun } from './lib/frontmatter-edit.mjs'
 import { parseSteps, parseJunit, stepStates } from './lib/junit.mjs'
 import { splitFrontmatter } from './lib/yaml.mjs'
@@ -161,11 +161,6 @@ function expectedCellsOf(root, config, runbook, text = fs.readFileSync(path.reso
 }
 
 // Refuses to rewrite a last_run the reader could not read in full, since the write would drop the cells it skipped.
-function requireReadableLastRun(runbook) {
-  const problem = runbook.problems.find((item) => item.startsWith('last_run'))
-  if (problem) throw new Error(`${runbook.id}: ${problem}. Fix last_run by hand first. Nothing was written`)
-}
-
 function commandCheck(root, config, options, positionals) {
   // parseArgs reads "--full <id>" as a value, so a string --full is the id.
   const id = typeof options.full === 'string' ? options.full : positionals[0]
@@ -459,6 +454,7 @@ function commandRenameRoleCells(root, config, options, positionals) {
   const edits = []
   const loaded = loadRunbooks(root, config)
   for (const rb of loaded) {
+    requireReadableLastRun(rb)
     if (rb.lastRun?.cells.some((cell) => cell.role === to)) throw new Error(`${rb.path}: last_run already has cells for role "${to}". Nothing was written`)
   }
   for (const rb of loaded) {

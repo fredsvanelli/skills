@@ -85,6 +85,20 @@ test('rename-case renames the case in last_run cells', () => {
   assert.doesNotMatch(text, /admin\/vip-team/)
 })
 
+test('rename-case and delete-case refuse a runbook whose last_run has problems and write nothing', () => {
+  const dir = copyContexts()
+  const report = '_runs/2026-10-21-1000-clients.edit-client.md'
+  const cells = `last_run:\n  runs:\n    r1: { date: 2026-10-21, commit: "abc1234", report: ${report} }\n  cells:\n    S01: { admin/vip-team: passed r1, admin/regular: nope r1 }`
+  fs.writeFileSync(path.join(dir, EDIT), fixtureText().replace(/^last_run:.*$/m, cells))
+  const before = read(dir)
+  for (const args of [['rename-case', 'vip-team', 'key-team'], ['delete-case', 'vip-team']]) {
+    const out = run([...args, '--write', '--root', dir])
+    assert.equal(out.code, 2, args[0])
+    assert.match(out.stderr, /clients\.edit-client: last_run\.cells\.S01: state "nope" is not a step state\. Fix last_run by hand first\. Nothing was written/, args[0])
+    assert.equal(read(dir), before, args[0])
+  }
+})
+
 test('delete-case removes the case everywhere and skips a runbook whose cases list only it', () => {
   const dir = copyContexts()
   const list = path.join(dir, 'docs/runbooks/clients/list-clients.md')
