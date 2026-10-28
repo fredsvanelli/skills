@@ -38,7 +38,7 @@ From the `list --json` output (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references
 - `no-script`: `api` runbooks with an empty `scripts`;
 - `outdated`: runbooks whose `last_run.outdated` is true;
 - `failing`: `active` or `draft` runbooks whose `last_run.result` is `failed`, `blocked` or `incomplete`;
-- `stale`: `active` or `draft` runbooks whose `last_run.date` is more than `staleDays` days before today.
+- `stale`: `active` or `draft` runbooks whose `last_run.oldest` (or `last_run.date` when `oldest` is not set) is more than `staleDays` days before today. `oldest` is the date of the oldest run a cell cites, so a merge on one step does not make the runbook look fresh.
 
 Tag each with `critical` when its `tags` hold it.
 
