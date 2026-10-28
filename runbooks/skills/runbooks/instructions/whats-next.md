@@ -37,7 +37,7 @@ From the `list --json` output (`${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references
 - `never-run`: `draft` runbooks with no `last_run`;
 - `no-script`: `api` runbooks with an empty `scripts`;
 - `outdated`: runbooks whose `last_run.outdated` is true;
-- `failing`: `active` or `draft` runbooks whose `last_run.result` is `failed` or `blocked`;
+- `failing`: `active` or `draft` runbooks whose `last_run.result` is `failed`, `blocked` or `incomplete`;
 - `stale`: `active` or `draft` runbooks whose `last_run.date` is more than `staleDays` days before today.
 
 Tag each with `critical` when its `tags` hold it.

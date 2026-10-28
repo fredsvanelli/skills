@@ -48,7 +48,7 @@ The keyword that opens a role line under a step's Expected and says what that ro
 _Avoid_: result, verdict
 
 **Review**:
-A mark in a runbook's frontmatter that its text may be wrong after a role change, for example a new role or a changed permission. It differs from `last_run.outdated`, which says the runbook should run again. Only `update` clears it, after the user confirms each role's Expected. A run does not clear it.
+A mark in a runbook's frontmatter that its text may be wrong after a role change, for example a new role or a changed permission. It differs from `last_run.outdated`, which says the runbook should run again; a run clears it on the cells it ran. Only `update` clears it, after the user confirms each role's Expected. A run does not clear it.
 _Avoid_: stale, dirty
 
 **Design reference**:

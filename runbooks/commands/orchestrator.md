@@ -67,7 +67,7 @@ Targets, from `${CLAUDE_PLUGIN_ROOT}/skills/runbooks/references/format.md` (Stat
 
 The stages of a unit, in order, by `surface`:
 
-- `ui`: `create` when the runbook is a placeholder or does not exist; `run` when the target is `active` or beyond and `status` is not `active`, or `last_run.result` is `failed` or `blocked`, or `last_run.outdated` is true; `to-test` last, when the target is `scripted` and `scripts` is empty. The script comes last because a `ui` runbook runs in the browser without it.
+- `ui`: `create` when the runbook is a placeholder or does not exist; `run` when the target is `active` or beyond and `status` is not `active`, or `last_run.result` is `failed`, `blocked` or `incomplete`, or `last_run.outdated` is true; `to-test` last, when the target is `scripted` and `scripts` is empty. The script comes last because a `ui` runbook runs in the browser without it. `incomplete` means a cell is pending, and the stage it launches is a full run. The orchestrator launches full runs and never passes `--merge`.
 - `api`: `create` as for `ui`; then `to-test` when `scripts` is empty, because an `api` runbook runs only through its script; then `run`. `active` and `scripted` are the same target here.
 - `update` opens the list, in place of `create`, when the goal says the behavior changed ("update", "after the diff", "changed") or when step 6 finds a run failed because the runbook text is wrong. Its `--from` is the goal's source, else `diff <git.base>`.
 
@@ -178,7 +178,7 @@ Repeat until every unit is at its target or skipped:
 | the code itself (`create --from file`, `dir`, `route` or `placeholder`), and `seen from` names a line that plainly produces B | the agent misread the code, or the environment's data differ from what it assumed | this command | add `update <id> --from file <seen from file>` before the `run`; the runbook records what the code does |
 | a spec, a ticket or the user's text (`create --from spec`, `ticket`, `text`), or a requirement id | the code and the requirement disagree | the user | the question below |
 | the code, but B contradicts a rule visible in the code itself (a guard, a validation, a comment, a test of the project) | a probable bug in the application | the user | the question below |
-| a run that passed before (`last_run.result` was `passed`) | a regression or a changed behavior | the user | the question below, with `git log --oneline <last_run.commit>..HEAD` and the files of the diff that reach the runbook |
+| a cell that passed before (`last_run.cells`, state `passed`) | a regression or a changed behavior | the user | the question below, with `git log --oneline <commit>..HEAD`, where `<commit>` is the commit of the run that proved the failed cell (`last_run.runs`), and the files of the diff that reach the runbook |
 
 The question to the user quotes the step, the Expected with its source, what was seen with the code line that produces it, and offers three options:
 

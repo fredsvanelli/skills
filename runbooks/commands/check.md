@@ -13,7 +13,7 @@ Arguments: `$ARGUMENTS`
 | Parameter | Use |
 |---|---|
 | `<id>` | required: the runbook whose latest run to show (`billing.issue-invoice`) |
-| `--full` | skip partial runs (`--steps`) and show the newest full run, the one `last_run` records |
+| `--full` | skip partial runs (`--steps`) and show the newest full run |
 | `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` |
 
 Examples: `/runbooks:check billing.issue-invoice`, `/runbooks:check billing.issue-invoice --full`.
@@ -39,9 +39,9 @@ With `--model` set to a value other than `inline`, follow "Dispatch steps" in `$
    - each failure with Expected and Seen, and each blocked step with what was missing, copied from the report's sections;
    - the report's Notes, shortened to the items that change how to read the result.
    - With role tracking on and a `review` entry in the runbook, say that its Expected may be out of date and offer `/runbooks:update <id>`. The latest run does not clear it.
-4. When `lastRunIsLatest` is `false`, the newest report is a partial run, or a report the runbook's `last_run` does not cite. Say so, and name the full run that `last_run` records (`lastRun.date`, `lastRun.result`, `lastRun.report`), or say there is none.
-5. When `lastRun.outdated` is `true`, say that `update` or `audit --fix` changed the runbook after its last full run, so that run verified the old text.
-6. End with the report path and the next command that fits the result. After a failure or a block, offer `/runbooks:run <id>` once the cause is fixed. After a partial run, or when `last_run` is outdated, offer a full run, because only a full run moves `status` and `last_run`.
+4. When `lastRunIsLatest` is `false`, the newest report is a partial run not merged into `last_run`, or a report the runbook's `last_run` does not cite. Say so, and name what `last_run` records (`lastRun.date`, `lastRun.result`, `lastRun.report`), or say there is none. When `lastRun.mixed` is `true`, say that the cells come from more than one run and name the oldest date (`lastRun.oldest`). List the pending cells (`pending`), the cells that failed or are blocked, and the outdated cells. When no report is on disk, answer from the cells.
+5. When `lastRun.outdated` is `true`, say that `update` or `audit --fix` changed the runbook after the run, so the outdated cells verified the old text.
+6. End with the report path and the next command that fits the result. After a failure or a block, offer `/runbooks:run <id>` once the cause is fixed. After a partial run, offer the same run again with `--merge` when its cells should enter `last_run`. When cells are pending or outdated, offer a run of those cells or a full run, because `status` moves only when no cell is pending or outdated.
 
 Write in the config `language`.
 
