@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.18.1 — 2026-10-28
+
+### Fixed
+
+- Show the report file's full project-relative path below the run title in the history UI, with a copy button and success or failure feedback.
+- Include the report path in the report detail API response.
+
 ## 1.18.0 — 2026-10-28
 
 ### Added

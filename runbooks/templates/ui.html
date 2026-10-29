@@ -210,6 +210,11 @@
   .runs td .muted { font-size: 13px; }
   .report { padding: 22px 22px 28px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
   .report-sections { overflow-x: auto; }
+  .report-path { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; color: var(--muted); }
+  .report-path code { min-width: 0; overflow-wrap: anywhere; font: 12px var(--mono); }
+  .report-path button { flex-shrink: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: 12px var(--mono); cursor: pointer; }
+  .report-path button:hover { border-color: var(--muted); }
+  .report-path button:focus-visible { outline: 2px solid var(--prompt); outline-offset: 2px; }
   .report td, .report th { padding: 10px 12px; }
   .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin: 14px 0 20px; color: var(--muted); font: 13px var(--mono); }
   .meta b { color: var(--fg); font-weight: 500; }
@@ -720,6 +725,23 @@
 
   function reportPanel(report) {
     const stamp = runStamp(report.name)
+    const copy = el('button', null, 'Copy')
+    copy.type = 'button'
+    copy.setAttribute('aria-label', 'Copy report path')
+    const copyStatus = el('span', 'muted')
+    copyStatus.setAttribute('role', 'status')
+    copy.addEventListener('click', async () => {
+      copy.disabled = true
+      try {
+        await navigator.clipboard.writeText(report.path)
+        copyStatus.textContent = 'Copied!'
+      } catch {
+        copyStatus.textContent = 'Could not copy. Select the path to copy it manually.'
+      } finally {
+        copy.disabled = false
+      }
+    })
+    const reportPath = el('div', 'report-path', el('code', null, report.path), copy, copyStatus)
     const meta = el('div', 'meta', el('span', null, report.result ? badge(report.result, stateClass(report.result)) : el('span', null, 'no result')))
     if (report.partial) meta.append(el('span', null, 'partial'))
     const field = (label, value) => el('span', null, `${label} `, el('b', null, value ?? '-'))
@@ -730,7 +752,7 @@
     const body = report.sectionsHtml
       ? setHtml(el('div', 'prose report-sections'), report.sectionsHtml)
       : el('p', 'none', 'This report has no step table and no sections.')
-    return el('div', 'report', el('h3', null, `Run ${stamp.run}`), meta, body)
+    return el('div', 'report', el('h3', null, `Run ${stamp.run}`), reportPath, meta, body)
   }
 
   async function runbookPage(id, tab, reportName, stale) {

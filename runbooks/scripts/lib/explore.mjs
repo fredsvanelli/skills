@@ -210,6 +210,7 @@ export function reportView(root, config, name) {
   const rest = heading ? body.slice(heading.index + heading[0].length) : body
   return {
     name: report.name,
+    path: report.path,
     runbook: report.runbook,
     date: report.date,
     commit: report.commit,
