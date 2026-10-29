@@ -93,12 +93,67 @@ into AGENTS.md automatically. On Claude retain the existing selection convention
 
 Every `model`/`models` helper invocation passes `--runtime <active host>` explicitly.
 A helper without that flag retains Claude compatibility. Setup writes/updates only
-the active host's model block, using `models --defaults` and `models --diff` with
-that flag. Preserve the other block. A legacy project with no `codex.models` uses
+the active host's model block. Use `models --defaults` and `models --diff` with
+that flag for baseline rows; on Codex, setup selects local models as below. Preserve the other block. A legacy project with no `codex.models` uses
 Codex defaults in memory; it does not reinterpret its Claude aliases.
 
-Codex defaults use `inline` for main-session work and `inherit` for delegation.
+Codex compatibility defaults use `inline` for main-session work and `inherit` for
+delegation. They are not the model recommendations for setup.
 Explicit model IDs must be available in the session. Codex row ties select the
 first equally specific matching row; they do not guess capability from model
 names. Settings shows only supported choices, while allowing an explicit ID to
 be checked before use. Never translate a Claude alias to a guessed OpenAI model.
+
+
+### Codex setup model selection
+
+Do this on initial setup and reconfiguration. Do not persist a table consisting
+only of `inline`/`inherit` without first checking local model availability.
+
+1. Inspect the actual subagent tool's supported model IDs and override restrictions.
+   Read the local model catalog, when present, at `$CODEX_HOME/models_cache.json`
+   (otherwise `~/.codex/models_cache.json`), using only model IDs, descriptions and
+   capability metadata. A missing, malformed or stale cache is not fatal: the
+   active tool is authoritative for launch support. Do not read authentication
+   files or dump unrelated Codex configuration. Do not install anything or launch
+   a trial agent just to discover models.
+2. Use only IDs the current host can launch with an explicit override. The local
+   cache enriches the tool's list; it does not prove a cached model is launchable.
+   Exclude internal approval/review-only models. Never invent an ID from a display
+   name such as "GPT-6", nor hardcode a catalog that every installation must have.
+3. Read `models --runtime codex --defaults --json` for the complete row keys.
+   Choose the least costly suitable available model using local descriptions and
+   capability evidence. Do not claim numeric prices or rank unfamiliar models
+   just from their names. Use these task groups:
+
+   | Rows | Selection |
+   |---|---|
+   | `coverage`, `run --mode test`, `run --mode prompt`, `run --import` | Fast economical model for bounded execution and reporting |
+   | `run`, `help <question>`, `whats-next`, `map`, `audit`, `roles:generate` | General coding/reasoning workhorse |
+   | `create`, `update`, `to-test`, `audit --fix` | Capable coding model for code analysis and edits; use the workhorse when suitable, reserve the strongest model for demonstrated complexity |
+   | Remaining baseline `inline` rows | Keep main-session coordination, interactive configuration and short helper invocations inline; this uses the session model and is not a cheaper model tier |
+
+   For example, if the local descriptions and spawn tool expose `gpt-6-luna`
+   as fast/economical and `gpt-6.1-sol` as the coding workhorse, select those for
+   the first and second groups, and normally Sol for the third. Consider an
+   available Terra model using its actual capability metadata. An available
+   `gpt-6-astra` is reserved for tasks that need its stronger reasoning, not all
+   authoring commands by default. These are conditional examples, not fixed IDs
+   or a Claude-alias translation. If only one suitable model is available, reuse
+   its explicit ID across groups and explain the limitation.
+4. Build a complete proposed `codex.models` table. On re-runs, fill missing rows
+   from this selection and propose upgrading legacy `inherit` rows and delegated
+   rows set to `inline`. Keep explicit user choices unless their replacement is
+   approved; flag unavailable choices rather than silently replacing them.
+   Preserve the Claude `models` block and other `codex` keys.
+5. Show the source of availability and a table of command, current value (when
+   present), selected ID and reason with the normal setup summary/diff. Do not
+   conceal model selection or describe inheritance as cost optimization. If no
+   explicit override is supported or availability cannot be established, disclose
+   the limitation and use the compatibility fallback; never imply routing was
+   optimized. Follow setup's existing write approval rules without adding a
+   separate question for each default row.
+
+At dispatch, recheck availability as `agents.md` requires. When an explicit model
+requires a fresh child context (for example `fork_turns: "none"`), use it and
+supply the full task brief; do not drop the override to retain inherited history.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.17.1 — 2026-10-28
+
+### Fixed
+
+- Codex setup now inspects local model availability and selects explicit models by task complexity instead of silently copying inherited session defaults. Reconfiguration reviews legacy inheritance rows and shows the proposed routing.
+
 ## 1.17.0 — 2026-10-28
 
 ### Added

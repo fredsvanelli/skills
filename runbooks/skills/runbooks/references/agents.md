@@ -28,7 +28,9 @@ It returns `{ model, row, forced }`. Never infer the result by reading the table
   rather than inventing an ID. Use a clean child context when the tool supports it.
 - Codex explicit model ID: check the actual spawn tool's supported models and
   override restrictions, then pass the ID. Structural validation by the CLI does
-  not prove that the host can launch it. Do not substitute another model.
+  not prove that the host can launch it. When overrides require a fresh context
+  (such as `fork_turns: "none"`), use that mode with the complete brief. Do not
+  omit the selected model to preserve inherited history or substitute another model.
 - With no native subagent tool, a default Codex `inherit` row runs inline after
   saying so. A forced `inherit` or explicit model cannot be silently downgraded;
   offer `--model inline` and wait for that choice. Do not launch a hidden nested

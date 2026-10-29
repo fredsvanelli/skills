@@ -333,10 +333,13 @@ A key that is not a command with options and placeholders, an empty key, or a ke
 ### Codex models
 
 Codex uses a separate optional `codex.models` object with the same row keys. Its
-defaults keep every `inline` row above and replace every delegated Claude alias
+compatibility defaults keep every `inline` row above and replace every delegated Claude alias
 with `inherit`, which delegates using the current session model. Legacy projects
 need no migration to be read on Codex; absent Codex rows receive those defaults.
-The helper does not write the configuration while reading it.
+The helper does not write the configuration while reading it. Setup discovers
+locally available models and persists explicit task-appropriate IDs instead of
+blindly copying these fallback defaults; see `runtime.md`, "Codex setup model
+selection". Re-running setup also reviews legacy inheritance rows.
 
 ```json
 {
