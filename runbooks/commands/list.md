@@ -1,6 +1,6 @@
 ---
 description: List runbooks, filtered, or the ones a diff affects
-argument-hint: "[--capability x] [--feature y] [--tag t] [--status s] [--path glob] [--role r] [--review] [--affected [base]] [--model <model>]"
+argument-hint: "[--failed] [--active] [--draft] [--outdated] [--blocked] [--placeholder] [--capability x] [--feature y] [--tag t] [--status s] [--path glob] [--role r] [--review] [--affected [base]] [--model <model>]"
 disable-model-invocation: true
 ---
 
@@ -12,10 +12,16 @@ Arguments: `$ARGUMENTS`
 
 ## Parameters
 
-Filters combine: a runbook is listed when it matches all of them. Without any, every runbook is listed.
+The state flags `--failed`, `--active`, `--draft`, `--outdated`, `--blocked` and `--placeholder` are additive: list a runbook when it matches any selected state (OR), without duplicates. Without state flags, include every state. Other filters narrow that selection and combine with AND. Without any filters, every runbook is listed.
 
 | Parameter | Use |
 |---|---|
+| `--failed` | runbooks whose `last_run.result` is `failed` |
+| `--active` | runbooks with status `active` |
+| `--draft` | runbooks with status `draft` |
+| `--outdated` | runbooks whose `last_run.outdated` is `true` |
+| `--blocked` | runbooks whose `last_run.result` is `blocked` |
+| `--placeholder` | runbooks with status `placeholder` |
 | `--capability x` | runbooks in the capability folder `x` |
 | `--feature y` | runbooks with `feature: y` |
 | `--tag t` | runbooks tagged `t` (`critical`) |
@@ -26,7 +32,7 @@ Filters combine: a runbook is listed when it matches all of them. Without any, e
 | `--affected [base]` | runbooks reached by the changes since `base`: committed, uncommitted and untracked files. `base` defaults to `git.base`. Leaves out `deprecated` runbooks and placeholders |
 | `--model m` | run this command in a sub-agent on that model: `inline` (the main session runs it, the default), `haiku`, `sonnet`, `opus` or `fable` on Claude; `inherit` or an available model ID on Codex |
 
-Examples: `/runbooks:list`, `/runbooks:list --capability billing --status draft`, `/runbooks:list --tag critical`, `/runbooks:list --role editor`, `/runbooks:list --review`, `/runbooks:list --affected develop`.
+Examples: `/runbooks:list`, `/runbooks:list --active --failed`, `/runbooks:list --draft --placeholder`, `/runbooks:list --capability billing --status draft`, `/runbooks:list --tag critical`, `/runbooks:list --role editor`, `/runbooks:list --review`, `/runbooks:list --affected develop`.
 
 ## Model
 

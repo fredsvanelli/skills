@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.18.0 — 2026-10-28
+
+### Added
+
+- Add `list` flags `--failed`, `--active`, `--draft`, `--outdated`, `--blocked` and `--placeholder`. Combine these flags with OR, without duplicate runbooks; omit filters to list all runbooks.
+- Keep existing capability, feature, tag, status, path and role filters as constraints on the selected states.
+- Document the flags and cover individual selections, additive combinations and unfiltered listing with CLI tests.
+
 ## 1.17.1 — 2026-10-28
 
 ### Fixed

@@ -51,6 +51,40 @@ test('list filters and --json', () => {
   assert.equal(run(['list', '--root', FIXTURE, '--tag', 'nope']).stdout, 'No runbooks match.\n')
 })
 
+test('list state flags select a union and keep other filters as constraints', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'runbooks-list-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const folder = path.join(dir, 'docs/runbooks/example')
+  fs.mkdirSync(folder, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'docs/runbooks/runbooks.config.json'), '{ "version": 1 }')
+  for (const [name, status, lastRun] of [
+    ['active', 'active', ''],
+    ['draft', 'draft', ''],
+    ['failed', 'draft', 'result: failed'],
+    ['blocked', 'draft', 'result: blocked'],
+    ['outdated', 'active', 'result: passed, outdated: true'],
+    ['placeholder', 'placeholder', ''],
+    ['deprecated', 'deprecated', ''],
+  ]) {
+    fs.writeFileSync(path.join(folder, `${name}.md`), `---\nid: example.${name}\ncapability: example\nstatus: ${status}\n${lastRun ? `last_run: { ${lastRun} }\n` : ''}---\n# ${name}\n`)
+  }
+  const ids = (...flags) => {
+    const result = run(['list', '--root', dir, '--json', ...flags])
+    assert.equal(result.code, 0, result.stderr)
+    return JSON.parse(result.stdout).map((rb) => rb.id)
+  }
+  assert.deepEqual(ids(), ['example.active', 'example.blocked', 'example.deprecated', 'example.draft', 'example.failed', 'example.outdated', 'example.placeholder'])
+  assert.deepEqual(ids('--active'), ['example.active', 'example.outdated'])
+  assert.deepEqual(ids('--draft'), ['example.blocked', 'example.draft', 'example.failed'])
+  assert.deepEqual(ids('--failed'), ['example.failed'])
+  assert.deepEqual(ids('--blocked'), ['example.blocked'])
+  assert.deepEqual(ids('--outdated'), ['example.outdated'])
+  assert.deepEqual(ids('--placeholder'), ['example.placeholder'])
+  assert.deepEqual(ids('--active', '--failed', '--outdated'), ['example.active', 'example.failed', 'example.outdated'])
+  assert.deepEqual(ids('--active', '--failed', '--status', 'draft'), ['example.failed'])
+  assert.deepEqual(ids('--failed', '--capability', 'missing'), [])
+})
+
 test('entries and requirements', () => {
   const entries = JSON.parse(run(['entries', '--root', FIXTURE, '--slice', 'billing', '--json']).stdout)
   assert.equal(entries.length, 5)

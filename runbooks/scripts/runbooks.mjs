@@ -37,6 +37,8 @@ export const USAGE = `Usage: runbooks.mjs <command> [options]
 
 Commands:
   list          [--capability x] [--feature y] [--tag t] [--status s] [--path glob] [--role r] [--review] [--affected [base]]
+                [--failed] [--active] [--draft] [--outdated] [--blocked] [--placeholder]
+                State flags are additive (OR); without them, all states are included.
   entries       [--slice name] [--path glob]
   requirements
   coverage      [--capability x | --feature y | --path glob | --slice name | --role r]
@@ -127,7 +129,16 @@ function commandList(root, config, options, warnings) {
   warnings.push(...runbookWarnings(runbooks, root, config))
   const entries = options.path || options.affected ? collect(root, config, 'entries', warnings) : []
   const entryFiles = new Map(entries.map((entry) => [entry.id, entry.file]))
+  const stateFilters = [
+    ['failed', (rb) => rb.lastRun?.result === 'failed'],
+    ['active', (rb) => rb.status === 'active'],
+    ['draft', (rb) => rb.status === 'draft'],
+    ['outdated', (rb) => rb.lastRun?.outdated === true],
+    ['blocked', (rb) => rb.lastRun?.result === 'blocked'],
+    ['placeholder', (rb) => rb.status === 'placeholder'],
+  ].filter(([flag]) => options[flag] === true)
   const selected = filterRunbooks(runbooks, { ...pick(options, ['capability', 'feature', 'tag', 'status', 'path', 'role']), review: options.review === true }, entryFiles)
+    .filter((rb) => stateFilters.length === 0 || stateFilters.some(([, matches]) => matches(rb)))
   if (!options.affected) return options.json ? json(selected) : listMarkdown(selected)
 
   const base = options.affected === true ? config.git.base : options.affected
