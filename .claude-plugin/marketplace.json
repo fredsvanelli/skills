@@ -15,7 +15,7 @@
     },
     {
       "name": "pmkit",
-      "source": { "source": "github", "repo": "fredsvanelli/pmkit" },
+      "source": { "source": "github", "repo": "fredsvanelli/pmkit", "ref": "main" },
       "description": "Project management for development agents: issues, sprints and epics across trackers."
     }
   ]
