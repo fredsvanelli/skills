@@ -7,6 +7,7 @@ See [Changelog](CHANGELOG.md) for releases and upgrade notes.
 | `/utils:cleanup-branches` | `$utils:cleanup-branches` | deletes branches already merged into production or develop, locally or with `--origin`, then fast-forwards the rest |
 | `/utils:cleanup-dependabot` | `$utils:cleanup-dependabot` | empties the Dependabot PR queue through `develop`: rebases, merges green CI, asks before majors, closes PRs already covered |
 | `/utils:generate-pr-description` | `$utils:generate-pr-description` | writes a PR description from the branch's real diff, for the reviewer; `--apply` writes it to the PR with `gh` |
+| `/utils:review-work` | `$utils:review-work` | rates a PR's delivery 0–10 per criterion (spec match, tests, security, complexity, debt…) and overall, deducting per verified finding, with a next step for every finding |
 
 `cleanup-dependabot` needs `gh`, `python3`, `target-branch: develop` in `.github/dependabot.yml`, and `DEPENDABOT_REQUIRED_CHECKS` with the names of every required check. For Codex, export it in the shell running the helper:
 

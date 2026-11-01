@@ -22,7 +22,7 @@ test('Codex marketplace resolves both local plugin packages and all skill roots'
     for (const key of ['name', 'version', 'description']) assert.equal(manifest[key], claude[key])
     const dirs = Array.isArray(manifest.skills) ? manifest.skills : [manifest.skills]
     const skills = dirs.flatMap((dir) => findFiles(root, `${dir.replace(/^\.\//, '')}/*/SKILL.md`))
-    assert.equal(skills.length, entry.name === 'runbooks' ? 28 : 3)
+    assert.equal(skills.length, entry.name === 'runbooks' ? 28 : 4)
     const names = new Set()
     for (const file of skills) {
       const meta = parseYaml(splitFrontmatter(fs.readFileSync(path.join(root, file), 'utf8')).yaml)
