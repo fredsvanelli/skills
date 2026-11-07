@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1 — 2026-11-07
+
+### Fixed
+
+- `cleanup-dependabot`: re-extracting a transitive dependency now goes through `resolutions` (raise the `**/<pkg>` floor, or create the entry) followed by `yarn install`, and `package.json` may change only in `resolutions`. The previous instruction either added the package to `dependencies` or left the version unchanged, depending on whether the entry existed.
+- `cleanup-dependabot`: the target version and the version `yarn.lock` resolved are now compared explicitly with the ranges the parents declare, because `resolutions` forces a version outside them with no warning. A version outside a range stops the re-extraction and is reported as a change in the parent.
+- `cleanup-dependabot`: step 5 runs `covered <pkg> <version> HEAD` after the commit. It reads the committed lock, so running it earlier reported `NOT covered` after a correct bump.
+
 ## 0.5.0 — 2026-11-01
 
 ### Added
