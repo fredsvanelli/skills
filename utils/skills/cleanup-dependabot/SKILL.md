@@ -207,16 +207,23 @@ git checkout -b chore/deps-<pkg-slug>-<version> origin/develop
 - **Direct dependency** (in `package.json`): edit the range in `package.json` to the
   target version (the `Edit` tool) and run `yarn install` — `yarn.lock` comes from yarn, never
   from you.
-- **Transitive** (only in `yarn.lock`): `yarn upgrade <pkg>` — without `@version`, otherwise classic
-  yarn promotes it to a direct dependency.
+- **Transitive** (only in `yarn.lock`): goes through `resolutions` in `package.json`. Do the range
+  check at the end of this step first, then:
+  - With a `**/<pkg>` entry: raise its floor to the target version (the `Edit` tool).
+  - Without one: create `"**/<pkg>": "^<target-version>"` (the `Edit` tool).
+  - Run `yarn install` — `yarn.lock` comes from yarn, never from you.
+  - Repeat the range check with the version `yarn.lock` resolved: `^` can land above the target.
+  - `git diff package.json` must show changes only in `resolutions`.
+  - Never `yarn upgrade <pkg>` for a transitive: with a `**/<pkg>` entry it also adds the package to `dependencies`, and without one it leaves the version where it was.
 - **GitHub Action**: edit `uses: <action>@vN` in `.github/workflows/*.yml`.
 
-Check with `python3 "$D" covered <pkg> <version> HEAD`. Then:
+Then:
 
 ```bash
 yarn lint && <project type-check>   # the command is in AGENTS.md / CLAUDE.md / package.json
 git add package.json yarn.lock .github/workflows
 git commit -m "chore(deps): bump <pkg> from <from> to <to> (re-extracted from #N)"
+python3 "$D" covered <pkg> <version> HEAD   # reads the commit, so only after it; NOT covered = do not push
 git push -u origin chore/deps-<pkg-slug>-<version>
 gh pr create --base develop --title "chore(deps): bump <pkg> from <from> to <to>" --body "Re-extracted from #N, which targets \`main\`. Closes #N when merged."
 ```
@@ -224,8 +231,17 @@ gh pr create --base develop --title "chore(deps): bump <pkg> from <from> to <to>
 The new PR then follows step 3 (it is a PR against `develop` like any other — including
 the major question). Once merged, close the original with a comment pointing to the new one.
 
-If `yarn upgrade` does not reach the target version (the parent's range does not allow it), this is not
-a dependency bump, it is a change in the parent — stop, report, suggest a ticket.
+**Range check (transitive, before applying and again after `yarn install`).** `resolutions` forces the
+version even outside a parent's range: yarn installs it with no warning and `--frozen-lockfile` still
+passes, so nothing flags this on its own. Compare the version with every range the parents declare in
+`yarn.lock` — the target version before applying, the resolved version after:
+
+```bash
+grep -E '^ +"?<pkg>"? "' yarn.lock
+```
+
+If either version falls outside any of them, this is not a dependency bump, it is a change in the parent —
+stop, report, suggest a ticket.
 
 ## Step 6 — Report
 
