@@ -11,7 +11,7 @@ A `ui` runbook runs in one of two modes:
 
 The config holds the project default in `upstream.mode`. A runbook overrides it with `upstream: live|mocked` in its frontmatter, written only when it differs from the default. There is no per-step mode. A config without `upstream` means `live`, and `upstream` in a `backend` stack is a config error.
 
-Every browser mode (`guided`, `headless`, `headed`, `chrome`, `prompt`, `script`) works with both modes, and a script stays optional for both. Mode `test` is offered for a `ui` runbook only when its script has one test per step, the shape of a mocked script (see "Scripts"). A live script keeps one test with a `test.step` per step (with role tracking on, one such test per role and viewport), so `test` is not offered for it, and the mode question says why.
+Every browser mode (`guided`, `headless`, `headed`, `chrome`, `prompt`, `script`) works with both modes, and a script stays optional for both. Mode `test` is offered for a `ui` runbook when its script has one test per step (see "Scripts"). A mocked script and a live script both have that shape. A live script written before 1.19.0 has one test with a `test.step` per step, so `test` is not offered for it until `/runbooks:to-test <id>` rewrites it, and the mode question says why.
 
 Design comparison happens only in browser runs. A mocked runbook keeps its `design` references.
 
@@ -304,6 +304,8 @@ test.afterAll(async ({ playwright }) => {
 ```
 
 The server holds one state for every client: one runbook, role, case, step and mode. So every test suite whose app points at the server runs with one worker, in CI too: Playwright `workers: 1` for that project or job, while Cypress already runs specs one at a time. With two workers, one worker's select would change the responses the other worker's app gets. When `upstream.baseUrl` is set, the copy starts with `--mode live --target <upstream.baseUrl>`, so a test that never selects reaches the live API through it. A mocked script posts `{ runbook, mode: 'mocked', step }` in `beforeEach` (`{ runbook, mode: 'mocked', role, step }` with role tracking on, the role being the one the test is named for, and `{ runbook, mode: 'mocked', role, case, step }` with cases, where a role that runs once selects its `dataCase` from `runbooks.mjs passes <id>`, the first case of `cases`) and `{ runbook: null, mode: 'live' }` in `afterAll`, which hands the server back to those tests. A live `ui` script posts nothing.
+
+A live `ui` script has the same test names as a mocked one, inside a serial `describe`: Playwright `test.describe.configure({ mode: 'serial' })`, Cypress `testIsolation: false` with a `beforeEach` that skips the rest after a failure. Its tests share one page and one login, because each step starts from the real state the earlier steps left (`instructions/to-test.md`, item 5, and `${RUNBOOKS_PLUGIN_ROOT}/docs/adr/0014-live-ui-scripts-run-one-test-per-step-in-serial.md`).
 
 A script keeps the design comparison out: only a browser run compares a screen with its design. A mocked runbook without a script is allowed, but then no automated run checks its fixtures, and only the schema check or `list --affected` notices an API change. `setup` warns about this.
 

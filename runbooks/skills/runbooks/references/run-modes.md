@@ -25,7 +25,7 @@ A mode is available when:
 | `headed` | the active host's MCP configuration has the `mcp.headed` server and its tools are loaded in this session |
 | `chrome` | the `mcp__claude-in-chrome__*` tools, or a tool that enables them, are in this session |
 | `prompt` | always |
-| `test` | for a `ui` runbook: its `scripts` hold a script with one test per step (the mocked shape, `upstream.md`, "Scripts"), or with role tracking on one test per step and role. A live script has one test with a `test.step` per step, or with role tracking on one such test per role, so the question says `test` is not offered for it |
+| `test` | for a `ui` runbook: its `scripts` hold a script with one test per step, or with role tracking on one test per step and role (`upstream.md`, "Scripts"). Mocked and live scripts have this shape, a live one inside a serial `describe`. A live script written before 1.19.0 has one test with a `test.step` or `cy.log` per step: the question says `test` is not offered for it and that `/runbooks:to-test <id>` rewrites it |
 
 Offer only the available modes, in the table's order, each with a one-line description from the first table. Mark `headless` "(Recommended)" and list it first when it is available; otherwise recommend `guided`. Fit the options to the actual question tool. On Claude, four options fit; on hosts with fewer options or no multi-select, split the question or accept a text answer. Describe remaining available modes in the question text. Name the unavailable modes in the question text with the reason, for example "headed: the active host's MCP configuration has no `runbooks-playwright-headed` server".
 

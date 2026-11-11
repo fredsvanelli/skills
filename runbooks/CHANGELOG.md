@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.19.0 — 2026-11-11
+
+### Changed
+
+- `/runbooks:to-test` writes a live `ui` script as one serial `describe` with one test per step, named as in a mocked script (`S01 <title>`, with ` as <role>`, ` in <case>` and ` @ <viewport>` when they apply). The tests share one page and one login. Playwright uses `test.describe.configure({ mode: 'serial' })`, and Cypress uses `testIsolation: false` with a `beforeEach` that skips the rest after a failure. ADR 0014 records why.
+- `/runbooks:run --mode test` now runs live `ui` runbooks too. Before, it ran only `api` runbooks and mocked `ui` runbooks.
+- `/runbooks:to-test` treats a live script in the old shape (one test with a `test.step` or `cy.log` per step) as an adopted script and rewrites each block into the test of its step. Until then, mode `test` is not offered for it, and the mode question says why.
+
+### Added
+
+- `junit` tests for Playwright JUnit names with the describe title before the test (`<describe> › S01 ...`), for steps skipped after a failure in a serial describe, and for the old live shape.
+
 ## 1.18.1 — 2026-10-28
 
 ### Fixed

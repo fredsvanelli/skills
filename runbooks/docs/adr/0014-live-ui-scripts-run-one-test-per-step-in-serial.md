@@ -1,0 +1,18 @@
+# Live ui scripts run one test per step, in serial
+
+Mode `test` reads a script's result through `runbooks.mjs junit`, which maps each JUnit `<testcase>` to a step by the `Sxx` prefix of its name (ADR 0001). A mocked `ui` script already has one test per step, because the upstream server gives each step its state from fixtures, and each test navigates to its step's start page. A live `ui` script used to have one test that walked every step, with one `test.step('S01 ...')` (Cypress `cy.log('S01 ...')`) per step, because each step starts from the real state the earlier steps left: S02 edits the invoice S01 created, on the same page and with the same login. The Playwright JUnit reporter writes one `<testcase>` per test and leaves `test.step` out, and Cypress reporters leave `cy.log` out, so `junit` found no test for any step. Mode `test` was therefore offered only for mocked `ui` runbooks, and a live `ui` runbook ran only in a browser mode.
+
+Now a live `ui` script has one test per step, named as in a mocked script (`S01 <title>`, with ` as <role>`, ` in <case>` and ` @ <viewport>` when they apply), inside one `describe` that runs its tests in order and shares one page and one login. In Playwright, the describe calls `test.describe.configure({ mode: 'serial' })`, a `beforeAll` opens the page with `browser.newPage()` and logs in, and the tests use that page instead of the `page` fixture. In Cypress, the describe sets `testIsolation: false`, and a `beforeEach` calls `this.skip()` after a failed test. `junit` reads these names without any change, so mode `test` is offered for live `ui` runbooks as well.
+
+## Considered Options
+
+- Keep one test with `test.step` blocks and read the steps from Playwright's JSON reporter, which lists them with their errors. Rejected: it needs a second parser and a second report file, and Cypress has no equivalent, so a Cypress project would still have no mode `test` for live runbooks.
+- Offer mode `test` for the old shape with one state for the whole runbook. Rejected for the reason ADR 0001 gives: it loses step granularity and empties the dependency tree of meaning.
+- One independent test per step that rebuilds its own state through the upstream API, as `api` scripts do. Rejected: a `ui` step's state is mostly the screen the previous step left, and rebuilding it through the browser would repeat every parent step in every test.
+
+## Consequences
+
+- After a failed test, Playwright skips the rest of the serial describe, and the Cypress `beforeEach` does the same. `junit` gives a skipped step `blocked-by-parent` when one of its parents did not pass, else `blocked` with "test skipped". A step that does not depend on the failed one does not run in that pass, which a browser mode would still have run.
+- Playwright retries a serial describe as a whole: `beforeAll` runs again, logs in again and recreates the precondition data with the same `RUNBOOKS_RUN_ID` suffix. Cleanup goes in `afterAll` (Cypress `after`), which also runs after a failed attempt, so a retry does not find the data of the attempt before it.
+- A live script written before 1.19.0 keeps working in the browser modes, but mode `test` is not offered for it. `/runbooks:to-test <id>` treats it as an adopted script and rewrites each `test.step` or `cy.log` block into the test of its step.
+- With role tracking on, there is one serial describe per role, case and viewport, and its `beforeAll` (Cypress `before`) logs in as that role. The Playwright JUnit report puts the describe title before the test name, separated by ` › `. `junit` reads the role, case and viewport from the end of the name, so the describe title does not change the mapping.

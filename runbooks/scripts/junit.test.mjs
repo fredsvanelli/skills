@@ -404,3 +404,57 @@ test('without casesOf, a name with " in <case>" maps to no role, as before cases
   assert.deepEqual(extra.map((e) => [e.role, e.reason]), [[null, 'no " as <role>" suffix']])
   assert.equal(rows.find((r) => r.step === 'S01').state, 'blocked')
 })
+
+// A live ui script: one serial describe, one test per step. Playwright's JUnit reporter names a test
+// "<describe title> › <test title>" and marks the tests after a failure in a serial describe as skipped.
+const SERIAL_XML = `<testsuites><testsuite name="billing/issue-invoice.spec.ts">
+  <testcase classname="billing/issue-invoice.spec.ts" name="Create an invoice › S01 admin creates a draft invoice"/>
+  <testcase classname="billing/issue-invoice.spec.ts" name="Create an invoice › S02 the invoice persists"><failure message="expect(locator).toBeVisible() failed"/></testcase>
+  <testcase classname="billing/issue-invoice.spec.ts" name="Create an invoice › S03 a partner cannot create one"><skipped message="skipped"/></testcase>
+  <testcase classname="billing/issue-invoice.spec.ts" name="Create an invoice › S04 the draft can be cancelled"><skipped message="skipped"/></testcase>
+  <testcase classname="billing/issue-invoice.spec.ts" name="Create an invoice › S05 the partner gets an e-mail"><skipped message="skipped"/></testcase>
+</testsuite></testsuites>`
+
+test('a serial live script: the describe title prefix still maps each test to its step', () => {
+  const cases = parseJunit(SERIAL_XML)
+  assert.deepEqual(cases.map(stepOfTest), ['S01', 'S02', 'S03', 'S04', 'S05'])
+})
+
+test('a serial live script: a child skipped after a failure is blocked-by-parent, another skipped step is blocked', () => {
+  const result = stepStates(parseSteps(BODY), parseJunit(SERIAL_XML))
+  assert.deepEqual(result.steps.map((s) => [s.step, s.state, s.seen]), [
+    ['S01', 'passed', ''],
+    ['S02', 'failed', 'expect(locator).toBeVisible() failed'],
+    ['S03', 'blocked', 'test skipped'],
+    ['S04', 'blocked-by-parent', 'parent S02 did not pass'],
+    ['S05', 'blocked', 'test skipped'],
+  ])
+  assert.equal(result.result, 'failed')
+  assert.deepEqual(result.extra, [])
+  assert.deepEqual(result.others, [])
+})
+
+test('a serial live script with roles, cases and viewports: the suffix after the last › decides the row', () => {
+  const steps = parseSteps(EDIT_CLIENT_BODY)
+  const names = [
+    'Edit a client as manager in vip-team @ desktop › S01 open as manager in vip-team @ desktop',
+    'Edit a client as manager in vip-team @ desktop › S02 edit as manager in vip-team @ desktop',
+    'Edit a client as admin @ desktop › S01 open as admin @ desktop',
+  ]
+  const { steps: rows, extra } = stepStates(steps, asTests(names), { roles: ['manager', 'admin'], casesOf: CASES_OF, viewports: ['desktop'] })
+  const state = (role, kase, step) => rows.find((r) => r.role === role && r.case === kase && r.viewport === 'desktop' && r.step === step)?.state
+  assert.equal(state('manager', 'vip-team', 'S01'), 'passed')
+  assert.equal(state('manager', 'vip-team', 'S02'), 'passed')
+  assert.equal(state('admin', '*', 'S01'), 'passed')
+  assert.deepEqual(extra, [])
+})
+
+test('the old live shape, one test with test.step blocks, maps to no step', () => {
+  const xml = '<testsuite><testcase name="Create an invoice › Create an invoice"/></testsuite>'
+  const result = stepStates(parseSteps(BODY), parseJunit(xml))
+  assert.deepEqual(result.steps.map((s) => [s.step, s.state]), [
+    ['S01', 'blocked'], ['S02', 'blocked-by-parent'], ['S03', 'blocked'], ['S04', 'blocked-by-parent'], ['S05', 'blocked-by-parent'],
+  ])
+  assert.equal(result.steps[0].seen, 'no test for this step in the script')
+  assert.equal(result.others.length, 1)
+})
