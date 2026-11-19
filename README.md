@@ -7,7 +7,7 @@ configuration. Each plugin is installed independently.
 | Plugin | Claude Code | Codex plugin skills | Does |
 |---|---|---|---|
 | [`runbooks`](runbooks/) | `/runbooks:*` | `$runbooks:runbooks`, `$runbooks:runbooks-*`, `$runbooks:scenarios` | UAT runbooks as a project's verified knowledge base |
-| [`utils`](utils/) | `/utils:*` | `$utils:cleanup-branches`, `$utils:cleanup-dependabot`, `$utils:generate-pr-description`, `$utils:review-work` | repository housekeeping, PR descriptions and PR ratings |
+| [`utils`](utils/) | `/utils:*` | `$utils:cleanup-branches`, `$utils:cleanup-dependabot`, `$utils:generate-pr-description`, `$utils:review-work`, `$utils:update-agent-docs` | repository housekeeping, PR descriptions, PR ratings and agent-doc checks |
 
 [`pmkit`](https://github.com/fredsvanelli/pmkit) lives in a separate repository.
 It remains listed in the Claude marketplace; this repository's Codex catalog

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-11-19
+
+### Added
+
+- `update-agent-docs`: decides whether the branch's work needs an edit to `CLAUDE.md`, `AGENTS.md` or a nested copy, before a PR is opened. Finds three kinds of candidate: *Stale* (a path, script or identifier the branch renamed or removed), *Missing* (a convention the branch introduced, cited from the diff) and *Misplaced* (ticket-level detail in the always-loaded file). Missing and Misplaced must pass a three-part gate (applies to future tasks, nothing else teaches it, agents get it wrong without it) with the answers in the finding; a ticket's business rule never passes, even when a section of the file already lists earlier tickets. Reports `Update recommended (N findings)` or `No update needed` with a unified diff per finding, edits only the source file (symlinks and `@AGENTS.md` imports resolved), never touches managed blocks, and writes only with `--apply`.
+- `update-agent-docs` helper: `scripts/refs.mjs` lists the instruction files, their source and managed blocks, and checks every backticked path, package script and identifier against the merge base and the working tree, separating references the branch broke (with the rename target) from those already broken.
+
+### Changed
+
+- `review-work`: the *Documentation* criterion leaves agent instruction files to `update-agent-docs`.
+
 ## 0.5.1 — 2026-11-07
 
 ### Fixed

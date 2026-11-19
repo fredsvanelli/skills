@@ -192,6 +192,9 @@ has; never install a tool.
   approval from the same reviewer (both in the *Reviews* section of `info`) is a candidate
   finding in the criterion it is about. Verify
   it in Step 5 like your own; a reviewer's opinion alone deducts nothing.
+- **Documentation**: README, changelog, docs, OpenAPI and env examples. Agent instruction files
+  (`CLAUDE.md`, `AGENTS.md`) are not rated here: point to `/utils:update-agent-docs` in the
+  report when the diff may have made them stale.
 - **Conflicts**: `mergeable: CONFLICTING` lowers no rate. Report it in one line below the table.
 
 ## Step 5: Verify findings
