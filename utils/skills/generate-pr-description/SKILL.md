@@ -146,7 +146,31 @@ in, a value at the limit. One per line, with the expected result.
 - No generic "Checklist" section, no "Type of change: [ ] bug [ ] feature", no architecture
   tour. The reviewer has the diff.
 
-## Step 3: Apply (only with `--apply`)
+## Step 3: Screenshots
+
+### Publish
+
+Set `SHOTS` (the scratchpad folder with the `.png` files) and `SLUG`, then run this block as is
+from the consumer repository. It never touches the working tree or the index: it builds a commit
+on top of the remote `pr-assets` tip (an orphan one when the branch does not exist yet), pushes it,
+and prints its SHA. A rejected push (someone pushed meanwhile) is rebuilt on the new tip once.
+
+```bash
+set -eu
+tmp=$(mktemp -d); export GIT_INDEX_FILE="$tmp/index"
+for try in 1 2; do
+  parent=$(git fetch -q origin pr-assets 2>/dev/null && git rev-parse FETCH_HEAD || true)
+  if [ -n "$parent" ]; then git read-tree "$parent"; else git read-tree --empty; fi
+  for f in "$SHOTS"/*.png; do
+    git update-index --add --cacheinfo "100644,$(git hash-object -w "$f"),$SLUG/$(basename "$f")"
+  done
+  sha=$(git commit-tree "$(git write-tree)" ${parent:+-p "$parent"} -m "assets: $SLUG")
+  if git push -q origin "$sha:refs/heads/pr-assets" 2>/dev/null; then rm -rf "$tmp"; echo "$sha"; exit 0; fi
+done
+rm -rf "$tmp"; exit 1
+```
+
+## Step 4: Apply (only with `--apply`)
 
 ```bash
 gh pr edit <n> --body-file <file>
