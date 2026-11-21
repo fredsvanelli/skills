@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `update-agent-docs`: `refs.mjs` no longer reports slash commands (`/pmkit:issues:move`, `/grill-with-docs`) or bare extensions (`.mjs`) as broken paths. Slash commands are left unchecked; a bare `.xxx` token is still checked as a dotfile (`.nvmrc`), and a miss is unchecked instead of already broken.
+
 ## 0.6.0 — 2026-11-19
 
 ### Added
