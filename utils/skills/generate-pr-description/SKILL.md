@@ -168,8 +168,10 @@ whenever any of these holds, and go on with the rest:
 
 ### Capture
 
-1. If the app already answers on its dev port, use it. Otherwise start it with the Setup commands
-   from "How to reproduce", and stop what you started when the captures are done. Never run a
+1. Reuse a running dev server only when its process runs from this checkout (`lsof -a -p <pid> -d
+   cwd`) on the PR's branch: a server from another checkout or branch shows the wrong state.
+   Otherwise start it with the Setup commands from "How to reproduce", on a free port when the
+   usual one is taken, and stop what you started when the captures are done. Never run a
    migration, seed or reset. Drive only `localhost` or `127.0.0.1`, never a staging, production or
    other remote URL, even one the README cites.
 2. Log in only with a session the browser already has or a dev user the project documents (README,
@@ -180,7 +182,8 @@ whenever any of these holds, and go on with the rest:
    the element when X is about one component, message or field. Add one capture at 390 wide only
    when the diff touches responsive CSS or breakpoints.
    Resize the window first. A tool that captures only the viewport gives the visible part of the
-   page, which is fine.
+   page, which is fine. Move the pointer off the page before a full capture (it shows in the
+   image), and prefer an element or region capture when it proves X.
 5. Make one fresh, empty folder for this run (`mktemp -d`, inside the scratchpad when the session
    has one). Copy each kept capture into it as `<n>-<slug-of-X>.png`, numbered in the order the
    images appear in the body, converting to PNG when the tool saved another format. Everything in
