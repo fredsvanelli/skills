@@ -14,9 +14,17 @@ const block = skill.split(/^### Publish$/m)[1]?.match(/```bash\n([\s\S]*?)```/)?
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
 
-function publish(work, shots, slug, shell = 'bash') {
+// Prints `<sha>/<slug>`, the path that follows `blob/` in the image URL.
+function run(work, shots, branch, shell = 'bash') {
   assert.ok(block, 'no ```bash block after "### Publish" in SKILL.md');
-  return execFileSync(shell, ['-c', block], { cwd: work, env: { ...env, SHOTS: shots, SLUG: slug }, encoding: 'utf8' }).trim();
+  return execFileSync(shell, ['-c', block], { cwd: work, env: { ...env, SHOTS: shots, BRANCH: branch }, encoding: 'utf8' }).trim();
+}
+const publish = (...args) => run(...args).split('/')[0];
+
+function rejectPushes(remote, script) {
+  const hook = join(remote, 'hooks', 'pre-receive');
+  writeFileSync(hook, `#!/bin/sh\n${script}\n`);
+  chmodSync(hook, 0o755);
 }
 
 function fixture() {
@@ -94,4 +102,31 @@ test("skips the user's pre-push hook", () => {
   writeFileSync(hook, '#!/bin/sh\nexit 1\n');
   chmodSync(hook, 0o755);
   assert.match(publish(work, shots, 'feat-x'), /^[0-9a-f]{40}$/);
+});
+
+test('prints the URL path with a slug made safe from the branch name', () => {
+  const { work, shots } = fixture();
+  const out = run(work, shots, 'Fix/#123 a?b%c');
+  const [sha, slug] = out.split('/');
+  assert.equal(slug, 'fix--123-a-b-c');
+  assert.equal(git(work, 'show', `${sha}:fix--123-a-b-c/1-form-error.png`), 'png-v1');
+});
+
+test('rebuilds on the new tip when the first push is rejected', () => {
+  const { root, remote, work, shots } = fixture();
+  const x = publish(work, shots, 'feat-x');
+  const y = publish(clone(root, remote, 'other'), shots, 'feat-y');
+  git(remote, 'update-ref', 'refs/heads/pr-assets', x);
+  // The first push meets a tip that moved to y meanwhile and is rejected; the retry must build on y.
+  const flag = join(root, 'rejected-once');
+  rejectPushes(remote, `[ -f '${flag}' ] && exit 0; touch '${flag}'; env -u GIT_QUARANTINE_PATH git update-ref refs/heads/pr-assets ${y}; exit 1`);
+  const sha = publish(work, shots, 'feat-x');
+  assert.equal(git(work, 'rev-parse', `${sha}^`), y);
+  assert.deepEqual(git(work, 'ls-tree', '--name-only', sha).split('\n'), ['feat-x', 'feat-y']);
+});
+
+test('exits non-zero with git\'s error when every push is rejected', () => {
+  const { remote, work, shots } = fixture();
+  rejectPushes(remote, 'echo "denied by ruleset" >&2; exit 1');
+  assert.throws(() => publish(work, shots, 'feat-x'), (e) => e.status !== 0 && /denied by ruleset/.test(e.stderr));
 });

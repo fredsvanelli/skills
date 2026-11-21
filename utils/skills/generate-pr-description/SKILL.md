@@ -206,41 +206,43 @@ path: `[SCREENSHOT HERE: X] (local: <path>)`.
 ### Publish
 
 In one shell call (variables do not survive between calls), `export SHOTS=<the run's folder>
-SLUG=<slug>`, then run this block as is from the consumer repository. It runs in `bash` whatever the
+BRANCH=<the PR's branch name>`, then run this block as is from the consumer repository. It runs in `bash` whatever the
 calling shell is. It never touches the working tree or the index: it builds a commit on top of the
 remote `pr-assets` tip (an orphan one when the branch does not exist yet), pushes it without the
-repository's push hooks, and prints its SHA. A rejected push (someone pushed meanwhile) is rebuilt
+repository's push hooks, and prints `<sha>/<slug>`: the commit and the folder of this run, the
+path that follows `blob/` in the image URL. A rejected push (someone pushed meanwhile) is rebuilt
 on the new tip once; a second failure prints git's error.
 
 ```bash
 bash <<'EOF'
 set -eu
+slug=$(printf '%s' "$BRANCH" | tr 'A-Z' 'a-z' | sed 's/[^a-z0-9._-]/-/g')
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 export GIT_INDEX_FILE="$tmp/index"
 for try in 1 2; do
   parent=$(git fetch -q origin pr-assets 2>/dev/null && git rev-parse FETCH_HEAD || true)
   if [ -n "$parent" ]; then git read-tree "$parent"; else git read-tree --empty; fi
   for f in "$SHOTS"/*.png; do
-    git update-index --add --cacheinfo "100644,$(git hash-object -w "$f"),$SLUG/$(basename "$f")"
+    git update-index --add --cacheinfo "100644,$(git hash-object -w "$f"),$slug/$(basename "$f")"
   done
-  sha=$(git commit-tree "$(git write-tree)" ${parent:+-p "$parent"} -m "assets: $SLUG")
-  if git push -q --no-verify origin "$sha:refs/heads/pr-assets" 2>"$tmp/err"; then echo "$sha"; exit 0; fi
+  sha=$(git commit-tree "$(git write-tree)" ${parent:+-p "$parent"} -m "assets: $slug")
+  if git push -q --no-verify origin "$sha:refs/heads/pr-assets" 2>"$tmp/err"; then echo "$sha/$slug"; exit 0; fi
 done
 cat "$tmp/err" >&2; exit 1
 EOF
 ```
 
-`SLUG` is the branch name with every `/` replaced by `-`. When the block exits non-zero, tell the user
+When the block exits non-zero, tell the user
 git's error and keep the markers with their local paths, as on a no.
 
 ### Link
 
-Replace each marker with the image, using `nameWithOwner` from `gh repo view` and the SHA the block
-printed. The `blob/...?raw=true` form renders in private repositories for logged-in viewers, and the
+Replace each marker with the image, using `nameWithOwner` from `gh repo view` and the
+`<sha>/<slug>` the block printed. The `blob/...?raw=true` form renders in private repositories for logged-in viewers, and the
 SHA keeps the link to this exact image even after a later run replaces the file:
 
 ```markdown
-![X](https://github.com/<owner>/<repo>/blob/<sha>/<SLUG>/<n>-<slug-of-X>.png?raw=true)
+![X](https://github.com/<owner>/<repo>/blob/<sha>/<slug>/<n>-<slug-of-X>.png?raw=true)
 ```
 
 ## Step 4: Apply (only with `--apply`)

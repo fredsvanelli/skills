@@ -79,3 +79,21 @@ UI with claude-in-chrome (fragile, needs Chrome).
   between Write and Apply).
 - The exact plumbing commands, as long as they never touch the working tree or index of the
   user's checkout (use a temporary `GIT_INDEX_FILE`).
+
+## Changes after review and Check
+
+The final review, the real run on skills-web#8 and `utils:review-work` changed the design above:
+
+- The publish block runs in `bash <<'EOF'` from any shell (it broke under zsh), skips push hooks
+  (`--no-verify`) and prints git's error on a second failure.
+- Captures go to a fresh, empty folder per run, and Confirm lists exactly that folder: the block
+  pushes every PNG in it, so a rejected capture never enters it.
+- `gh repo view` always names `origin` (the pushed remote), and runs first.
+- A running dev server is reused only when it runs from this checkout on the PR's branch;
+  otherwise the skill starts one on a free port and stops what it started. No migration, seed or
+  reset.
+- With `--apply`, one question with three answers: apply with the images, without them, or cancel.
+- The pointer is moved off the page before a full capture; element captures are preferred.
+- The block takes `BRANCH`, derives the slug itself (lowercase, `[^a-z0-9._-]` → `-`) and prints
+  `<sha>/<slug>`, the path after `blob/` in the link.
+- Open: no automated end-to-end test of the skill; the project has no E2E tool yet.

@@ -13,3 +13,4 @@
 - Every PR body with images depends on `pr-assets` existing and its commits staying reachable. Never force-push or delete `pr-assets`; `utils:cleanup-branches` lists it as protected.
 - In a public repository the images are public forever, even after the PR closes. The skill states the repository's visibility when it asks before the push.
 - `pr-assets` only grows. Pruning it would break the links in old PRs.
+- The first publish from a clone fetches the whole `pr-assets` history; later ones fetch only what is new. A `--depth=1` fetch would avoid it but turns the user's clone into a shallow repository, so it is not used.
