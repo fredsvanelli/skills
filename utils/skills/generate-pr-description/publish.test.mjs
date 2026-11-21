@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,9 +14,9 @@ const block = skill.split(/^### Publish$/m)[1]?.match(/```bash\n([\s\S]*?)```/)?
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
 
-function publish(work, shots, slug) {
+function publish(work, shots, slug, shell = 'bash') {
   assert.ok(block, 'no ```bash block after "### Publish" in SKILL.md');
-  return execFileSync('bash', ['-c', block], { cwd: work, env: { ...env, SHOTS: shots, SLUG: slug }, encoding: 'utf8' }).trim();
+  return execFileSync(shell, ['-c', block], { cwd: work, env: { ...env, SHOTS: shots, SLUG: slug }, encoding: 'utf8' }).trim();
 }
 
 function fixture() {
@@ -76,4 +76,22 @@ test('leaves index and working tree untouched', () => {
   const before = [git(work, 'status', '--porcelain'), git(work, 'diff', '--cached')];
   publish(work, shots, 'feat-x');
   assert.deepEqual([git(work, 'status', '--porcelain'), git(work, 'diff', '--cached')], before);
+});
+
+const hasZsh = (() => { try { execFileSync('zsh', ['-c', 'true']); return true; } catch { return false; } })();
+
+test('runs from zsh, the agent shell on macOS', { skip: !hasZsh && 'zsh not installed' }, () => {
+  const { work, shots } = fixture();
+  const sha1 = publish(work, shots, 'feat-x', 'zsh');
+  const sha2 = publish(work, shots, 'feat-x', 'zsh');
+  assert.equal(git(work, 'rev-parse', `${sha2}^`), sha1);
+  assert.match(git(work, 'ls-remote', 'origin', 'pr-assets'), new RegExp(`^${sha2}\\s`));
+});
+
+test("skips the user's pre-push hook", () => {
+  const { work, shots } = fixture();
+  const hook = join(work, '.git', 'hooks', 'pre-push');
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n');
+  chmodSync(hook, 0o755);
+  assert.match(publish(work, shots, 'feat-x'), /^[0-9a-f]{40}$/);
 });

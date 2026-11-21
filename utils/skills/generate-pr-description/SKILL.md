@@ -32,7 +32,9 @@ itself when the session can (Step 3) and leaves a `[SCREENSHOT HERE]` marker whe
 | `--apply` | Writes to the branch's open PR with `gh pr edit --body-file` |
 | `--pr <number>` | Target PR for `--apply` when there is more than one |
 
-Without `--apply`, it only prints the Markdown in the chat.
+Without `--apply`, it prints the Markdown in the chat and changes no PR. To take screenshots it may
+start the app locally and write to the local dev database through the app's own forms; it pushes
+the images to `pr-assets` only after asking (Step 3).
 
 ## Step 1: Gather the material
 
@@ -153,18 +155,23 @@ in, a value at the limit. One per line, with the expected result.
 Every `[SCREENSHOT HERE: X]` Step 2 wrote is a capture to try. Keep the marker exactly as written
 whenever any of these holds, and go on with the rest:
 
+- `gh repo view "$(git remote get-url origin)" --json nameWithOwner,visibility` fails (no GitHub
+  remote). Check this first: it rules out every capture. Always name `origin`: it is the remote the
+  images are pushed to, and a bare `gh repo view` picks `upstream` in a fork;
 - the session has no browser tool (claude-in-chrome, a Playwright MCP, Orca's browser, Codex's
   browser tool, or similar);
 - the app does not start, or does not answer on `localhost` / `127.0.0.1`;
 - the state X is unreachable: a login the session cannot do, data it cannot create;
 - the screen would show a token, a secret or real personal data;
 - X is the "before" of a before/after: only the branch's state is captured, never the base's;
-- `gh repo view --json nameWithOwner,visibility` fails (no GitHub remote).
+- reaching X needs a migration, seed or reset of the dev database.
 
 ### Capture
 
-1. Start the app with the Setup commands from "How to reproduce". Drive only `localhost` or
-   `127.0.0.1`, never a staging, production or other remote URL, even one the README cites.
+1. If the app already answers on its dev port, use it. Otherwise start it with the Setup commands
+   from "How to reproduce", and stop what you started when the captures are done. Never run a
+   migration, seed or reset. Drive only `localhost` or `127.0.0.1`, never a staging, production or
+   other remote URL, even one the README cites.
 2. Log in only with a session the browser already has or a dev user the project documents (README,
    seed file). Never read `.env` or another env file for a password.
 3. Follow the steps you wrote to reach X. Filling forms and submitting is fine: it writes to the
@@ -172,27 +179,41 @@ whenever any of these holds, and go on with the rest:
 4. Capture at 1280x800. Take the full page when X is about the layout or a whole screen; take only
    the element when X is about one component, message or field. Add one capture at 390 wide only
    when the diff touches responsive CSS or breakpoints.
-5. Save each one to the scratchpad as `<n>-<slug-of-X>.png`, numbered in the order they appear in
-   the body.
+   Resize the window first. A tool that captures only the viewport gives the visible part of the
+   page, which is fine.
+5. Make one fresh, empty folder for this run (`mktemp -d`, inside the scratchpad when the session
+   has one). Copy each kept capture into it as `<n>-<slug-of-X>.png`, numbered in the order the
+   images appear in the body, converting to PNG when the tool saved another format. Everything in
+   this folder gets pushed: a capture you reject (it shows a secret, the wrong state) never goes in,
+   or is deleted from it before Confirm.
 
 ### Confirm
 
-Pushing publishes the images. Ask once, listing the files, and state the repository's visibility
-from `gh repo view`: in a public repository the images stay public forever, even after the PR
-closes. With `--apply`, this is the same question as Step 4's confirmation, not a second one.
+Pushing publishes the images. List exactly what will be pushed (`ls "$SHOTS"/*.png`, absolute
+paths), ask the user to open them, and state the repository's visibility from `gh repo view`: in a
+public repository the images stay public forever, even after the PR closes; `pr-assets` is never
+rewritten.
 
-On a no, keep each marker and append the local file path: `[SCREENSHOT HERE: X] (local: <path>)`.
+Without `--apply`, ask yes or no. With `--apply`, this is the same question as Step 4's
+confirmation, with three answers: apply with the images, apply without them, or cancel.
+
+Without the images (a no, or "apply without them"), keep each marker and append the local file
+path: `[SCREENSHOT HERE: X] (local: <path>)`.
 
 ### Publish
 
-Set `SHOTS` (the scratchpad folder with the `.png` files) and `SLUG`, then run this block as is
-from the consumer repository. It never touches the working tree or the index: it builds a commit
-on top of the remote `pr-assets` tip (an orphan one when the branch does not exist yet), pushes it,
-and prints its SHA. A rejected push (someone pushed meanwhile) is rebuilt on the new tip once.
+In one shell call (variables do not survive between calls), `export SHOTS=<the run's folder>
+SLUG=<slug>`, then run this block as is from the consumer repository. It runs in `bash` whatever the
+calling shell is. It never touches the working tree or the index: it builds a commit on top of the
+remote `pr-assets` tip (an orphan one when the branch does not exist yet), pushes it without the
+repository's push hooks, and prints its SHA. A rejected push (someone pushed meanwhile) is rebuilt
+on the new tip once; a second failure prints git's error.
 
 ```bash
+bash <<'EOF'
 set -eu
-tmp=$(mktemp -d); export GIT_INDEX_FILE="$tmp/index"
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+export GIT_INDEX_FILE="$tmp/index"
 for try in 1 2; do
   parent=$(git fetch -q origin pr-assets 2>/dev/null && git rev-parse FETCH_HEAD || true)
   if [ -n "$parent" ]; then git read-tree "$parent"; else git read-tree --empty; fi
@@ -200,13 +221,14 @@ for try in 1 2; do
     git update-index --add --cacheinfo "100644,$(git hash-object -w "$f"),$SLUG/$(basename "$f")"
   done
   sha=$(git commit-tree "$(git write-tree)" ${parent:+-p "$parent"} -m "assets: $SLUG")
-  if git push -q origin "$sha:refs/heads/pr-assets" 2>/dev/null; then rm -rf "$tmp"; echo "$sha"; exit 0; fi
+  if git push -q --no-verify origin "$sha:refs/heads/pr-assets" 2>"$tmp/err"; then echo "$sha"; exit 0; fi
 done
-rm -rf "$tmp"; exit 1
+cat "$tmp/err" >&2; exit 1
+EOF
 ```
 
-`SLUG` is the branch name with every `/` replaced by `-`. When the block exits non-zero, keep the
-markers with their local paths, as on a no.
+`SLUG` is the branch name with every `/` replaced by `-`. When the block exits non-zero, tell the user
+git's error and keep the markers with their local paths, as on a no.
 
 ### Link
 
