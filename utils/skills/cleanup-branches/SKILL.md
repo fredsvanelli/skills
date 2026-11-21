@@ -68,7 +68,8 @@ Base branches = production branch + develop branch (if any).
 Protected — never delete, never list as a deletion candidate:
 - the base branches themselves,
 - the currently checked-out branch,
-- `HEAD`.
+- `HEAD`,
+- `pr-assets` (screenshots linked from PR bodies by `generate-pr-description`; deleting it breaks them).
 
 For each remaining local branch, decide:
 

@@ -6,7 +6,7 @@ See [Changelog](CHANGELOG.md) for releases and upgrade notes.
 |---|---|---|
 | `/utils:cleanup-branches` | `$utils:cleanup-branches` | deletes branches already merged into production or develop, locally or with `--origin`, then fast-forwards the rest |
 | `/utils:cleanup-dependabot` | `$utils:cleanup-dependabot` | empties the Dependabot PR queue through `develop`: rebases, merges green CI, asks before majors, closes PRs already covered |
-| `/utils:generate-pr-description` | `$utils:generate-pr-description` | writes a PR description from the branch's real diff, for the reviewer; `--apply` writes it to the PR with `gh` |
+| `/utils:generate-pr-description` | `$utils:generate-pr-description` | writes a PR description from the branch's real diff, for the reviewer, with screenshots it takes itself and publishes to a `pr-assets` branch; `--apply` writes it to the PR with `gh` |
 | `/utils:review-work` | `$utils:review-work` | rates a PR's delivery 0–10 per criterion (spec match, tests, security, complexity, debt…) and overall, deducting per verified finding, with a next step for every finding |
 | `/utils:update-agent-docs` | `$utils:update-agent-docs` | checks whether the branch made `CLAUDE.md`/`AGENTS.md` stale or introduced a rule worth adding; proposes only edits that pass a worth-it gate, usually *No update needed*; `--apply` writes them |
 
