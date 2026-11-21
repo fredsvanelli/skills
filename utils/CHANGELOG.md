@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 — 2026-11-20
+
+### Added
+
+- `generate-pr-description`: takes the screenshots its `[SCREENSHOT HERE: X]` markers describe with the session's browser tool (claude-in-chrome, a Playwright MCP, Orca, Codex's browser), full page or only the element, whichever proves X, at 1280x800 (plus 390 wide when the diff touches responsive CSS). Drives only `localhost`/`127.0.0.1`, logs in only with an existing session or a documented dev user, never reads env files, and never captures a secret or real personal data. Reuses a running dev server only when it serves this checkout and branch, else starts one on a free port and stops only what it started; never runs a migration, seed or reset. Puts each kept capture in a fresh per-run folder, lists exactly those files and the visibility of `origin`'s repository before pushing (with `--apply`, one question: apply with the images, without them, or cancel), then publishes them to an orphan `pr-assets` branch on `origin` by git plumbing (runs in `bash` from any shell, working tree and index untouched, push hooks skipped, rebuilt once on a rejected push, git's error shown on failure) and links them by commit SHA under a slug of the branch name safe for URLs. Keeps the marker when there is no browser tool, the app does not start, the state is unreachable, the image is a "before", there is no GitHub remote or the user says no (with the local path).
+- `generate-pr-description/publish.test.mjs`: runs the skill's publish block against a throwaway repo with a local bare remote (`node --test`), including a rejected-then-retried push and a push rejected every time.
+
+### Changed
+
+- `cleanup-branches`: `pr-assets` is protected.
+
 ## 0.6.0 — 2026-11-19
 
 ### Added

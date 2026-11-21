@@ -1,6 +1,6 @@
 ---
 name: generate-pr-description
-description: "Write a pull request description from the branch's real diff, for the reviewer: what changes, where to look first, risks, and a 'How to reproduce' with manual steps and [SCREENSHOT HERE] markers. Use when the user types /utils:generate-pr-description or asks to write the PR description, the PR body, or describe this branch for review. --apply writes it to the PR with gh."
+description: "Write a pull request description from the branch's real diff, for the reviewer: what changes, where to look first, risks, and a 'How to reproduce' with manual steps and screenshots it takes itself with the session's browser tool (published to a pr-assets branch), or [SCREENSHOT HERE] markers when it cannot. Use when the user types /utils:generate-pr-description or asks to write the PR description, the PR body, or describe this branch for review. --apply writes it to the PR with gh."
 argument-hint: "[--base <branch>] [--apply] [--pr <number>]"
 allowed-tools:
   - Bash
@@ -15,7 +15,8 @@ Before following this procedure, read [runtime setup](../../references/runtime.m
 
 Reads the branch's real diff and writes the PR description **for the reviewer**, not for the
 author. The bar: the reviewer understands what changed, where to look first, and can test it
-by hand without asking anything.
+by hand without asking anything. Where the reviewer needs to see a state, it takes the screenshot
+itself when the session can (Step 3) and leaves a `[SCREENSHOT HERE]` marker when it cannot.
 
 ## Usage
 
@@ -31,7 +32,9 @@ by hand without asking anything.
 | `--apply` | Writes to the branch's open PR with `gh pr edit --body-file` |
 | `--pr <number>` | Target PR for `--apply` when there is more than one |
 
-Without `--apply`, it only prints the Markdown in the chat.
+Without `--apply`, it prints the Markdown in the chat and changes no PR. To take screenshots it may
+start the app locally and write to the local dev database through the app's own forms; it pushes
+the images to `pr-assets` only after asking (Step 3).
 
 ## Step 1: Gather the material
 
@@ -138,6 +141,7 @@ in, a value at the limit. One per line, with the expected result.
 
 - Every `[SCREENSHOT HERE]` carries the description of what the image proves. A bare marker is
   useless. One per state worth evidence (new screen, error state, before/after), not one per step.
+  The same holds for a captured image: its alt text is that description.
 - Routes, button names and labels come from the code and its message files, not from memory.
   A wrong button name blocks the reviewer.
 - When the change has two faces (for example two user roles), "How to reproduce" has two
@@ -146,7 +150,102 @@ in, a value at the limit. One per line, with the expected result.
 - No generic "Checklist" section, no "Type of change: [ ] bug [ ] feature", no architecture
   tour. The reviewer has the diff.
 
-## Step 3: Apply (only with `--apply`)
+## Step 3: Screenshots
+
+Every `[SCREENSHOT HERE: X]` Step 2 wrote is a capture to try. Keep the marker exactly as written
+whenever any of these holds, and go on with the rest:
+
+- `gh repo view "$(git remote get-url origin)" --json nameWithOwner,visibility` fails (no GitHub
+  remote). Check this first: it rules out every capture. Always name `origin`: it is the remote the
+  images are pushed to, and a bare `gh repo view` picks `upstream` in a fork;
+- the session has no browser tool (claude-in-chrome, a Playwright MCP, Orca's browser, Codex's
+  browser tool, or similar);
+- the app does not start, or does not answer on `localhost` / `127.0.0.1`;
+- the state X is unreachable: a login the session cannot do, data it cannot create;
+- the screen would show a token, a secret or real personal data;
+- X is the "before" of a before/after: only the branch's state is captured, never the base's;
+- reaching X needs a migration, seed or reset of the dev database.
+
+### Capture
+
+1. Reuse a running dev server only when its process runs from this checkout (`lsof -a -p <pid> -d
+   cwd`) on the PR's branch: a server from another checkout or branch shows the wrong state.
+   Otherwise start it with the Setup commands from "How to reproduce", on a free port when the
+   usual one is taken, and stop what you started when the captures are done. Never run a
+   migration, seed or reset. Drive only `localhost` or `127.0.0.1`, never a staging, production or
+   other remote URL, even one the README cites.
+2. Log in only with a session the browser already has or a dev user the project documents (README,
+   seed file). Never read `.env` or another env file for a password.
+3. Follow the steps you wrote to reach X. Filling forms and submitting is fine: it writes to the
+   local dev database only.
+4. Capture at 1280x800. Take the full page when X is about the layout or a whole screen; take only
+   the element when X is about one component, message or field. Add one capture at 390 wide only
+   when the diff touches responsive CSS or breakpoints.
+   Resize the window first. A tool that captures only the viewport gives the visible part of the
+   page, which is fine. Move the pointer off the page before a full capture (it shows in the
+   image), and prefer an element or region capture when it proves X.
+5. Make one fresh, empty folder for this run (`mktemp -d`, inside the scratchpad when the session
+   has one). Copy each kept capture into it as `<n>-<slug-of-X>.png`, numbered in the order the
+   images appear in the body, converting to PNG when the tool saved another format. Everything in
+   this folder gets pushed: a capture you reject (it shows a secret, the wrong state) never goes in,
+   or is deleted from it before Confirm.
+
+### Confirm
+
+Pushing publishes the images. List exactly what will be pushed (`ls "$SHOTS"/*.png`, absolute
+paths), ask the user to open them, and state the repository's visibility from `gh repo view`: in a
+public repository the images stay public forever, even after the PR closes; `pr-assets` is never
+rewritten.
+
+Without `--apply`, ask yes or no. With `--apply`, this is the same question as Step 4's
+confirmation, with three answers: apply with the images, apply without them, or cancel.
+
+Without the images (a no, or "apply without them"), keep each marker and append the local file
+path: `[SCREENSHOT HERE: X] (local: <path>)`.
+
+### Publish
+
+In one shell call (variables do not survive between calls), `export SHOTS=<the run's folder>
+BRANCH=<the PR's branch name>`, then run this block as is from the consumer repository. It runs in `bash` whatever the
+calling shell is. It never touches the working tree or the index: it builds a commit on top of the
+remote `pr-assets` tip (an orphan one when the branch does not exist yet), pushes it without the
+repository's push hooks, and prints `<sha>/<slug>`: the commit and the folder of this run, the
+path that follows `blob/` in the image URL. A rejected push (someone pushed meanwhile) is rebuilt
+on the new tip once; a second failure prints git's error.
+
+```bash
+bash <<'EOF'
+set -eu
+slug=$(printf '%s' "$BRANCH" | tr 'A-Z' 'a-z' | sed 's/[^a-z0-9._-]/-/g')
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+export GIT_INDEX_FILE="$tmp/index"
+for try in 1 2; do
+  parent=$(git fetch -q origin pr-assets 2>/dev/null && git rev-parse FETCH_HEAD || true)
+  if [ -n "$parent" ]; then git read-tree "$parent"; else git read-tree --empty; fi
+  for f in "$SHOTS"/*.png; do
+    git update-index --add --cacheinfo "100644,$(git hash-object -w "$f"),$slug/$(basename "$f")"
+  done
+  sha=$(git commit-tree "$(git write-tree)" ${parent:+-p "$parent"} -m "assets: $slug")
+  if git push -q --no-verify origin "$sha:refs/heads/pr-assets" 2>"$tmp/err"; then echo "$sha/$slug"; exit 0; fi
+done
+cat "$tmp/err" >&2; exit 1
+EOF
+```
+
+When the block exits non-zero, tell the user
+git's error and keep the markers with their local paths, as on a no.
+
+### Link
+
+Replace each marker with the image, using `nameWithOwner` from `gh repo view` and the
+`<sha>/<slug>` the block printed. The `blob/...?raw=true` form renders in private repositories for logged-in viewers, and the
+SHA keeps the link to this exact image even after a later run replaces the file:
+
+```markdown
+![X](https://github.com/<owner>/<repo>/blob/<sha>/<slug>/<n>-<slug-of-X>.png?raw=true)
+```
+
+## Step 4: Apply (only with `--apply`)
 
 ```bash
 gh pr edit <n> --body-file <file>
@@ -154,6 +253,7 @@ gh pr edit <n> --body-file <file>
 
 Write the body to a temporary file in the scratchpad, never inline with quotes. Before
 writing, show the Markdown and confirm with the user: `gh pr edit` overwrites the current
-description with no backup.
+description with no backup. When Step 3 has captures to push, ask this together with Step 3's
+question (the Markdown still has the markers then), before the push; do not ask again here.
 
 End the body with the pull request attribution footer the session asks for, if any.

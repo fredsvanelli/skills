@@ -1,6 +1,6 @@
 {
   "name": "utils",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Repo housekeeping: delete merged branches, clear the Dependabot PR queue, write and rate PRs, keep CLAUDE.md/AGENTS.md current.",
   "author": { "name": "Fred Vanelli" },
   "repository": "https://github.com/fredsvanelli/skills"
