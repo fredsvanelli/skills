@@ -44,7 +44,11 @@ function classify(tok) {
   const m = tok.match(RUNNER)
   if (m) return NPM_BUILTIN.has(m[1]) && !/run\s/.test(tok) ? null : { kind: 'script', name: m[1] }
   if (/[\s<>*{}$|=]|^-|:\/\//.test(tok)) return null
+  // slash commands (`/pmkit:issues:move`, `/grill-with-docs`): one segment, no extension
+  if (/^\/[\w-]+(?::[\w-]+)*$/.test(tok)) return null
   const p = tok.replace(/^@/, '').replace(/^\.\//, '').replace(/(:\d+)+$/, '').replace(/\/$/, '')
+  // `.mjs` may be an extension or a dotfile (`.nvmrc`): check it, but a miss is unchecked
+  if (/^\.[a-z][a-z0-9]{0,4}$/i.test(p)) return { kind: 'path', name: p, bare: true }
   if (p.includes('/') || /\.[a-z][a-z0-9]{0,4}$/i.test(p)) return { kind: 'path', name: p }
   const id = tok.replace(/\(\)$/, '')
   // code-shaped only (camelCase, PascalCase, snake_case, call): plain words like `yarn` are prose
@@ -66,7 +70,7 @@ function check(ref, file) {
     const cands = dir ? [path.posix.join(dir, ref.name), ref.name] : [ref.name]
     if (cands.some((c) => fs.existsSync(c))) return { status: 'ok' }
     const then = cands.find(inBase)
-    if (!then) return { status: 'already-broken' }
+    if (!then) return { status: ref.bare ? 'unchecked' : 'already-broken' }
     const to = renames.get(then) || [...renames].find(([f]) => f.startsWith(then + '/'))?.[1]
     return { status: 'broken-by-branch', note: to ? `renamed to ${to}` : 'deleted on branch' }
   }

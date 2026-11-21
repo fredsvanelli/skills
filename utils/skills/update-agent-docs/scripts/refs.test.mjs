@@ -38,3 +38,17 @@ test('splits references broken by the branch from those already broken', () => {
   assert.match(section('ok'), /yarn dev/)
   assert.match(section('ok'), /apiGet/)
 })
+
+test('leaves slash commands and bare extensions unchecked, still checks dotfiles', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'refs-'))
+  const sh = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: dir })
+  fs.writeFileSync(path.join(dir, '.nvmrc'), '20\n')
+  fs.writeFileSync(path.join(dir, 'CLAUDE.md'), 'Run `/pmkit:issues:move` or `/grill-with-docs`. Files are `.mjs`. Node is in `.nvmrc`. See `/docs/gone.md`.\n')
+  sh('init', '-q', '-b', 'main'); sh('add', '-A'); sh('commit', '-qm', 'init')
+
+  const out = execFileSync('node', [refs, '--base', 'main'], { cwd: dir, encoding: 'utf8' })
+  const section = (name) => (out.split(new RegExp(`^${name} \\(\\d+\\):$`, 'm'))[1] || '').split(/^\S/m)[0]
+  for (const tok of ['/pmkit:issues:move', '/grill-with-docs', '.mjs']) assert.match(section('unchecked'), new RegExp('`' + tok + '`'))
+  assert.match(section('ok'), /\.nvmrc/)
+  assert.match(section('already-broken'), /\/docs\/gone\.md/)
+})
