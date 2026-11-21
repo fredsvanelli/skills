@@ -1,6 +1,7 @@
 # generate-pr-description: capture its own screenshots
 
-Status: approved (short design, small change).
+Status: approved (short design, small change). Interviewed 2026-11-20; storage decision in
+`docs/adr/0001-pr-screenshots-on-orphan-branch.md`.
 
 ## Intent
 
@@ -18,14 +19,18 @@ which routes the diff touches, so it can take the screenshots itself and link th
 ## Non-goals
 
 - No new dependency, no bundled capture script, no helper file for publishing.
-- No login automation beyond what the session can already do with the project's dev setup.
-- No image diffing, before/after automation or video.
+- No login beyond a session the browser already has or a dev user the project documents (README,
+  seed). `.env` files are never read for a password.
+- No "before" screenshot: it needs the base checked out and the app restarted. Where before/after
+  matters, the "before" stays a marker.
+- No image diffing or video.
 
 ## Anti-goals
 
 - A screenshot showing a token, secret or real personal data.
 - Screenshots committed to the PR branch (they would land in its diff and in `main`'s history).
 - Pushing to the remote without the user's confirmation.
+- Driving any host other than `localhost`/`127.0.0.1` (staging, production, a URL the README cites).
 
 ## Approaches
 
@@ -45,8 +50,12 @@ UI with claude-in-chrome (fragile, needs Chrome).
    with the browser tool the session has. It keeps the marker unchanged when there is no browser
    tool, the app does not start, the screen is unreachable (login it cannot do, data that does not
    exist), or the screen would show a secret or real personal data.
-2. **What.** Full page or element, whichever proves X better. Files saved in the scratchpad as
+2. **What.** Full page or element, whichever proves X better, at 1280x800; plus one at 390 wide
+   only when the diff touches responsive CSS or breakpoints. Files saved in the scratchpad as
    `<n>-<slug-of-X>.png`.
+2a. **Reaching the state.** It may fill forms and submit to reach a state (an error, a non-empty
+   list), which writes to the local dev database. Only on a local host. Login: an existing browser
+   session or a documented dev user, else the marker.
 3. **Publish.** Git plumbing, no checkout, working tree untouched: hash each file, build a tree
    with `<branch-slug>/<file>` entries on top of the current `origin/pr-assets` tree (or an empty
    tree), `git commit-tree` with `origin/pr-assets` as parent when it exists (orphan otherwise),
@@ -56,9 +65,12 @@ UI with claude-in-chrome (fragile, needs Chrome).
    reachable from `pr-assets`, so GC never drops it.
 5. **Confirmation.** The push publishes. With `--apply` it joins the existing confirmation before
    `gh pr edit`. Without `--apply`, ask once before the push. On a no, keep the marker and add the
-   local file path after it.
+   local file path after it. The question states the repository's visibility
+   (`gh repo view --json visibility`): in a public repo the images are public forever.
 6. **No GitHub remote** (`gh repo view` fails): keep the markers.
-7. **Docs and version.** Update the skill's `description`, `utils/README.md`, `utils/CHANGELOG.md`;
+7. **cleanup-branches.** Add `pr-assets` to its Protected list. It already escapes deletion (no
+   common history with the base, so it lands in Active), but that should not hinge on a detail.
+8. **Docs and version.** Update the skill's `description`, `utils/README.md`, `utils/CHANGELOG.md`;
    bump utils to 0.7.0 in `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`.
 
 ## Left to the builder
